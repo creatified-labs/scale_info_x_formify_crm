@@ -26,31 +26,13 @@ const OAuthCallback = () => {
       }
 
       const code = searchParams.get("code") || hashParams?.get("code");
+      const state = searchParams.get("state") || hashParams?.get("state");
 
       let { data: session } = await supabase.auth.getSession();
       let token = session?.session?.access_token;
 
       console.log("User session status:", { hasSession: !!session?.session, hasToken: !!token });
-      
-      // Get Whop identity from sessionStorage (stored before OAuth started)
-      let whopIdentity = null;
-      try {
-        const stored = sessionStorage.getItem('whop_oauth_identity');
-        if (stored) {
-          whopIdentity = JSON.parse(stored);
-          sessionStorage.removeItem('whop_oauth_identity'); // Clean up
-        }
-      } catch (e) {
-        console.error('Failed to retrieve stored Whop identity:', e);
-      }
-      
-      // Fallback to detecting from current context
-      if (!whopIdentity || !whopIdentity.orgId) {
-        const isWhopContext = detectWhopContext();
-        whopIdentity = isWhopContext ? readWhopIdentity() : null;
-      }
-      
-      console.log("Whop identity for OAuth:", { whopIdentity, pathname: window.location.pathname });
+      console.log("OAuth state parameter:", state);
 
       if (!code) {
         if (session?.session) {
@@ -87,7 +69,7 @@ const OAuthCallback = () => {
           },
           body: JSON.stringify({ 
             code,
-            whop_identity: whopIdentity 
+            state
           }),
         });
 

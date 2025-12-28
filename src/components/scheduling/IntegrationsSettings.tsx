@@ -84,24 +84,32 @@ export const IntegrationsSettings = () => {
       console.log('Starting OAuth flow for scope:', scope);
       setLoadingScope(scope);
       
-      // Store Whop identity for OAuth callback to use
+      // Get Whop identity to pass to OAuth callback
       const { detectWhopContext, readWhopIdentity } = await import('@/lib/embed');
       const isWhop = detectWhopContext();
       console.log('Whop context detected:', isWhop);
       
+      let whopIdentity = null;
       if (isWhop) {
-        const identity = readWhopIdentity();
-        console.log('Storing Whop identity:', identity);
-        sessionStorage.setItem('whop_oauth_identity', JSON.stringify(identity));
+        whopIdentity = readWhopIdentity();
+        console.log('Whop identity:', whopIdentity);
       }
       
       // Use direct Google OAuth flow (works in both Whop iframe and standalone)
       const { data: session } = await supabase.auth.getSession();
       const token = session?.session?.access_token;
-      const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/google-auth-url?scope=${scope}`;
       
-      console.log('Fetching OAuth URL from:', url);
-      const res = await fetch(url, { 
+      // Build URL with Whop identity as parameter
+      const url = new URL(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/google-auth-url`);
+      url.searchParams.set('scope', scope);
+      if (whopIdentity?.orgId) {
+        url.searchParams.set('whop_org_id', whopIdentity.orgId);
+        if (whopIdentity.email) url.searchParams.set('whop_email', whopIdentity.email);
+        if (whopIdentity.name) url.searchParams.set('whop_name', whopIdentity.name);
+      }
+      
+      console.log('Fetching OAuth URL from:', url.toString());
+      const res = await fetch(url.toString(), { 
         method: 'GET', 
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } 
       });
