@@ -148,7 +148,17 @@ export const IntegrationsSettings = () => {
         throw new Error('Missing auth URL');
       }
 
-      console.log('Opening Google OAuth in new window:', j.url);
+      console.log('Opening Google OAuth in new window');
+      console.log('Full OAuth URL:', j.url);
+      
+      // Check if state parameter is in the URL
+      try {
+        const oauthUrl = new URL(j.url);
+        const stateParam = oauthUrl.searchParams.get('state');
+        console.log('State parameter in OAuth URL:', stateParam ? 'YES (' + stateParam + ')' : 'NO - MISSING!');
+      } catch (e) {
+        console.error('Failed to parse OAuth URL:', e);
+      }
       // Open in new window to bypass Whop iframe CSP restrictions
       const width = 600;
       const height = 700;
