@@ -39,6 +39,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@supabase/supabase-js": "^2.89.0",
     "@tanstack/react-query": "^5.90.12",
+    "@whop-apps/core": "0.0.1-canary.117",
     "@whop-apps/iframe": "^0.0.1-canary.117",
     "@whop-apps/sdk": "^0.0.1-canary.117",
     "class-variance-authority": "^0.7.1",

@@ -98,6 +98,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.90.12
         version: 5.90.13(react@19.2.3)
+      '@whop-apps/core':
+        specifier: 0.0.1-canary.117
+        version: 0.0.1-canary.117
       '@whop-apps/iframe':
         specifier: ^0.0.1-canary.117
         version: 0.0.1-canary.117
