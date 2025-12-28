@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { detectWhopContext, readWhopIdentity } from "@/lib/embed";
 
 const OAuthCallback = () => {
   const [status, setStatus] = useState<"idle" | "working" | "done" | "error">("idle");
@@ -26,8 +27,43 @@ const OAuthCallback = () => {
 
       const code = searchParams.get("code") || hashParams?.get("code");
 
-      const { data: session } = await supabase.auth.getSession();
-      const token = session?.session?.access_token;
+      let { data: session } = await supabase.auth.getSession();
+      let token = session?.session?.access_token;
+
+      // If no session and in Whop context, bootstrap authentication
+      if (!token && detectWhopContext()) {
+        const identity = readWhopIdentity();
+        if (identity.orgId) {
+          try {
+            const bootstrapRes = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/wap-bootstrap`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+              },
+              body: JSON.stringify({
+                whop_org_id: identity.orgId,
+                email: identity.email || `${identity.orgId}@whop.temp`,
+                name: identity.name || 'Whop User',
+              }),
+            });
+
+            if (bootstrapRes.ok) {
+              const bootstrapData = await bootstrapRes.json();
+              if (bootstrapData.action_link) {
+                // Follow the magic link to create session
+                window.location.href = bootstrapData.action_link;
+                return;
+              }
+            }
+          } catch (e) {
+            console.error('Failed to bootstrap Whop auth:', e);
+          }
+        }
+      }
+
+      const { data: refreshedSession } = await supabase.auth.getSession();
+      token = refreshedSession?.session?.access_token;
 
       console.log("User session status:", { hasSession: !!session?.session, hasToken: !!token });
 
@@ -46,19 +82,12 @@ const OAuthCallback = () => {
       const isLocalDev = typeof window !== "undefined" &&
         (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
-      if (!token) {
-        if (isLocalDev) {
-          // Redirect to dev-auth to create a session, then come back
-          setStatus("working");
-          setMessage("Creating local session...");
-          window.location.href = `/api/dev-auth?returnTo=${encodeURIComponent(`/oauth/callback?code=${code}`)}`;
-          return;
-        } else {
-          setStatus("error");
-          setMessage("Authentication required. Please access this app through Whop.");
-          setTimeout(() => router.replace("/scheduling"), 2000);
-          return;
-        }
+      if (!token && isLocalDev) {
+        // Redirect to dev-auth to create a session, then come back
+        setStatus("working");
+        setMessage("Creating local session...");
+        window.location.href = `/api/dev-auth?returnTo=${encodeURIComponent(`/oauth/callback?code=${code}`)}`;
+        return;
       }
 
       try {
