@@ -45,23 +45,21 @@ serve(async (req) => {
     }
 
     // POST request from client app
+    const authHeader = req.headers.get('Authorization')
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
+      authHeader ? {
         global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
+          headers: { Authorization: authHeader },
         },
-      }
+      } : {}
     )
 
+    // Try to get authenticated user, but don't require it
     const {
       data: { user },
     } = await supabaseClient.auth.getUser()
-
-    if (!user) {
-      throw new Error('Unauthorized')
-    }
 
     const body = await req.json()
     code = body.code
@@ -105,6 +103,24 @@ serve(async (req) => {
     // Calculate expiration time
     const expiresAt = new Date()
     expiresAt.setSeconds(expiresAt.getSeconds() + tokens.expires_in)
+
+    // User must be authenticated to store integration
+    if (!user) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Authentication required',
+          detail: 'Please sign in to connect your Google account',
+          tokens: {
+            access_token: tokens.access_token,
+            email: userInfo.email,
+          }
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 401,
+        },
+      )
+    }
 
     // Store integration in database
     const { error: dbError } = await supabaseClient
