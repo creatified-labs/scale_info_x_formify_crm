@@ -87,6 +87,11 @@ export const Layout = ({
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const [accountDisplayName, setAccountDisplayName] = useState("");
   const [accountSavingName, setAccountSavingName] = useState(false);
+
+  // Debug: Monitor dialog state changes
+  useEffect(() => {
+    console.log("accountDialogOpen changed to:", accountDialogOpen);
+  }, [accountDialogOpen]);
   const [brandingNameInput, setBrandingNameInput] = useState("");
   const [brandingHideBadge, setBrandingHideBadge] = useState(false);
   const [brandingSaving, setBrandingSaving] = useState(false);
@@ -237,14 +242,20 @@ export const Layout = ({
   };
 
   const openAccountSettings = async () => {
+    console.log("openAccountSettings called", { authLoading, user: !!user });
+    
     if (authLoading) {
+      console.log("Auth still loading");
       toast({ title: "Loading session", description: "Please wait a moment while we load your account details.", variant: "default" });
       return;
     }
     if (!user) {
+      console.log("No user found");
       toast({ title: "No user session", description: "Please wait for your session to load before editing account details.", variant: "destructive" });
       return;
     }
+    
+    console.log("Opening account dialog");
     const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
     const currentName =
       displayNameValue ||
@@ -268,7 +279,10 @@ export const Layout = ({
       console.error("Error loading timezone:", error);
     }
 
+    console.log("Setting accountDialogOpen to true");
     setAccountDialogOpen(true);
+    console.log("Dialog state set, accountDialogOpen should now be true");
+    
     try {
       const resolvedCompanyId = await getCompanyId({ allowFallback: false });
       void resolvedCompanyId;
