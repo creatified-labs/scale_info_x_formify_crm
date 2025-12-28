@@ -125,7 +125,11 @@ const OAuthCallback = () => {
         }
 
         setStatus("done");
-        setTimeout(() => router.replace("/scheduling"), 1200);
+        setMessage("Google Calendar connected successfully!");
+        setTimeout(() => {
+          // Redirect back to scheduling page
+          window.location.href = "/scheduling";
+        }, 1500);
       } catch (e: any) {
         setStatus("error");
         setMessage(e?.message || "Failed to connect Google");

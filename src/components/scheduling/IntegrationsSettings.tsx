@@ -109,11 +109,8 @@ export const IntegrationsSettings = () => {
       const j = await res.json();
       if (!j?.url) throw new Error('Missing auth URL');
 
-      // Open in new window or redirect
-      const opened = window.open(j.url, "_blank", "noopener,noreferrer,width=600,height=700");
-      if (!opened) {
-        window.location.assign(j.url);
-      }
+      // Redirect in same window to stay in Whop iframe context
+      window.location.href = j.url;
     } catch (e) {
       console.error('connect-integration:', e);
       toast.error('Failed to start Google authentication');
