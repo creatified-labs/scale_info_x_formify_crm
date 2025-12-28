@@ -16,6 +16,35 @@ serve(async (req) => {
   }
 
   try {
+    // Handle both POST (from client) and GET (from Google OAuth redirect)
+    const url = new URL(req.url)
+    let code: string | null = null
+    
+    if (req.method === 'GET') {
+      // OAuth callback from Google
+      code = url.searchParams.get('code')
+      
+      if (!code) {
+        // Redirect to the callback page with error
+        return new Response(null, {
+          status: 302,
+          headers: {
+            'Location': `${Deno.env.get('NEXT_PUBLIC_APP_URL') || 'http://localhost:3000'}/oauth/callback?error=missing_code`,
+          },
+        })
+      }
+      
+      // For GET requests (OAuth callback), redirect to the app's callback page
+      // The app will then call this function via POST with the code
+      return new Response(null, {
+        status: 302,
+        headers: {
+          'Location': `${Deno.env.get('NEXT_PUBLIC_APP_URL') || 'http://localhost:3000'}/oauth/callback?code=${code}`,
+        },
+      })
+    }
+
+    // POST request from client app
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -34,7 +63,8 @@ serve(async (req) => {
       throw new Error('Unauthorized')
     }
 
-    const { code } = await req.json()
+    const body = await req.json()
+    code = body.code
 
     if (!code) {
       throw new Error('Missing authorization code')
