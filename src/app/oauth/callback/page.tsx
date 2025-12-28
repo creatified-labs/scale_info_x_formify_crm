@@ -33,7 +33,9 @@ const OAuthCallback = () => {
       console.log("User session status:", { hasSession: !!session?.session, hasToken: !!token });
       
       // Get Whop identity for passing to Edge Function
-      const whopIdentity = detectWhopContext() ? readWhopIdentity() : null;
+      const isWhopContext = detectWhopContext();
+      const whopIdentity = isWhopContext ? readWhopIdentity() : null;
+      console.log("Whop context detection:", { isWhopContext, whopIdentity, pathname: window.location.pathname });
 
       if (!code) {
         if (session?.session) {

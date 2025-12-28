@@ -184,28 +184,6 @@ export const IntegrationsSettings = () => {
         <p className="text-muted-foreground">Connect your calendar and marketing tools</p>
       </div>
 
-      {isDev && !hasSession && (
-        <Card className="p-4 border-dashed border-amber-500/40 bg-amber-50 dark:bg-amber-950/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                Local Development: Authentication Required
-              </p>
-              <p className="text-sm text-amber-700 dark:text-amber-200 mt-1">
-                Click here to authenticate for local testing
-              </p>
-            </div>
-            <Button
-              size="sm"
-              onClick={() => window.location.href = '/api/dev-auth?returnTo=/scheduling'}
-              className="bg-amber-600 hover:bg-amber-700"
-            >
-              Authenticate
-            </Button>
-          </div>
-        </Card>
-      )}
-
       <div className="grid gap-4">
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
