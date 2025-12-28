@@ -1,0 +1,13 @@
+{
+  "/(protected)/analytics/page": "app/(protected)/analytics/page.js",
+  "/(protected)/call-tracker/page": "app/(protected)/call-tracker/page.js",
+  "/(protected)/dashboard/[companyId]/page": "app/(protected)/dashboard/[companyId]/page.js",
+  "/(protected)/dashboard/page": "app/(protected)/dashboard/page.js",
+  "/(protected)/page": "app/(protected)/page.js",
+  "/(protected)/scheduling/page": "app/(protected)/scheduling/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/dev-auth/callback/route": "app/api/dev-auth/callback/route.js",
+  "/api/dev-auth/login/route": "app/api/dev-auth/login/route.js",
+  "/api/dev-auth/route": "app/api/dev-auth/route.js",
+  "/oauth/callback/page": "app/oauth/callback/page.js"
+}

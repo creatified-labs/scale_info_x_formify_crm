@@ -1,0 +1,193 @@
+[00:00:00.753] Server  LOG     ✓ Ready in 548ms
+[00:01:00.560] Browser WARN    Whop company API returned 404
+[00:01:18.296] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:01:18.586] Browser LOG     User session status: {"hasSession":false,"hasToken":false}
+[00:01:38.691] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:01:39.009] Browser LOG     User session status: {"hasSession":false,"hasToken":false}
+[00:05:27.765] Server  LOG     ✓ Compiled in 1296ms
+[00:05:54.641] Browser WARN    Whop company API returned 404
+[00:06:36.362] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:06:36.363] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:07:08.722] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:07:09.017] Browser LOG     User session status: {"hasSession":false,"hasToken":false}
+[00:09:46.413] Browser WARN    Whop company API returned 404
+[00:09:49.470] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:09:49.470] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:10:39.064] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:10:39.364] Browser LOG     User session status: {"hasSession":false,"hasToken":false}
+[00:12:15.461] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:12:15.462] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:12:41.417] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:12:41.708] Browser LOG     User session status: {"hasSession":false,"hasToken":false}
+[00:13:59.208] Browser WARN    Whop company API returned 404
+[00:14:04.941] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:14:20.299] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:14:20.299] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:16:17.289] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:16:17.623] Browser LOG     User session status: {"hasSession":false,"hasToken":false}
+[00:16:23.501] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:16:23.752] Browser LOG     User session status: {"hasSession":false,"hasToken":false}
+[00:16:33.989] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:16:33.989] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:21:12.995] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:21:43.106] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:21:53.533] Browser WARN    Whop company API returned 404
+[00:21:57.115] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:21:57.115] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:22:00.353] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:22:03.281] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:22:03.281] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:22:10.813] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:22:12.374] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:22:12.374] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:22:15.011] Browser LOG     Not in Whop iframe, using direct Google OAuth
+[00:22:15.011] Browser LOG     Session before OAuth redirect: {"hasSession":false,"hasToken":false}
+[00:22:18.894] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:22:19.198] Browser LOG     User session status: {"hasSession":false,"hasToken":false}
+[00:23:26.202] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:23:45.913] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:23:59.208] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:23:59.208] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:24:02.213] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:24:07.752] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:24:07.752] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:24:10.870] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:25:05.473] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:25:05.474] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:25:31.685] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:25:36.887] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:25:36.887] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:25:39.427] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:25:42.437] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:25:42.437] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:25:45.083] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:25:56.361] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:25:56.361] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:25:58.896] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:26:00.723] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:00.723] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:02.789] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:26:03.970] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:03.971] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:06.156] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:26:07.866] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:07.866] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:10.019] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:26:11.077] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:11.078] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:12.894] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:26:13.916] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:13.916] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:15.937] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:26:17.101] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:17.101] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:19.315] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:26:21.360] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:21.360] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:23.348] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:26:44.184] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:44.184] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:46.734] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:26:51.137] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:51.137] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:55.313] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:26:56.756] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:56.756] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:26:59.153] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:27:00.417] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:27:00.418] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:27:02.729] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:27:04.855] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:27:04.855] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[00:27:07.992] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[20:49:17.891] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[20:49:19.389] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[20:49:19.389] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[20:49:23.528] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[20:49:26.322] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[20:49:26.323] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[20:49:32.083] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[20:49:35.214] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[20:49:35.214] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[20:52:01.583] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[20:52:04.788] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[20:52:04.788] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[20:52:09.705] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[20:52:12.999] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[20:52:13.000] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[20:52:17.227] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[21:16:43.550] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[21:16:52.583] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[21:16:52.583] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[21:16:56.607] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[21:16:58.501] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[21:16:58.501] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[21:24:01.482] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[21:24:24.618] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[21:24:24.618] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[21:24:30.057] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[21:24:35.233] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[21:24:35.233] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[21:25:56.456] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[21:25:56.753] Browser LOG     User session status: {"hasSession":false,"hasToken":false}
+[21:26:02.231] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[21:26:02.231] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[21:26:15.086] Browser WARN    Whop company API returned 404
+[21:30:20.272] Browser WARN    Whop company API returned 404
+[21:30:49.550] Server  LOG     ✓ Compiled in 377ms
+[21:30:50.074] Browser ERROR   ./formify-sales-crm-lovable/nextjs-app/src/components/scheduling/IntegrationsSettings.tsx:312:7
+Parsing ecmascript source code failed
+  310 |         />
+  311 |       </div>
+> 312 |     </div>
+      |       ^^^
+  313 |   );
+  314 | };
+  315 |
+
+Expected '</', got 'div'
+
+Import traces:
+  Client Component Browser:
+    ./formify-sales-crm-lovable/nextjs-app/src/components/scheduling/IntegrationsSettings.tsx [Client Component Browser]
+    ./formify-sales-crm-lovable/nextjs-app/src/app/(protected)/scheduling/page.tsx [Client Component Browser]
+    ./formify-sales-crm-lovable/nextjs-app/src/app/(protected)/scheduling/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./formify-sales-crm-lovable/nextjs-app/src/components/scheduling/IntegrationsSettings.tsx [Client Component SSR]
+    ./formify-sales-crm-lovable/nextjs-app/src/app/(protected)/scheduling/page.tsx [Client Component SSR]
+    ./formify-sales-crm-lovable/nextjs-app/src/app/(protected)/scheduling/page.tsx [Server Component]
+[21:30:50.074] Browser ERROR   ./formify-sales-crm-lovable/nextjs-app/src/components/scheduling/IntegrationsSettings.tsx:312:7
+Parsing ecmascript source code failed
+  310 |         />
+  311 |       </div>
+> 312 |     </div>
+      |       ^^^
+  313 |   );
+  314 | };
+  315 |
+
+Expected '</', got 'div'
+
+Import traces:
+  Client Component Browser:
+    ./formify-sales-crm-lovable/nextjs-app/src/components/scheduling/IntegrationsSettings.tsx [Client Component Browser]
+    ./formify-sales-crm-lovable/nextjs-app/src/app/(protected)/scheduling/page.tsx [Client Component Browser]
+    ./formify-sales-crm-lovable/nextjs-app/src/app/(protected)/scheduling/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./formify-sales-crm-lovable/nextjs-app/src/components/scheduling/IntegrationsSettings.tsx [Client Component SSR]
+    ./formify-sales-crm-lovable/nextjs-app/src/app/(protected)/scheduling/page.tsx [Client Component SSR]
+    ./formify-sales-crm-lovable/nextjs-app/src/app/(protected)/scheduling/page.tsx [Server Component]
+[21:31:05.675] Server  LOG     ✓ Compiled in 172ms
+[22:11:09.037] Browser WARN    Whop company API returned 404
+[34:25:21.209] Browser WARN    Whop company API returned 404
+[34:36:19.211] Browser WARN    Whop company API returned 404
+[34:42:57.821] Server  LOG     ○ Compiling /call-tracker ...
+[34:43:53.021] Browser ERROR   event types load error {"activeError":{"code":"","details":"TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/26666_84a1cf23._.js:11391:23\n    at http://localhost:3000/_next/static/chunks/26666_84a1cf23._.js:11405:16\n    at async loadEventTypes (http://localhost:3000/_next/static/chunks/formify-sales-crm-lovable_nextjs-app_src_components_1e4156bd._.js:4255:58)","hint":"","message":"TypeError: Failed to fetch"},"archivedError":{"code":"","details":"TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/26666_84a1cf23._.js:11391:23\n    at http://localhost:3000/_next/static/chunks/26666_84a1cf23._.js:11405:16\n    at async loadEventTypes (http://localhost:3000/_next/static/chunks/formify-sales-crm-lovable_nextjs-app_src_components_1e4156bd._.js:4259:62)","hint":"","message":"TypeError: Failed to fetch"}}
+[34:43:53.021] Browser ERROR   event types load error {"activeError":{"code":"","details":"TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/26666_84a1cf23._.js:11391:23\n    at http://localhost:3000/_next/static/chunks/26666_84a1cf23._.js:11405:16\n    at async loadEventTypes (http://localhost:3000/_next/static/chunks/formify-sales-crm-lovable_nextjs-app_src_components_1e4156bd._.js:4255:58)","hint":"","message":"TypeError: Failed to fetch"},"archivedError":{"code":"","details":"TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/26666_84a1cf23._.js:11391:23\n    at http://localhost:3000/_next/static/chunks/26666_84a1cf23._.js:11405:16\n    at async loadEventTypes (http://localhost:3000/_next/static/chunks/formify-sales-crm-lovable_nextjs-app_src_components_1e4156bd._.js:4259:62)","hint":"","message":"TypeError: Failed to fetch"}}
+[35:07:40.847] Browser WARN    Whop company API returned 404
+[35:15:38.948] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[35:15:38.949] Browser LOG     IntegrationsSettings session check: {"hasSession":false,"session":null}
+[35:42:38.683] Browser WARN    Whop company API returned 404
+[40:44:30.103] Browser WARN    Whop company API returned 404
