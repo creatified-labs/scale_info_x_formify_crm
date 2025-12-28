@@ -42,15 +42,23 @@ const OAuthCallback = () => {
         return;
       }
 
-      // For local development, allow OAuth without prior authentication
+      // For local development, auto-authenticate if no session exists
       const isLocalDev = typeof window !== "undefined" &&
         (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
-      if (!token && !isLocalDev) {
-        setStatus("error");
-        setMessage("Authentication required. Please access this app through Whop.");
-        setTimeout(() => router.replace("/scheduling"), 2000);
-        return;
+      if (!token) {
+        if (isLocalDev) {
+          // Redirect to dev-auth to create a session, then come back
+          setStatus("working");
+          setMessage("Creating local session...");
+          window.location.href = `/api/dev-auth?returnTo=${encodeURIComponent(`/oauth/callback?code=${code}`)}`;
+          return;
+        } else {
+          setStatus("error");
+          setMessage("Authentication required. Please access this app through Whop.");
+          setTimeout(() => router.replace("/scheduling"), 2000);
+          return;
+        }
       }
 
       try {
