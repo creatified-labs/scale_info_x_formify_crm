@@ -122,9 +122,34 @@ export const IntegrationsSettings = () => {
         throw new Error('Missing auth URL');
       }
 
-      console.log('Redirecting to Google OAuth:', j.url);
-      // Redirect in same window to stay in Whop iframe context
-      window.location.href = j.url;
+      console.log('Opening Google OAuth in new window:', j.url);
+      // Open in new window to bypass Whop iframe CSP restrictions
+      const width = 600;
+      const height = 700;
+      const left = window.screen.width / 2 - width / 2;
+      const top = window.screen.height / 2 - height / 2;
+      
+      const popup = window.open(
+        j.url,
+        'google-oauth',
+        `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes`
+      );
+      
+      if (!popup) {
+        // Fallback if popup blocked
+        console.log('Popup blocked, redirecting in same window');
+        window.location.href = j.url;
+      } else {
+        // Listen for OAuth completion
+        const checkPopup = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(checkPopup);
+            setLoadingScope(null);
+            // Refresh integration status
+            window.location.reload();
+          }
+        }, 500);
+      }
     } catch (e: any) {
       console.error('connect-integration error:', e);
       toast.error(e?.message || 'Failed to start Google authentication');
