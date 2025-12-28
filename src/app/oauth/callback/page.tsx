@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { detectWhopContext, readWhopIdentity } from "@/lib/embed";
+import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 
 const OAuthCallback = () => {
   const [status, setStatus] = useState<"idle" | "working" | "done" | "error">("idle");
