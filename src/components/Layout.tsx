@@ -73,7 +73,7 @@ export const Layout = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLocalHost, setIsLocalHost] = useState(false);
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
-  const { user, signOut } = useAuth();
+  const { user, signOut, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const { plan, removeWatermark } = useFeature();
   const [brandName, setBrandName] = useState<string>("");
@@ -219,6 +219,10 @@ export const Layout = ({
   };
 
   const openAccountSettings = async () => {
+    if (authLoading) {
+      toast({ title: "Loading session", description: "Please wait a moment while we load your account details.", variant: "default" });
+      return;
+    }
     if (!user) {
       toast({ title: "No user session", description: "Please wait for your session to load before editing account details.", variant: "destructive" });
       return;
