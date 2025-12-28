@@ -82,37 +82,30 @@ export const IntegrationsSettings = () => {
   const handleConnect = useCallback(async (scope: "calendar" | "meet") => {
     try {
       setLoadingScope(scope);
-      const googleScopes = "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events";
       
-      // Try Whop OAuth first (only works in Whop iframe)
-      try {
-        await startWhopOAuth({
-          provider: "google",
-          scope: googleScopes,
-          restPath: "/oauth_callback",
-        });
-      } catch (whopError: any) {
-        // If not in Whop iframe, fall back to direct Google OAuth
-        if (whopError?.message?.includes("embedded in Whop")) {
-          console.log("Not in Whop iframe, using direct Google OAuth");
-          const { data: session } = await supabase.auth.getSession();
-          const token = session?.session?.access_token;
-          const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/google-auth-url?scope=${scope}`;
-          const res = await fetch(url, { 
-            method: 'GET', 
-            headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } 
-          });
-          if (!res.ok) throw new Error('Failed to start Google auth');
-          const j = await res.json();
-          if (!j?.url) throw new Error('Missing auth URL');
+      // Use direct Google OAuth flow (works in both Whop iframe and standalone)
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+      const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/google-auth-url?scope=${scope}`;
+      
+      const res = await fetch(url, { 
+        method: 'GET', 
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } 
+      });
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Google auth URL error:', errorText);
+        throw new Error('Failed to start Google auth');
+      }
+      
+      const j = await res.json();
+      if (!j?.url) throw new Error('Missing auth URL');
 
-          const opened = window.open(j.url, "_blank", "noopener,noreferrer");
-          if (!opened) {
-            window.location.assign(j.url);
-          }
-        } else {
-          throw whopError;
-        }
+      // Open in new window or redirect
+      const opened = window.open(j.url, "_blank", "noopener,noreferrer,width=600,height=700");
+      if (!opened) {
+        window.location.assign(j.url);
       }
     } catch (e) {
       console.error('connect-integration:', e);
