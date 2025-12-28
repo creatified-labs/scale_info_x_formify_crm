@@ -32,10 +32,25 @@ const OAuthCallback = () => {
 
       console.log("User session status:", { hasSession: !!session?.session, hasToken: !!token });
       
-      // Get Whop identity for passing to Edge Function
-      const isWhopContext = detectWhopContext();
-      const whopIdentity = isWhopContext ? readWhopIdentity() : null;
-      console.log("Whop context detection:", { isWhopContext, whopIdentity, pathname: window.location.pathname });
+      // Get Whop identity from sessionStorage (stored before OAuth started)
+      let whopIdentity = null;
+      try {
+        const stored = sessionStorage.getItem('whop_oauth_identity');
+        if (stored) {
+          whopIdentity = JSON.parse(stored);
+          sessionStorage.removeItem('whop_oauth_identity'); // Clean up
+        }
+      } catch (e) {
+        console.error('Failed to retrieve stored Whop identity:', e);
+      }
+      
+      // Fallback to detecting from current context
+      if (!whopIdentity || !whopIdentity.orgId) {
+        const isWhopContext = detectWhopContext();
+        whopIdentity = isWhopContext ? readWhopIdentity() : null;
+      }
+      
+      console.log("Whop identity for OAuth:", { whopIdentity, pathname: window.location.pathname });
 
       if (!code) {
         if (session?.session) {

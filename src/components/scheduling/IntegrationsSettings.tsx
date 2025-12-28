@@ -83,6 +83,13 @@ export const IntegrationsSettings = () => {
     try {
       setLoadingScope(scope);
       
+      // Store Whop identity for OAuth callback to use
+      const { detectWhopContext, readWhopIdentity } = await import('@/lib/embed');
+      if (detectWhopContext()) {
+        const identity = readWhopIdentity();
+        sessionStorage.setItem('whop_oauth_identity', JSON.stringify(identity));
+      }
+      
       // Use direct Google OAuth flow (works in both Whop iframe and standalone)
       const { data: session } = await supabase.auth.getSession();
       const token = session?.session?.access_token;
