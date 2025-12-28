@@ -81,12 +81,17 @@ export const IntegrationsSettings = () => {
 
   const handleConnect = useCallback(async (scope: "calendar" | "meet") => {
     try {
+      console.log('Starting OAuth flow for scope:', scope);
       setLoadingScope(scope);
       
       // Store Whop identity for OAuth callback to use
       const { detectWhopContext, readWhopIdentity } = await import('@/lib/embed');
-      if (detectWhopContext()) {
+      const isWhop = detectWhopContext();
+      console.log('Whop context detected:', isWhop);
+      
+      if (isWhop) {
         const identity = readWhopIdentity();
+        console.log('Storing Whop identity:', identity);
         sessionStorage.setItem('whop_oauth_identity', JSON.stringify(identity));
       }
       
@@ -95,25 +100,34 @@ export const IntegrationsSettings = () => {
       const token = session?.session?.access_token;
       const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/google-auth-url?scope=${scope}`;
       
+      console.log('Fetching OAuth URL from:', url);
       const res = await fetch(url, { 
         method: 'GET', 
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } 
       });
       
+      console.log('OAuth URL response status:', res.status);
+      
       if (!res.ok) {
         const errorText = await res.text();
-        console.error('Google auth URL error:', errorText);
-        throw new Error('Failed to start Google auth');
+        console.error('Google auth URL error:', { status: res.status, error: errorText });
+        throw new Error(`Failed to start Google auth: ${errorText}`);
       }
       
       const j = await res.json();
-      if (!j?.url) throw new Error('Missing auth URL');
+      console.log('OAuth URL response:', j);
+      
+      if (!j?.url) {
+        console.error('Missing auth URL in response:', j);
+        throw new Error('Missing auth URL');
+      }
 
+      console.log('Redirecting to Google OAuth:', j.url);
       // Redirect in same window to stay in Whop iframe context
       window.location.href = j.url;
-    } catch (e) {
-      console.error('connect-integration:', e);
-      toast.error('Failed to start Google authentication');
+    } catch (e: any) {
+      console.error('connect-integration error:', e);
+      toast.error(e?.message || 'Failed to start Google authentication');
       setLoadingScope(null);
     }
   }, []);
