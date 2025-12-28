@@ -20,15 +20,18 @@ export async function GET(request: Request) {
     const returnTo = url.searchParams.get('returnTo') || '/scheduling';
     const fullRedirectUrl = `${origin}${returnTo}`;
 
+    // Use the actual company ID from environment
+    const companyId = url.searchParams.get('companyId') || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || 'biz_5c2wnbWihQovAt';
+    
     // Call wap-bootstrap to create a test session
     const response = await fetch(`${supabaseUrl}/functions/v1/wap-bootstrap`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Referer': fullRedirectUrl,
+        'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
       },
       body: JSON.stringify({
-        whop_org_id: 'dev-local-test',
+        whop_org_id: companyId,
         email: 'dev@localhost.test',
         name: 'Local Dev User',
       }),

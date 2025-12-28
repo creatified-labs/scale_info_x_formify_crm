@@ -106,3 +106,28 @@ export function getCurrentWhopAppUrl(): string | null {
 
   return null;
 }
+
+/**
+ * Auto-authenticate for localhost development
+ * Uses the company ID from environment variables
+ */
+export async function ensureLocalDevAuth() {
+  if (typeof window === "undefined") return false;
+  
+  const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  if (!isLocalhost) return false;
+
+  const companyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+  if (!companyId) return false;
+
+  try {
+    const response = await fetch(`/api/dev-auth?companyId=${companyId}&returnTo=${encodeURIComponent(window.location.pathname)}`);
+    if (response.ok) {
+      return true;
+    }
+  } catch (error) {
+    console.error("Failed to auto-authenticate:", error);
+  }
+  
+  return false;
+}
