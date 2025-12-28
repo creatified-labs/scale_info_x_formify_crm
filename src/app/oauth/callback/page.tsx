@@ -31,26 +31,35 @@ const OAuthCallback = () => {
       console.log("=== OAuth Callback Debug ===");
       console.log("Code:", code?.substring(0, 20) + "...");
       
-      // Read Whop identity from cookie
+      // Read Whop identity from localStorage
       let whopIdentity = null;
-      const cookies = document.cookie.split(';');
-      const identityCookie = cookies.find(c => c.trim().startsWith('whop_oauth_identity='));
-      
-      if (identityCookie) {
-        try {
-          const cookieValue = identityCookie.split('=')[1];
-          const decoded = decodeURIComponent(cookieValue);
-          whopIdentity = JSON.parse(decoded);
-          console.log("Whop identity from cookie:", whopIdentity);
+      try {
+        const storedIdentity = localStorage.getItem('whop_oauth_identity');
+        
+        if (storedIdentity) {
+          const parsed = JSON.parse(storedIdentity);
+          console.log("Whop identity from localStorage:", parsed);
           
-          // Clear the cookie after reading
-          document.cookie = 'whop_oauth_identity=; path=/; max-age=0; SameSite=None; Secure';
-        } catch (e) {
-          console.error("Failed to parse identity cookie:", e);
+          // Check if not expired (10 minutes)
+          const age = Date.now() - (parsed.timestamp || 0);
+          if (age < 10 * 60 * 1000) {
+            whopIdentity = {
+              orgId: parsed.orgId,
+              email: parsed.email,
+              name: parsed.name
+            };
+            console.log("Using Whop identity:", whopIdentity);
+          } else {
+            console.warn("Stored identity expired");
+          }
+          
+          // Clear after reading
+          localStorage.removeItem('whop_oauth_identity');
+        } else {
+          console.warn("No Whop identity in localStorage!");
         }
-      } else {
-        console.warn("No Whop identity cookie found!");
-        console.log("All cookies:", document.cookie);
+      } catch (e) {
+        console.error("Failed to read identity from localStorage:", e);
       }
 
       let { data: session } = await supabase.auth.getSession();

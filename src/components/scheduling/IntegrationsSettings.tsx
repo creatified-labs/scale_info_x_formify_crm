@@ -84,7 +84,7 @@ export const IntegrationsSettings = () => {
       console.log('Starting OAuth flow for scope:', scope);
       setLoadingScope(scope);
       
-      // Get Whop identity and store in cookie before OAuth
+      // Get Whop identity and store in localStorage before OAuth
       const { detectWhopContext, readWhopIdentity } = await import('@/lib/embed');
       const isWhop = detectWhopContext();
       console.log('Whop context detected:', isWhop);
@@ -94,16 +94,16 @@ export const IntegrationsSettings = () => {
         console.log('Whop identity:', whopIdentity);
         
         if (whopIdentity?.orgId) {
-          // Store Whop identity in cookie (expires in 10 minutes)
-          const identityData = JSON.stringify({
+          // Store Whop identity in localStorage
+          const identityData = {
             orgId: whopIdentity.orgId,
             email: whopIdentity.email,
             name: whopIdentity.name,
-          });
+            timestamp: Date.now()
+          };
           
-          // Set cookie with SameSite=None for cross-origin (Whop iframe)
-          document.cookie = `whop_oauth_identity=${encodeURIComponent(identityData)}; path=/; max-age=600; SameSite=None; Secure`;
-          console.log('Whop identity stored in cookie');
+          localStorage.setItem('whop_oauth_identity', JSON.stringify(identityData));
+          console.log('Whop identity stored in localStorage:', identityData);
         }
       }
       
