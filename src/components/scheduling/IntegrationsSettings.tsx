@@ -206,12 +206,6 @@ export const IntegrationsSettings = () => {
         </Card>
       )}
 
-      <Card className="p-4 border-dashed border-primary/40 bg-primary/5">
-        <p className="text-sm text-primary">
-          We&apos;re putting the finishing touches on integrations support. Everything below is launching soon.
-        </p>
-      </Card>
-
       <div className="grid gap-4">
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
@@ -277,28 +271,6 @@ export const IntegrationsSettings = () => {
             </Button>
           )}
         </Card>
-
-        <LockedIntegrationCard
-          name="Google Meet"
-          logo=""
-          description="Add Meet links to your events"
-          badgeLabel="Coming Soon"
-          upgradeable={false}
-        />
-        <LockedIntegrationCard
-          name="Zoom"
-          logo=""
-          description="Automatically create meeting links"
-          badgeLabel="Coming Soon"
-          upgradeable={false}
-        />
-        <LockedIntegrationCard
-          name="Meta Pixel"
-          logo=""
-          description="Track conversions and ad performance"
-          badgeLabel="Coming Soon"
-          upgradeable={false}
-        />
       </div>
     </div>
   );
