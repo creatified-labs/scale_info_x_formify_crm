@@ -12,46 +12,66 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
     // Get the origin from the request to build the redirect URL
     const url = new URL(request.url);
-    const origin = url.origin;
     const returnTo = url.searchParams.get('returnTo') || '/scheduling';
-    const fullRedirectUrl = `${origin}${returnTo}`;
-
-    // Use the actual company ID from environment
     const companyId = url.searchParams.get('companyId') || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || 'biz_5c2wnbWihQovAt';
-    
-    // Call wap-bootstrap to create a test session
-    const response = await fetch(`${supabaseUrl}/functions/v1/wap-bootstrap`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-      },
-      body: JSON.stringify({
-        whop_org_id: companyId,
-        email: 'dev@localhost.test',
-        name: 'Local Dev User',
-      }),
+
+    // Create admin client with service role key
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
     });
 
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('wap-bootstrap error:', error);
-      return NextResponse.json({ error: 'Failed to create session', details: error }, { status: 500 });
+    // Create or get test user for local development
+    const testEmail = `dev-${companyId}@localhost.test`;
+    
+    // Try to get existing user or create new one
+    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+    let userId = existingUsers?.users?.find(u => u.email === testEmail)?.id;
+
+    if (!userId) {
+      // Create new user
+      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email: testEmail,
+        email_confirm: true,
+        user_metadata: {
+          name: 'Local Dev User',
+          display_name: 'Local Dev User',
+          whop_org_id: companyId,
+        }
+      });
+
+      if (createError) {
+        console.error('Failed to create user:', createError);
+        return NextResponse.json({ error: 'Failed to create user', details: createError.message }, { status: 500 });
+      }
+
+      userId = newUser.user.id;
     }
 
-    const data = await response.json();
+    // Generate a magic link for the user
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: testEmail,
+      options: {
+        redirectTo: `${url.origin}${returnTo}`
+      }
+    });
 
-    if (!data.action_link) {
-      return NextResponse.json({ error: 'No action link returned' }, { status: 500 });
+    if (linkError || !linkData) {
+      console.error('Failed to generate magic link:', linkError);
+      return NextResponse.json({ error: 'Failed to generate auth link', details: linkError?.message }, { status: 500 });
     }
 
-    // The action_link from wap-bootstrap should redirect back to our app
     // Redirect to the magic link to create the session
-    return NextResponse.redirect(data.action_link);
+    return NextResponse.redirect(linkData.properties.action_link);
   } catch (error) {
     console.error('Dev auth error:', error);
     return NextResponse.json({
