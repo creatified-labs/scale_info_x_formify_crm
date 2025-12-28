@@ -63,9 +63,54 @@ serve(async (req) => {
 
     const body = await req.json()
     code = body.code
+    const whopIdentity = body.whop_identity
 
     if (!code) {
       throw new Error('Missing authorization code')
+    }
+
+    // If no user but we have Whop identity, create/get user with service role
+    let effectiveUser = user
+    if (!effectiveUser && whopIdentity?.orgId) {
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false
+          }
+        }
+      )
+
+      const email = whopIdentity.email || `${whopIdentity.orgId}@whop.temp`
+      
+      // Try to find existing user
+      const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
+      let userId = existingUsers?.users?.find(u => u.email === email)?.id
+
+      if (!userId) {
+        // Create new user
+        const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+          email,
+          email_confirm: true,
+          user_metadata: {
+            name: whopIdentity.name || 'Whop User',
+            whop_org_id: whopIdentity.orgId,
+          }
+        })
+
+        if (createError) {
+          console.error('Failed to create user from Whop identity:', createError)
+        } else {
+          userId = newUser.user.id
+          effectiveUser = newUser.user
+        }
+      } else {
+        // Get existing user
+        const { data: existingUser } = await supabaseAdmin.auth.admin.getUserById(userId)
+        effectiveUser = existingUser?.user || null
+      }
     }
 
     // Exchange code for tokens
@@ -104,12 +149,12 @@ serve(async (req) => {
     const expiresAt = new Date()
     expiresAt.setSeconds(expiresAt.getSeconds() + tokens.expires_in)
 
-    // User must be authenticated to store integration
-    if (!user) {
+    // User must exist to store integration
+    if (!effectiveUser) {
       return new Response(
         JSON.stringify({ 
           error: 'Authentication required',
-          detail: 'Please sign in to connect your Google account',
+          detail: 'Unable to identify user. Please try again.',
           tokens: {
             access_token: tokens.access_token,
             email: userInfo.email,
@@ -122,22 +167,21 @@ serve(async (req) => {
       )
     }
 
-    // Store integration in database
-    const { error: dbError } = await supabaseClient
+    // Store integration in database (use admin client if we created the user)
+    const clientForInsert = effectiveUser.id === user?.id ? supabaseClient : createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    )
+
+    const { error: dbError } = await clientForInsert
       .from('user_integrations')
       .upsert({
-        user_id: user.id,
+        user_id: effectiveUser.id,
         provider: 'google',
-        email: userInfo.email,
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
         expires_at: expiresAt.toISOString(),
-        scope: tokens.scope,
-        metadata: {
-          picture: userInfo.picture,
-          name: userInfo.name,
-        },
-        updated_at: new Date().toISOString(),
+        email: userInfo.email,
       }, {
         onConflict: 'user_id,provider'
       })

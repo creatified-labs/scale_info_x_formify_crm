@@ -30,42 +30,10 @@ const OAuthCallback = () => {
       let { data: session } = await supabase.auth.getSession();
       let token = session?.session?.access_token;
 
-      // If no session and in Whop context, bootstrap authentication
-      if (!token && detectWhopContext()) {
-        const identity = readWhopIdentity();
-        if (identity.orgId) {
-          try {
-            const bootstrapRes = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/wap-bootstrap`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-              },
-              body: JSON.stringify({
-                whop_org_id: identity.orgId,
-                email: identity.email || `${identity.orgId}@whop.temp`,
-                name: identity.name || 'Whop User',
-              }),
-            });
-
-            if (bootstrapRes.ok) {
-              const bootstrapData = await bootstrapRes.json();
-              if (bootstrapData.action_link) {
-                // Follow the magic link to create session
-                window.location.href = bootstrapData.action_link;
-                return;
-              }
-            }
-          } catch (e) {
-            console.error('Failed to bootstrap Whop auth:', e);
-          }
-        }
-      }
-
-      const { data: refreshedSession } = await supabase.auth.getSession();
-      token = refreshedSession?.session?.access_token;
-
       console.log("User session status:", { hasSession: !!session?.session, hasToken: !!token });
+      
+      // Get Whop identity for passing to Edge Function
+      const whopIdentity = detectWhopContext() ? readWhopIdentity() : null;
 
       if (!code) {
         if (session?.session) {
@@ -100,7 +68,10 @@ const OAuthCallback = () => {
             "Content-Type": "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
-          body: JSON.stringify({ code }),
+          body: JSON.stringify({ 
+            code,
+            whop_identity: whopIdentity 
+          }),
         });
 
         console.log("Edge Function response status:", res.status, res.statusText);
