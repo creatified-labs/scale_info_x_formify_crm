@@ -125,11 +125,8 @@ const OAuthCallback = () => {
         }
 
         setStatus("done");
-        setMessage("Google Calendar connected successfully!");
-        setTimeout(() => {
-          // Redirect back to scheduling page
-          window.location.href = "/scheduling";
-        }, 1500);
+        setMessage("Google Calendar connected successfully! You can close this tab and return to Whop.");
+        // Don't auto-redirect - let user close the popup manually
       } catch (e: any) {
         setStatus("error");
         setMessage(e?.message || "Failed to connect Google");
@@ -139,14 +136,35 @@ const OAuthCallback = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
-      <Card className="p-6 max-w-md w-full text-center space-y-3">
-        {status === "working" && <p>Connecting your Google account…</p>}
-        {status === "done" && <p>Connected! Redirecting…</p>}
+      <Card className="p-6 max-w-md w-full text-center space-y-4">
+        {status === "working" && (
+          <>
+            <Loader2 className="w-12 h-12 mx-auto animate-spin text-blue-500" />
+            <p className="text-lg font-medium">Connecting...</p>
+          </>
+        )}
+        {status === "done" && (
+          <>
+            <CheckCircle2 className="w-12 h-12 mx-auto text-green-500" />
+            <p className="text-lg font-medium text-green-600">Google Calendar Connected!</p>
+            <p className="text-sm text-gray-600">You can now close this tab and return to Whop.</p>
+            <Button 
+              onClick={() => window.close()} 
+              className="mt-4"
+              variant="outline"
+            >
+              Close Tab
+            </Button>
+          </>
+        )}
         {status === "error" && (
           <>
-            <p className="text-destructive">Connection failed</p>
-            {message && <p className="text-sm text-muted-foreground">{message}</p>}
-            <Button onClick={() => router.push("/scheduling")}>Back to Scheduling</Button>
+            <XCircle className="w-12 h-12 mx-auto text-red-500" />
+            <p className="text-lg font-medium text-red-600">Connection failed</p>
+            <p className="text-sm text-gray-600">{message}</p>
+            <Button onClick={() => window.close()} className="mt-4" variant="outline">
+              Close Tab
+            </Button>
           </>
         )}
       </Card>
