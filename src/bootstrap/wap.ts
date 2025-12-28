@@ -5,6 +5,9 @@ export async function ensureSupabaseSessionFromWhop(opts: {
   whopOrgId: string;
   email?: string | null;
   name?: string | null;
+  username?: string | null;
+  profilePicture?: string | null;
+  userId?: string | null;
 }) {
   console.log("ensureSupabaseSessionFromWhop entered", opts);
 
@@ -20,7 +23,7 @@ export async function ensureSupabaseSessionFromWhop(opts: {
     .toLowerCase();
   const fallbackEmail = `${normalizedOrgId || crypto.randomUUID()}@noemail.formifycrm.com`;
   const loginEmail = normalizedEmail.length > 0 ? normalizedEmail : fallbackEmail;
-  const displayName = (opts.name ?? "")?.toString().trim() || null;
+  const displayName = (opts.name ?? opts.username ?? "")?.toString().trim() || null;
 
   // Call the Edge Function
   const sess = (await supabase.auth.getSession()).data.session;

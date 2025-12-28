@@ -150,12 +150,30 @@ export const Layout = ({
     if (!isWhopEmbed || !user || hasCapturedDisplayName) return;
 
     const identity = readWhopIdentity();
-    const whopName = identity.name?.trim();
+    const whopName = identity.name?.trim() || identity.username?.trim();
     if (!whopName) return;
 
     (async () => {
       try {
         await performDisplayNameUpdate(whopName);
+        
+        // Also store profile picture if available
+        if (identity.profilePicture) {
+          try {
+            const companyId = await getCompanyId({ allowFallback: false });
+            if (companyId) {
+              await (supabase as any)
+                .from("companies")
+                .update({ 
+                  whop_user_id: identity.userId,
+                  whop_profile_picture: identity.profilePicture 
+                })
+                .eq("id", companyId);
+            }
+          } catch (error) {
+            console.warn("Failed to sync Whop profile picture", error);
+          }
+        }
       } catch (error) {
         console.warn("Failed to sync Whop display name", error);
       }

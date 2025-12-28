@@ -7,7 +7,6 @@ const publicRoutes = [
   '/f',
   '/oauth/callback',
   '/meeting-link-info',
-  '/wh-admin-login',
 ];
 
 // Define protected routes that require authentication
@@ -19,7 +18,6 @@ const protectedRoutes = [
   '/calendar',
   '/events',
   '/goals',
-  '/pricing',
   '/scheduling',
   '/discover',
   '/experience',

@@ -33,11 +33,14 @@ export type WhopIdentity = {
   orgId: string | null;
   email: string | null;
   name: string | null;
+  username: string | null;
+  profilePicture: string | null;
+  userId: string | null;
 };
 
 export function readWhopIdentity(): WhopIdentity {
   if (typeof window === "undefined") {
-    return { orgId: null, email: null, name: null };
+    return { orgId: null, email: null, name: null, username: null, profilePicture: null, userId: null };
   }
 
   const w = window as any;
@@ -59,12 +62,30 @@ export function readWhopIdentity(): WhopIdentity {
   const name =
     (typeof w.WHOP_USERNAME === "string" && w.WHOP_USERNAME) ||
     (typeof w.wapUserName === "string" && w.wapUserName) ||
+    (typeof w.WHOP_NAME === "string" && w.WHOP_NAME) ||
+    null;
+
+  const username =
+    (typeof w.WHOP_USERNAME === "string" && w.WHOP_USERNAME) ||
+    null;
+
+  const profilePicture =
+    (typeof w.WHOP_PROFILE_PICTURE === "string" && w.WHOP_PROFILE_PICTURE) ||
+    (typeof w.wapUserAvatar === "string" && w.wapUserAvatar) ||
+    null;
+
+  const userId =
+    (typeof w.WHOP_USER_ID === "string" && w.WHOP_USER_ID) ||
+    (typeof w.wapUserId === "string" && w.wapUserId) ||
     null;
 
   return {
     orgId,
     email,
     name,
+    username,
+    profilePicture,
+    userId,
   };
 }
 
