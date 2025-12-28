@@ -27,7 +27,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { configureBookingBranding, DEFAULT_PRODUCT_SEGMENT } from "@/lib/urls";
-import { isPricingEnabled } from "@/lib/pricing";
 import { detectWhopContext, readWhopIdentity } from "@/lib/embed";
 import { BrandingProvider } from "@/contexts/BrandingContext";
 import { LockTile } from "@/components/entitlements/LockTile";
@@ -127,7 +126,6 @@ export const Layout = ({
       "/analytics",
       "/call-tracker",
       "/calendar",
-      "/pricing",
       "/events",
     ];
 
@@ -507,15 +505,6 @@ export const Layout = ({
       description: "Deep insights and trends",
       show: true,
     },
-    isPricingEnabled
-      ? {
-          name: "Pricing",
-          href: "/pricing",
-          icon: Coins,
-          description: "View pricing plans",
-          show: true,
-        }
-      : null,
   ];
 
   const navigation = allNavigation.filter((item): item is NonNullable<typeof item> => Boolean(item && item.show));
