@@ -550,7 +550,7 @@ export const Layout = ({
     return false;
   };
   return (
-    <BrandingProvider value={{ productName: removeWatermark && brandName.trim().length > 0 ? brandName.trim() : "Formify CRM" }}>
+    <BrandingProvider value={{ productName: removeWatermark && brandName.trim().length > 0 ? brandName.trim() : "Scale Info" }}>
       <div className="min-h-screen bg-background relative">
       {/* Content Layer */}
       <div className="relative z-10 min-h-screen">
@@ -570,7 +570,7 @@ export const Layout = ({
             <div className="flex items-center justify-between gap-2 sm:gap-4">
               {/* Logo */}
               <div className="flex items-center flex-shrink-0">
-                <span className="text-base sm:text-lg font-semibold tracking-tight text-foreground">{removeWatermark && brandName.trim().length > 0 ? brandName.trim() : 'Formify CRM'}</span>
+                <span className="text-base sm:text-lg font-semibold tracking-tight text-foreground">{removeWatermark && brandName.trim().length > 0 ? brandName.trim() : 'Scale Info'}</span>
               </div>
 
               {/* Desktop Navigation */}
