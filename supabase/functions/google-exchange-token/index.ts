@@ -1,0 +1,124 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID')!
+const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET')!
+const GOOGLE_REDIRECT_URI = Deno.env.get('GOOGLE_REDIRECT_URI') || 'https://rwmmiosgsncsxiehkyyd.supabase.co/functions/v1/google-exchange-token'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
+  try {
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: { Authorization: req.headers.get('Authorization')! },
+        },
+      }
+    )
+
+    const {
+      data: { user },
+    } = await supabaseClient.auth.getUser()
+
+    if (!user) {
+      throw new Error('Unauthorized')
+    }
+
+    const { code } = await req.json()
+
+    if (!code) {
+      throw new Error('Missing authorization code')
+    }
+
+    // Exchange code for tokens
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        code,
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri: GOOGLE_REDIRECT_URI,
+        grant_type: 'authorization_code',
+      }),
+    })
+
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text()
+      console.error('Google token exchange failed:', errorText)
+      throw new Error(`Token exchange failed: ${errorText}`)
+    }
+
+    const tokens = await tokenResponse.json()
+
+    // Get user info from Google
+    const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: {
+        Authorization: `Bearer ${tokens.access_token}`,
+      },
+    })
+
+    const userInfo = await userInfoResponse.json()
+
+    // Calculate expiration time
+    const expiresAt = new Date()
+    expiresAt.setSeconds(expiresAt.getSeconds() + tokens.expires_in)
+
+    // Store integration in database
+    const { error: dbError } = await supabaseClient
+      .from('user_integrations')
+      .upsert({
+        user_id: user.id,
+        provider: 'google',
+        email: userInfo.email,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        expires_at: expiresAt.toISOString(),
+        scope: tokens.scope,
+        metadata: {
+          picture: userInfo.picture,
+          name: userInfo.name,
+        },
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id,provider'
+      })
+
+    if (dbError) {
+      console.error('Database error:', dbError)
+      throw new Error(`Failed to store integration: ${dbError.message}`)
+    }
+
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        email: userInfo.email,
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      },
+    )
+  } catch (error) {
+    console.error('Error:', error)
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      },
+    )
+  }
+})
