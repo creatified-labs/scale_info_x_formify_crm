@@ -84,34 +84,26 @@ export const IntegrationsSettings = () => {
       console.log('Starting OAuth flow for scope:', scope);
       setLoadingScope(scope);
       
-      // Get Whop identity and store in database before OAuth
+      // Get Whop identity and store in cookie before OAuth
       const { detectWhopContext, readWhopIdentity } = await import('@/lib/embed');
       const isWhop = detectWhopContext();
       console.log('Whop context detected:', isWhop);
       
-      let sessionId = null;
       if (isWhop) {
         const whopIdentity = readWhopIdentity();
         console.log('Whop identity:', whopIdentity);
         
         if (whopIdentity?.orgId) {
-          // Store Whop identity in database
-          const { data, error } = await supabase
-            .from('oauth_sessions')
-            .insert({
-              whop_org_id: whopIdentity.orgId,
-              whop_email: whopIdentity.email,
-              whop_name: whopIdentity.name,
-            })
-            .select('id')
-            .single();
+          // Store Whop identity in cookie (expires in 10 minutes)
+          const identityData = JSON.stringify({
+            orgId: whopIdentity.orgId,
+            email: whopIdentity.email,
+            name: whopIdentity.name,
+          });
           
-          if (error) {
-            console.error('Failed to store OAuth session:', error);
-          } else {
-            sessionId = data.id;
-            console.log('OAuth session stored:', sessionId);
-          }
+          // Set cookie with SameSite=None for cross-origin (Whop iframe)
+          document.cookie = `whop_oauth_identity=${encodeURIComponent(identityData)}; path=/; max-age=600; SameSite=None; Secure`;
+          console.log('Whop identity stored in cookie');
         }
       }
       
@@ -119,12 +111,9 @@ export const IntegrationsSettings = () => {
       const { data: session } = await supabase.auth.getSession();
       const token = session?.session?.access_token;
       
-      // Build URL with session ID
+      // Build URL
       const url = new URL(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/google-auth-url`);
       url.searchParams.set('scope', scope);
-      if (sessionId) {
-        url.searchParams.set('session_id', sessionId);
-      }
       
       console.log('Fetching OAuth URL from:', url.toString());
       const res = await fetch(url.toString(), { 

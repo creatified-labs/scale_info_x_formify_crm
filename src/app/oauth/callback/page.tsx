@@ -27,25 +27,30 @@ const OAuthCallback = () => {
       }
 
       const code = searchParams.get("code") || hashParams?.get("code");
-      const state = searchParams.get("state") || hashParams?.get("state");
 
       console.log("=== OAuth Callback Debug ===");
       console.log("Code:", code?.substring(0, 20) + "...");
-      console.log("State parameter:", state);
       
-      if (state) {
+      // Read Whop identity from cookie
+      let whopIdentity = null;
+      const cookies = document.cookie.split(';');
+      const identityCookie = cookies.find(c => c.trim().startsWith('whop_oauth_identity='));
+      
+      if (identityCookie) {
         try {
-          const decoded = atob(state);
-          console.log("Decoded state:", decoded);
-          const parsed = JSON.parse(decoded);
-          console.log("Parsed state:", parsed);
+          const cookieValue = identityCookie.split('=')[1];
+          const decoded = decodeURIComponent(cookieValue);
+          whopIdentity = JSON.parse(decoded);
+          console.log("Whop identity from cookie:", whopIdentity);
+          
+          // Clear the cookie after reading
+          document.cookie = 'whop_oauth_identity=; path=/; max-age=0; SameSite=None; Secure';
         } catch (e) {
-          console.error("Failed to decode state:", e);
+          console.error("Failed to parse identity cookie:", e);
         }
       } else {
-        console.warn("No state parameter in URL!");
-        console.log("Full URL:", window.location.href);
-        console.log("Search params:", Object.fromEntries(searchParams.entries()));
+        console.warn("No Whop identity cookie found!");
+        console.log("All cookies:", document.cookie);
       }
 
       let { data: session } = await supabase.auth.getSession();
@@ -88,7 +93,7 @@ const OAuthCallback = () => {
           },
           body: JSON.stringify({ 
             code,
-            state
+            whop_identity: whopIdentity
           }),
         });
 
