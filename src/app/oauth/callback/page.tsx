@@ -28,11 +28,29 @@ const OAuthCallback = () => {
       const code = searchParams.get("code") || hashParams?.get("code");
       const state = searchParams.get("state") || hashParams?.get("state");
 
+      console.log("=== OAuth Callback Debug ===");
+      console.log("Code:", code?.substring(0, 20) + "...");
+      console.log("State parameter:", state);
+      
+      if (state) {
+        try {
+          const decoded = atob(state);
+          console.log("Decoded state:", decoded);
+          const parsed = JSON.parse(decoded);
+          console.log("Parsed state:", parsed);
+        } catch (e) {
+          console.error("Failed to decode state:", e);
+        }
+      } else {
+        console.warn("No state parameter in URL!");
+        console.log("Full URL:", window.location.href);
+        console.log("Search params:", Object.fromEntries(searchParams.entries()));
+      }
+
       let { data: session } = await supabase.auth.getSession();
       let token = session?.session?.access_token;
 
       console.log("User session status:", { hasSession: !!session?.session, hasToken: !!token });
-      console.log("OAuth state parameter:", state);
 
       if (!code) {
         if (session?.session) {
