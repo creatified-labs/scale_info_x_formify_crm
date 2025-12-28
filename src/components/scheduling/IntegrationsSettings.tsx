@@ -84,28 +84,46 @@ export const IntegrationsSettings = () => {
       console.log('Starting OAuth flow for scope:', scope);
       setLoadingScope(scope);
       
-      // Get Whop identity to pass to OAuth callback
+      // Get Whop identity and store in database before OAuth
       const { detectWhopContext, readWhopIdentity } = await import('@/lib/embed');
       const isWhop = detectWhopContext();
       console.log('Whop context detected:', isWhop);
       
-      let whopIdentity = null;
+      let sessionId = null;
       if (isWhop) {
-        whopIdentity = readWhopIdentity();
+        const whopIdentity = readWhopIdentity();
         console.log('Whop identity:', whopIdentity);
+        
+        if (whopIdentity?.orgId) {
+          // Store Whop identity in database
+          const { data, error } = await supabase
+            .from('oauth_sessions')
+            .insert({
+              whop_org_id: whopIdentity.orgId,
+              whop_email: whopIdentity.email,
+              whop_name: whopIdentity.name,
+            })
+            .select('id')
+            .single();
+          
+          if (error) {
+            console.error('Failed to store OAuth session:', error);
+          } else {
+            sessionId = data.id;
+            console.log('OAuth session stored:', sessionId);
+          }
+        }
       }
       
       // Use direct Google OAuth flow (works in both Whop iframe and standalone)
       const { data: session } = await supabase.auth.getSession();
       const token = session?.session?.access_token;
       
-      // Build URL with Whop identity as parameter
+      // Build URL with session ID
       const url = new URL(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/google-auth-url`);
       url.searchParams.set('scope', scope);
-      if (whopIdentity?.orgId) {
-        url.searchParams.set('whop_org_id', whopIdentity.orgId);
-        if (whopIdentity.email) url.searchParams.set('whop_email', whopIdentity.email);
-        if (whopIdentity.name) url.searchParams.set('whop_name', whopIdentity.name);
+      if (sessionId) {
+        url.searchParams.set('session_id', sessionId);
       }
       
       console.log('Fetching OAuth URL from:', url.toString());
