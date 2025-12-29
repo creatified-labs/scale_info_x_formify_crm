@@ -123,9 +123,20 @@ export const IntegrationsSettings = () => {
       const { data: session } = await supabase.auth.getSession();
       const token = session?.session?.access_token;
       
-      // Build URL
+      // Build URL with Whop identity as parameters
       const url = new URL(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/google-auth-url`);
       url.searchParams.set('scope', scope);
+      
+      // Pass Whop identity to Edge Function so it can encode in redirect_uri
+      if (isWhop) {
+        const whopIdentity = readWhopIdentity();
+        if (whopIdentity?.orgId) {
+          url.searchParams.set('whop_org_id', whopIdentity.orgId);
+          if (whopIdentity.email) url.searchParams.set('whop_email', whopIdentity.email);
+          if (whopIdentity.name) url.searchParams.set('whop_name', whopIdentity.name);
+          console.log('Passing Whop identity to Edge Function:', whopIdentity.orgId);
+        }
+      }
       
       console.log('Fetching OAuth URL from:', url.toString());
       const res = await fetch(url.toString(), { 
