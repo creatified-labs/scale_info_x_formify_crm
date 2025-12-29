@@ -27,10 +27,12 @@ const OAuthCallback = () => {
       }
 
       const code = searchParams.get("code") || hashParams?.get("code");
+      const state = searchParams.get("state") || hashParams?.get("state");
 
       console.log("=== OAuth Callback Debug ===");
       console.log("Code:", code?.substring(0, 20) + "...");
-      console.log("Note: Whop identity is passed via Edge Function URL, not client storage");
+      console.log("State:", state?.substring(0, 20) + "...");
+      console.log("Note: Whop identity is passed via OAuth state parameter");
 
       let { data: session } = await supabase.auth.getSession();
       let token = session?.session?.access_token;
@@ -71,7 +73,8 @@ const OAuthCallback = () => {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ 
-            code
+            code,
+            state
           }),
         });
 
