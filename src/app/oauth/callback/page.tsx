@@ -30,63 +30,7 @@ const OAuthCallback = () => {
 
       console.log("=== OAuth Callback Debug ===");
       console.log("Code:", code?.substring(0, 20) + "...");
-      
-      // Read Whop identity from localStorage or sessionStorage
-      let whopIdentity = null;
-      try {
-        console.log("🔍 Checking for stored Whop identity...");
-        console.log("Current origin:", window.location.origin);
-        console.log("Has opener:", !!window.opener);
-        
-        // Try localStorage first
-        let storedIdentity = localStorage.getItem('whop_oauth_identity');
-        console.log("localStorage check:", storedIdentity ? "FOUND" : "NOT FOUND");
-        
-        // Try sessionStorage as backup
-        if (!storedIdentity) {
-          storedIdentity = sessionStorage.getItem('whop_oauth_identity');
-          console.log("sessionStorage check:", storedIdentity ? "FOUND" : "NOT FOUND");
-        }
-        
-        // Try to get from opener window if popup
-        if (!storedIdentity && window.opener && !window.opener.closed) {
-          try {
-            console.log("Trying to access opener's localStorage...");
-            storedIdentity = window.opener.localStorage.getItem('whop_oauth_identity');
-            console.log("opener.localStorage check:", storedIdentity ? "FOUND" : "NOT FOUND");
-          } catch (e) {
-            console.error("Cannot access opener localStorage (cross-origin):", e instanceof Error ? e.message : String(e));
-          }
-        }
-        
-        if (storedIdentity) {
-          const parsed = JSON.parse(storedIdentity);
-          console.log("✅ Whop identity found:", parsed);
-          
-          // Check if not expired (10 minutes)
-          const age = Date.now() - (parsed.timestamp || 0);
-          if (age < 10 * 60 * 1000) {
-            whopIdentity = {
-              orgId: parsed.orgId,
-              email: parsed.email,
-              name: parsed.name
-            };
-            console.log("✅ Using Whop identity:", whopIdentity);
-          } else {
-            console.warn("⚠️ Stored identity expired (age:", age, "ms)");
-          }
-          
-          // Clear after reading
-          localStorage.removeItem('whop_oauth_identity');
-          sessionStorage.removeItem('whop_oauth_identity');
-        } else {
-          console.error("❌ No Whop identity found in any storage!");
-          console.log("All localStorage keys:", Object.keys(localStorage));
-          console.log("All sessionStorage keys:", Object.keys(sessionStorage));
-        }
-      } catch (e) {
-        console.error("Failed to read identity from storage:", e);
-      }
+      console.log("Note: Whop identity is passed via Edge Function URL, not client storage");
 
       let { data: session } = await supabase.auth.getSession();
       let token = session?.session?.access_token;
@@ -127,8 +71,7 @@ const OAuthCallback = () => {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ 
-            code,
-            whop_identity: whopIdentity
+            code
           }),
         });
 
