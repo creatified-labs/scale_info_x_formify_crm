@@ -55,7 +55,7 @@ const OAuthCallback = () => {
             storedIdentity = window.opener.localStorage.getItem('whop_oauth_identity');
             console.log("opener.localStorage check:", storedIdentity ? "FOUND" : "NOT FOUND");
           } catch (e) {
-            console.error("Cannot access opener localStorage (cross-origin):", e.message);
+            console.error("Cannot access opener localStorage (cross-origin):", e instanceof Error ? e.message : String(e));
           }
         }
         
