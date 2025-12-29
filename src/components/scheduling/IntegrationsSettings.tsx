@@ -103,8 +103,20 @@ export const IntegrationsSettings = () => {
           };
           
           localStorage.setItem('whop_oauth_identity', JSON.stringify(identityData));
-          console.log('Whop identity stored in localStorage:', identityData);
+          console.log('✅ Whop identity stored in localStorage:', identityData);
+          
+          // Verify it was stored
+          const verification = localStorage.getItem('whop_oauth_identity');
+          console.log('✅ Verification - can read back:', verification ? 'YES' : 'NO');
+          
+          // Also store in sessionStorage as backup
+          sessionStorage.setItem('whop_oauth_identity', JSON.stringify(identityData));
+          console.log('✅ Also stored in sessionStorage as backup');
+        } else {
+          console.error('❌ No orgId in Whop identity!');
         }
+      } else {
+        console.warn('⚠️ Not in Whop context - identity will not be stored');
       }
       
       // Use direct Google OAuth flow (works in both Whop iframe and standalone)
