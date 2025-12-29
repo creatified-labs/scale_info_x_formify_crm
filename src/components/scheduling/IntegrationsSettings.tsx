@@ -128,14 +128,30 @@ export const IntegrationsSettings = () => {
       url.searchParams.set('scope', scope);
       
       // Pass Whop identity to Edge Function so it can encode in redirect_uri
+      let whopOrgId = null;
+      let whopEmail = null;
+      let whopName = null;
+      
       if (isWhop) {
         const whopIdentity = readWhopIdentity();
-        if (whopIdentity?.orgId) {
-          url.searchParams.set('whop_org_id', whopIdentity.orgId);
-          if (whopIdentity.email) url.searchParams.set('whop_email', whopIdentity.email);
-          if (whopIdentity.name) url.searchParams.set('whop_name', whopIdentity.name);
-          console.log('Passing Whop identity to Edge Function:', whopIdentity.orgId);
-        }
+        whopOrgId = whopIdentity?.orgId;
+        whopEmail = whopIdentity?.email;
+        whopName = whopIdentity?.name;
+      }
+      
+      // Fallback to environment variable if not detected from Whop context
+      if (!whopOrgId && process.env.NEXT_PUBLIC_WHOP_COMPANY_ID) {
+        whopOrgId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+        console.log('Using fallback Whop company ID from environment:', whopOrgId);
+      }
+      
+      if (whopOrgId) {
+        url.searchParams.set('whop_org_id', whopOrgId);
+        if (whopEmail) url.searchParams.set('whop_email', whopEmail);
+        if (whopName) url.searchParams.set('whop_name', whopName);
+        console.log('Passing Whop identity to Edge Function:', whopOrgId);
+      } else {
+        console.error('❌ No Whop org ID available - OAuth will fail!');
       }
       
       console.log('Fetching OAuth URL from:', url.toString());
