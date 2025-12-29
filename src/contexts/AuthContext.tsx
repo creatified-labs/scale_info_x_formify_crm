@@ -35,10 +35,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+        setSession(session);
+        setUser(session.user);
+        setLoading(false);
+      } else {
+        // No session - try to bootstrap from Whop
+        try {
+          const { bootstrapWhopUser } = await import('@/lib/whop-bootstrap');
+          const result = await bootstrapWhopUser();
+          
+          if (result.success) {
+            console.log('Whop user bootstrapped, refreshing session...');
+            // Refresh session after bootstrap
+            const { data: { session: newSession } } = await supabase.auth.getSession();
+            setSession(newSession);
+            setUser(newSession?.user ?? null);
+          }
+        } catch (error) {
+          console.error('Failed to bootstrap Whop user:', error);
+        }
+        
+        setLoading(false);
+      }
     });
 
     return () => subscription.unsubscribe();
