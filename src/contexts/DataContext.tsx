@@ -253,15 +253,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
           .order("created_at", { ascending: false }),
       ]);
 
-      if (revenueRes.error) throw revenueRes.error;
-      if (goalsRes.error) throw goalsRes.error;
-      if (callsRes.error) throw callsRes.error;
+      if (revenueRes.error) {
+        console.warn('Revenue query error (non-critical):', revenueRes.error);
+      }
+      if (goalsRes.error) {
+        console.warn('Goals query error (non-critical):', goalsRes.error);
+      }
+      if (callsRes.error) {
+        console.warn('Calls query error (non-critical):', callsRes.error);
+      }
 
       setRevenueEntries((revenueRes.data ?? []).map((row: any) => mapRevenueFromDb(row as DbRevenueRow)));
       setGoals((goalsRes.data ?? []).map((row: any) => mapGoalFromDb(row as DbGoalRow)));
       setCalls((callsRes.data ?? []).map((row: any) => mapCallFromDb(row as DbCallRow)));
     } catch (error: any) {
-      console.error('Error loading data:', error);
+      console.warn('Error loading data (non-critical):', error?.message || error);
       setRevenueEntries([]);
       setGoals([]);
       setCalls([]);
