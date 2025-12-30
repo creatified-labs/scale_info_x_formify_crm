@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { PreviewModeToggle } from "@/components/PreviewModeToggle";
-import { BarChart3, PoundSterling, Target, Calendar, TrendingUp, Menu, X, Phone, Coins, Star, Settings, LogOut, UserCircle } from "lucide-react";
+import { BarChart3, PoundSterling, Target, Calendar, TrendingUp, Menu, X, Phone, Coins, Star, Settings, LogOut, UserCircle, Bell } from "lucide-react";
 import { Newsletter } from "@/components/Newsletter";
 import { RevenueEntry, Goal } from "@/types/revenue";
 import { useEntitlements } from "@/contexts/EntitlementsContext";
@@ -532,6 +532,13 @@ export const Layout = ({
       href: "/call-tracker",
       icon: Phone,
       description: "Manage calls and notes",
+      show: true,
+    },
+    {
+      name: "Notifications",
+      href: "/notifications",
+      icon: Bell,
+      description: "Email templates and settings",
       show: true,
     },
     {
