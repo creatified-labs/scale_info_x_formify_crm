@@ -79,16 +79,43 @@ export async function bootstrapWhopUser(): Promise<{
       };
     }
     
-    const result = await response.json();
-    console.log('Whop user bootstrapped successfully:', result);
+    const data = await response.json();
+    console.log('Whop user bootstrapped successfully');
+    
+    // If we got a session URL, use it to sign in
+    if (data.session_url) {
+      console.log('Signing in with session URL...');
+      try {
+        // Extract the token from the magic link URL
+        const url = new URL(data.session_url);
+        const token = url.searchParams.get('token');
+        
+        if (token) {
+          const { createClient } = await import('@/lib/supabase/client');
+          const supabase = createClient();
+          const { error: verifyError } = await supabase.auth.verifyOtp({
+            token_hash: token,
+            type: 'magiclink',
+          });
+          
+          if (verifyError) {
+            console.error('Failed to verify session token:', verifyError);
+          } else {
+            console.log('Session established successfully');
+          }
+        }
+      } catch (e) {
+        console.error('Failed to establish session:', e);
+      }
+    }
     
     return {
       success: true,
-      userId: result.user_id,
-      companyId: result.company_id,
+      userId: data.user_id,
+      companyId: data.company_id,
     };
   } catch (error) {
-    console.error('Error bootstrapping Whop user:', error);
+    console.error('Bootstrap error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
