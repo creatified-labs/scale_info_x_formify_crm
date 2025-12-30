@@ -541,6 +541,13 @@ export const Layout = ({
       description: "Deep insights and trends",
       show: true,
     },
+    {
+      name: "Settings",
+      href: "/settings",
+      icon: Settings,
+      description: "Integrations and preferences",
+      show: true,
+    },
   ];
 
   const navigation = allNavigation.filter((item): item is NonNullable<typeof item> => Boolean(item && item.show));
