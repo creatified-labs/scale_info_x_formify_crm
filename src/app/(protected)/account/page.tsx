@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { IntegrationsSettings } from "@/components/scheduling/IntegrationsSettings";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,10 +39,16 @@ export default function AccountSettingsPage() {
   const [syncExistingEvents, setSyncExistingEvents] = useState(false);
   const [calendarSyncInterval, setCalendarSyncInterval] = useState("realtime");
   const [integrationSettingsSaving, setIntegrationSettingsSaving] = useState(false);
+  
+  // Calendar Selection
+  const [availableCalendars, setAvailableCalendars] = useState<Array<{ id: string; summary: string; primary?: boolean }>>([]);
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>([]);
+  const [loadingCalendars, setLoadingCalendars] = useState(false);
 
   useEffect(() => {
     loadUserTimezone();
     loadIntegrationSettings();
+    loadGoogleCalendars();
   }, []);
 
   const loadUserTimezone = async () => {
@@ -82,10 +89,65 @@ export default function AccountSettingsPage() {
           setAutoCreateMeetLinks(settings.google_calendar.auto_create_meet_links ?? true);
           setSyncExistingEvents(settings.google_calendar.sync_existing_events ?? false);
           setCalendarSyncInterval(settings.google_calendar.sync_interval ?? "realtime");
+          setSelectedCalendarIds(settings.google_calendar.selected_calendars ?? []);
         }
       }
     } catch (error) {
       console.warn("Error loading integration settings:", error);
+    }
+  };
+
+  const loadGoogleCalendars = async () => {
+    setLoadingCalendars(true);
+    try {
+      const companyId = await getCompanyId({ allowFallback: true });
+      if (!companyId) return;
+
+      // Get integration account with access token
+      const { data: integrationData } = await supabase
+        .from("integration_accounts")
+        .select("access_token, refresh_token")
+        .eq("company_id", companyId)
+        .eq("provider", "google_calendar")
+        .maybeSingle();
+
+      if (!integrationData?.access_token) {
+        setAvailableCalendars([]);
+        return;
+      }
+
+      // Fetch calendar list from Google
+      const response = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList", {
+        headers: {
+          Authorization: `Bearer ${integrationData.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.warn("Failed to fetch calendars:", response.statusText);
+        return;
+      }
+
+      const data = await response.json();
+      const calendars = data.items?.map((cal: any) => ({
+        id: cal.id,
+        summary: cal.summary || cal.id,
+        primary: cal.primary || false,
+      })) || [];
+
+      setAvailableCalendars(calendars);
+
+      // Auto-select primary calendar if no calendars selected yet
+      if (selectedCalendarIds.length === 0 && calendars.length > 0) {
+        const primaryCal = calendars.find((c: any) => c.primary);
+        if (primaryCal) {
+          setSelectedCalendarIds([primaryCal.id]);
+        }
+      }
+    } catch (error) {
+      console.warn("Error loading Google calendars:", error);
+    } finally {
+      setLoadingCalendars(false);
     }
   };
 
@@ -128,6 +190,7 @@ export default function AccountSettingsPage() {
           auto_create_meet_links: autoCreateMeetLinks,
           sync_existing_events: syncExistingEvents,
           sync_interval: calendarSyncInterval,
+          selected_calendars: selectedCalendarIds,
         },
       };
 
@@ -261,6 +324,52 @@ export default function AccountSettingsPage() {
                 checked={syncExistingEvents}
                 onCheckedChange={setSyncExistingEvents}
               />
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <Label>Calendars to check for conflicts</Label>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Select which calendars to check when preventing double-bookings
+                </p>
+              </div>
+              
+              {loadingCalendars ? (
+                <p className="text-sm text-muted-foreground">Loading calendars...</p>
+              ) : availableCalendars.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Connect your Google Calendar to select calendars
+                </p>
+              ) : (
+                <div className="space-y-2 border rounded-lg p-3">
+                  {availableCalendars.map((calendar) => (
+                    <div key={calendar.id} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id={`calendar-${calendar.id}`}
+                        checked={selectedCalendarIds.includes(calendar.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedCalendarIds([...selectedCalendarIds, calendar.id]);
+                          } else {
+                            setSelectedCalendarIds(selectedCalendarIds.filter(id => id !== calendar.id));
+                          }
+                        }}
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                      <label
+                        htmlFor={`calendar-${calendar.id}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        {calendar.summary}
+                        {calendar.primary && (
+                          <span className="ml-2 text-xs text-muted-foreground">(Primary)</span>
+                        )}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
