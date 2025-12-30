@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { PreviewModeToggle } from "@/components/PreviewModeToggle";
 import { BarChart3, PoundSterling, Target, Calendar, TrendingUp, Menu, X, Phone, Coins, Star, Settings, LogOut, UserCircle, Bell } from "lucide-react";
 import { Newsletter } from "@/components/Newsletter";
+import { IntegrationsSettings } from "@/components/scheduling/IntegrationsSettings";
 import { RevenueEntry, Goal } from "@/types/revenue";
 import { useEntitlements } from "@/contexts/EntitlementsContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -600,12 +601,6 @@ export const Layout = ({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem asChild>
-                      <Link href="/settings" className="cursor-pointer">
-                        <Settings className="mr-2 h-4 w-4" />
-                        <span>Settings</span>
-                      </Link>
-                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={openAccountSettings} className="cursor-pointer">
                       <UserCircle className="mr-2 h-4 w-4" />
                       <span>Account settings</span>
@@ -727,6 +722,14 @@ export const Layout = ({
                   </Button>
                 </div>
               </div>
+            </div>
+
+            {/* Integrations Section */}
+            <div className="space-y-4 border-t pt-4">
+              <div>
+                <h3 className="text-sm font-medium mb-4">Integrations</h3>
+              </div>
+              <IntegrationsSettings />
             </div>
 
             {/* Branding Section */}
