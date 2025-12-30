@@ -16,6 +16,11 @@ serve(async (req) => {
   try {
     const url = new URL(req.url)
     const scope = url.searchParams.get('scope') || 'calendar'
+    const whopOrgId = url.searchParams.get('whop_org_id')
+    const whopEmail = url.searchParams.get('whop_email')
+    const whopName = url.searchParams.get('whop_name')
+
+    console.log('google-auth-url received params:', { scope, whopOrgId })
 
     // Google OAuth scopes
     const scopes = scope === 'meet' 
@@ -28,6 +33,22 @@ serve(async (req) => {
           'https://www.googleapis.com/auth/calendar.events',
         ]
 
+    // Encode Whop identity in OAuth state parameter instead of redirect_uri
+    let stateData = {}
+    if (whopOrgId) {
+      stateData = {
+        whop_org_id: whopOrgId,
+        whop_email: whopEmail,
+        whop_name: whopName,
+      }
+      console.log('Encoding Whop identity in state parameter')
+    }
+    
+    // Use Deno's built-in base64 encoding
+    const encoder = new TextEncoder()
+    const data = encoder.encode(JSON.stringify(stateData))
+    const stateParam = btoa(String.fromCharCode(...data))
+
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
     authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID)
     authUrl.searchParams.set('redirect_uri', GOOGLE_REDIRECT_URI)
@@ -35,6 +56,9 @@ serve(async (req) => {
     authUrl.searchParams.set('scope', scopes.join(' '))
     authUrl.searchParams.set('access_type', 'offline')
     authUrl.searchParams.set('prompt', 'consent')
+    authUrl.searchParams.set('state', stateParam)
+    
+    console.log('OAuth URL generated with state parameter')
 
     return new Response(
       JSON.stringify({ url: authUrl.toString() }),

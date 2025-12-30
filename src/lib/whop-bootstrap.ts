@@ -91,8 +91,7 @@ export async function bootstrapWhopUser(): Promise<{
         const token = url.searchParams.get('token');
         
         if (token) {
-          const { createClient } = await import('@/lib/supabase/client');
-          const supabase = createClient();
+          const { supabase } = await import('@/integrations/supabase/client');
           const { error: verifyError } = await supabase.auth.verifyOtp({
             token_hash: token,
             type: 'magiclink',

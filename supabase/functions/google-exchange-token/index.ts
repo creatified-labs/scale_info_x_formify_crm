@@ -63,7 +63,38 @@ serve(async (req) => {
 
     const body = await req.json()
     code = body.code
-    const whopIdentity = body.whop_identity
+    const stateParam = body.state
+
+    console.log('Received code:', code ? 'yes' : 'no')
+    console.log('Received state:', stateParam ? 'yes' : 'no')
+    
+    // Extract Whop identity from OAuth state parameter
+    let whopIdentity = null
+    if (stateParam) {
+      try {
+        // Use Deno's built-in base64 decoding
+        const decoded = atob(stateParam)
+        const decoder = new TextDecoder()
+        const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0))
+        const stateData = JSON.parse(decoder.decode(bytes))
+        
+        if (stateData.whop_org_id) {
+          whopIdentity = {
+            orgId: stateData.whop_org_id,
+            email: stateData.whop_email,
+            name: stateData.whop_name
+          }
+          console.log('Whop identity from state parameter:', whopIdentity)
+        }
+      } catch (e) {
+        console.error('Failed to decode state parameter:', e)
+      }
+    }
+
+    console.log('Received whop_identity:', whopIdentity ? 'yes' : 'no')
+    if (whopIdentity) {
+      console.log('Whop org ID:', whopIdentity.orgId)
+    }
 
     if (!code) {
       throw new Error('Missing authorization code')
@@ -72,6 +103,8 @@ serve(async (req) => {
     // If no user but we have Whop identity, create/get user with service role
     let effectiveUser = user
     if (!effectiveUser && whopIdentity?.orgId) {
+      console.log('Creating user from Whop identity:', whopIdentity)
+      
       const supabaseAdmin = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -84,12 +117,18 @@ serve(async (req) => {
       )
 
       const email = whopIdentity.email || `${whopIdentity.orgId}@whop.temp`
+      console.log('Looking for existing user with email:', email)
       
       // Try to find existing user
-      const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
+      const { data: existingUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers()
+      if (listError) {
+        console.error('Failed to list users:', listError)
+      }
+      
       let userId = existingUsers?.users?.find(u => u.email === email)?.id
 
       if (!userId) {
+        console.log('User not found, creating new user')
         // Create new user
         const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
           email,
@@ -102,11 +141,31 @@ serve(async (req) => {
 
         if (createError) {
           console.error('Failed to create user from Whop identity:', createError)
+          throw new Error(`Failed to create user: ${createError.message}`)
         } else {
+          console.log('User created successfully:', newUser.user.id)
           userId = newUser.user.id
           effectiveUser = newUser.user
+          
+          // Create company record for Whop org
+          const { error: companyError } = await supabaseAdmin
+            .from('companies')
+            .upsert({
+              id: whopIdentity.orgId,
+              name: whopIdentity.name || whopIdentity.orgId,
+              created_at: new Date().toISOString(),
+            }, {
+              onConflict: 'id'
+            })
+          
+          if (companyError) {
+            console.error('Failed to create company record:', companyError)
+          } else {
+            console.log('Company record created:', whopIdentity.orgId)
+          }
         }
       } else {
+        console.log('Found existing user:', userId)
         // Get existing user
         const { data: existingUser } = await supabaseAdmin.auth.admin.getUserById(userId)
         effectiveUser = existingUser?.user || null
@@ -151,10 +210,15 @@ serve(async (req) => {
 
     // User must exist to store integration
     if (!effectiveUser) {
+      const errorDetail = whopIdentity?.orgId 
+        ? `Failed to create user for Whop org ${whopIdentity.orgId}. Check Edge Function logs for details.`
+        : 'No user session and no Whop identity provided. Please access through Whop.';
+      
       return new Response(
         JSON.stringify({ 
           error: 'Authentication required',
-          detail: 'Unable to identify user. Please try again.',
+          detail: errorDetail,
+          whop_identity: whopIdentity,
           tokens: {
             access_token: tokens.access_token,
             email: userInfo.email,
