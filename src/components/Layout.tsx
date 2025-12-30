@@ -541,13 +541,6 @@ export const Layout = ({
       description: "Deep insights and trends",
       show: true,
     },
-    {
-      name: "Settings",
-      href: "/settings",
-      icon: Settings,
-      description: "Integrations and preferences",
-      show: true,
-    },
   ];
 
   const navigation = allNavigation.filter((item): item is NonNullable<typeof item> => Boolean(item && item.show));
@@ -607,6 +600,12 @@ export const Layout = ({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                      <Link href="/settings" className="cursor-pointer">
+                        <Settings className="mr-2 h-4 w-4" />
+                        <span>Settings</span>
+                      </Link>
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={openAccountSettings} className="cursor-pointer">
                       <UserCircle className="mr-2 h-4 w-4" />
                       <span>Account settings</span>
