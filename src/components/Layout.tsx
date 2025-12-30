@@ -601,9 +601,11 @@ export const Layout = ({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={openAccountSettings} className="cursor-pointer">
-                      <UserCircle className="mr-2 h-4 w-4" />
-                      <span>Account settings</span>
+                    <DropdownMenuItem asChild>
+                      <Link href="/account" className="cursor-pointer">
+                        <Settings className="mr-2 h-4 w-4" />
+                        <span>Account settings</span>
+                      </Link>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
