@@ -97,7 +97,7 @@ async function ensureCompanyIdViaEdge(): Promise<string | null> {
     },
     body: JSON.stringify({ name: desiredName }),
   }).catch((error) => {
-    console.error("ensure-company request failed", error);
+    console.warn("ensure-company request failed (non-critical):", error);
     return null;
   });
 
@@ -105,16 +105,12 @@ async function ensureCompanyIdViaEdge(): Promise<string | null> {
     if (res) {
       try {
         const body = await res.json();
-        console.error("ensure-company failed", body);
+        console.warn("ensure-company failed (non-critical):", body);
       } catch (err) {
-        console.error("ensure-company unable to parse error", err);
+        console.warn("ensure-company unable to parse error (non-critical):", err);
       }
     }
-    const fallback = ensureLocalDevCompanyId();
-    if (fallback) {
-      cacheLocalCompanyId(fallback);
-      return fallback;
-    }
+    // Don't throw errors - just return null and let Whop bootstrap handle it
     return null;
   }
 
@@ -156,6 +152,12 @@ export async function getCompanyId(options?: GetCompanyIdOptions): Promise<strin
 
   const cid = (user.user_metadata as any)?.company_id as string | undefined;
   if (cid) return cid;
+
+  // Check for Whop company ID from environment
+  const whopCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+  if (whopCompanyId) {
+    return whopCompanyId;
+  }
 
   const ensuredCompanyId = await ensureCompanyIdViaEdge();
   if (ensuredCompanyId) {
