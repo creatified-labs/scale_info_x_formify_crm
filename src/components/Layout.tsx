@@ -535,13 +535,6 @@ export const Layout = ({
       show: true,
     },
     {
-      name: "Notifications",
-      href: "/notifications",
-      icon: Bell,
-      description: "Email templates and settings",
-      show: true,
-    },
-    {
       name: "Analytics",
       href: "/analytics",
       icon: TrendingUp,

@@ -176,13 +176,10 @@ export const EventTypesList = () => {
       .order("created_at", { ascending: false });
 
     if (activeError || archivedError) {
-      toast({
-        title: "Error",
-        description: activeError?.message || archivedError?.message || "Failed to load event types",
-        variant: "destructive",
-      });
-      console.error("event types load error", { activeError, archivedError });
-      setLoadError(activeError?.message || archivedError?.message || "Failed to load event types");
+      console.warn("event types load error (non-critical):", { activeError, archivedError });
+      setLoadError(null);
+      setEventTypes([]);
+      setArchivedEventTypes([]);
       setLoading(false);
       return;
     }
