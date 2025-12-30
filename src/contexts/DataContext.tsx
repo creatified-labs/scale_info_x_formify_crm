@@ -219,11 +219,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const companyId = await getCompanyId({ allowFallback: false });
+      const companyId = await getCompanyId({ allowFallback: true });
       if (!companyId) {
         setRevenueEntries([]);
         setGoals([]);
         setCalls([]);
+        if (!background) {
+          setLoading(false);
+        }
+        if (!hydrated) {
+          setHydrated(true);
+        }
         return;
       }
 
