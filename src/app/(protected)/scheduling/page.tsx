@@ -91,9 +91,7 @@ const Scheduling = () => {
             <TabsTrigger value="availability">Availability</TabsTrigger>
             <TabsTrigger value="time-blocks">Time Blocks</TabsTrigger>
             <TabsTrigger value="bookings">Bookings</TabsTrigger>
-            {isLocalhost && (
-              <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            )}
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
             {showIntegrations && <TabsTrigger value="integrations">Integrations</TabsTrigger>}
           </TabsList>
 
@@ -119,11 +117,9 @@ const Scheduling = () => {
             {activeTab === 'bookings' && <BookingsList />}
           </TabsContent>
 
-          {isLocalhost && (
-            <TabsContent value="notifications" className="mt-6">
-              {activeTab === 'notifications' && <NotificationsSettings />}
-            </TabsContent>
-          )}
+          <TabsContent value="notifications" className="mt-6">
+            {activeTab === 'notifications' && <NotificationsSettings />}
+          </TabsContent>
 
           {showIntegrations && (
             <TabsContent value="integrations" className="mt-6">
