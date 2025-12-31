@@ -44,6 +44,7 @@ export default function AccountSettingsPage() {
   const [availableCalendars, setAvailableCalendars] = useState<Array<{ id: string; summary: string; primary?: boolean }>>([]);
   const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>([]);
   const [loadingCalendars, setLoadingCalendars] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     loadUserTimezone();
@@ -206,6 +207,50 @@ export default function AccountSettingsPage() {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
       setIntegrationSettingsSaving(false);
+    }
+  };
+
+  const handleSyncNow = async () => {
+    setSyncing(true);
+    try {
+      const companyId = await getCompanyId({ allowFallback: true });
+      if (!companyId) {
+        toast({ title: "Error", description: "No company found", variant: "destructive" });
+        return;
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/sync-calendar-events`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ company_id: companyId }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to sync calendar');
+      }
+
+      if (data.skipped) {
+        toast({ 
+          title: "Sync Skipped", 
+          description: data.message || "Sync existing events is disabled in settings" 
+        });
+      } else {
+        toast({ 
+          title: "Calendar Synced", 
+          description: `Synced ${data.synced_count || 0} events from ${data.calendars_checked || 0} calendar(s)` 
+        });
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -391,9 +436,16 @@ export default function AccountSettingsPage() {
               </p>
             </div>
 
-            <div className="flex justify-end pt-4">
+            <div className="flex justify-end gap-2">
+              <Button 
+                variant="outline" 
+                onClick={handleSyncNow} 
+                disabled={syncing || !syncExistingEvents}
+              >
+                {syncing ? "Syncing..." : "Sync Now"}
+              </Button>
               <Button onClick={handleIntegrationSettingsSave} disabled={integrationSettingsSaving}>
-                {integrationSettingsSaving ? "Saving..." : "Save integration settings"}
+                {integrationSettingsSaving ? "Saving..." : "Save settings"}
               </Button>
             </div>
           </div>
