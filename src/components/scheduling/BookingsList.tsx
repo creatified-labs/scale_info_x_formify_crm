@@ -499,6 +499,57 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
     }
   };
 
+  const checkWhopPayment = async (booking: Booking) => {
+    setCheckingPayment(booking.id);
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/check-whop-payment`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ booking_id: booking.id }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to check payment');
+      }
+
+      if (data.has_payment) {
+        setBookings(bookings.map(b => 
+          b.id === booking.id 
+            ? { ...b, is_converted: true, converted_at: new Date().toISOString() } as any
+            : b
+        ));
+
+        toast({
+          title: "Payment Confirmed!",
+          description: `Found ${data.active_memberships_count} active Whop membership(s) for ${data.email}`,
+        });
+
+        signalCallTrackerRefresh();
+      } else {
+        toast({
+          title: "No Payment Found",
+          description: data.message || "No active Whop membership found for this email",
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to check Whop payment",
+        variant: "destructive",
+      });
+    } finally {
+      setCheckingPayment(null);
+    }
+  };
+
   const deleteBooking = async (bookingId: string) => {
     if (!confirm("Are you sure you want to delete this booking? This will remove all associated data including conversions and revenue from analytics.")) {
       return;
