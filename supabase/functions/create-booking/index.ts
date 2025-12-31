@@ -130,14 +130,35 @@ serve(async (req) => {
       )
     }
 
-    // Add to Google Calendar (async, don't wait)
+    // Add to Google Calendar (wait for Meet link)
+    let meetLink = null
     const autoAddToCalendar = settings?.google_calendar?.auto_add_bookings ?? true
     if (autoAddToCalendar) {
-      fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/add-booking-to-calendar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ booking_id: booking.id }),
-      }).catch(err => console.error('Calendar add error:', err))
+      try {
+        const calendarResponse = await fetch(
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/add-booking-to-calendar`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ booking_id: booking.id }),
+          }
+        )
+        
+        if (calendarResponse.ok) {
+          const calendarData = await calendarResponse.json()
+          meetLink = calendarData.meet_link
+          
+          // Update booking with meet link
+          if (meetLink) {
+            await supabaseClient
+              .from('bookings')
+              .update({ video_join_url: meetLink })
+              .eq('id', booking.id)
+          }
+        }
+      } catch (err) {
+        console.error('Calendar add error:', err)
+      }
     }
 
     // Send confirmation email (async, don't wait)
@@ -171,7 +192,14 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, booking }),
+      JSON.stringify({ 
+        success: true, 
+        booking: {
+          ...booking,
+          video_join_url: meetLink || booking.video_join_url,
+        },
+        meet_link: meetLink,
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   } catch (error) {

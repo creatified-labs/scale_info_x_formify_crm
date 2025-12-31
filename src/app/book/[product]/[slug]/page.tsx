@@ -333,8 +333,12 @@ const PublicBooking = () => {
       }
       const json = await res.json().catch(() => null);
       const createdBookingId = json?.booking?.id as string | undefined;
+      const meetLink = json?.meet_link || json?.booking?.video_join_url;
 
       trackEventAnalytics("submission");
+
+      // Use Meet link if available, otherwise use original join URL
+      const finalJoinUrl = meetLink || joinUrl;
 
       // Track submission
       const confirmation: ConfirmationDetails = {
@@ -344,7 +348,7 @@ const PublicBooking = () => {
         endIso: endTime.toISOString(),
         timezone: payload.invitee_timezone,
         callType,
-        joinUrl,
+        joinUrl: finalJoinUrl,
         locationText,
       };
 
@@ -360,8 +364,14 @@ const PublicBooking = () => {
         notes: `Booking via ${eventType.name}`,
         status: "scheduled",
         bookingId: createdBookingId,
-        joinUrl: joinUrl || undefined,
+        joinUrl: finalJoinUrl || undefined,
       });
+
+      // Check for custom redirect URL
+      if (eventType.redirect_url) {
+        window.location.href = eventType.redirect_url;
+        return;
+      }
 
       setSubmitted(true);
       setConfirmationDetails(confirmation);
