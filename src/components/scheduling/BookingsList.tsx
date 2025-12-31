@@ -61,6 +61,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
   const [emailBody, setEmailBody] = useState<string>("");
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailTemplates, setEmailTemplates] = useState<{ id: string; name: string; subject: string; body: string }[]>([]);
+  const [checkingPayment, setCheckingPayment] = useState<string | null>(null);
   const isLocalhost = typeof window !== "undefined" &&
     (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
@@ -814,7 +815,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
                         {(booking as any).is_converted ? (
                           <div className="flex items-center gap-2">
                             <Badge variant="default" className="gap-1">
-                              £{((booking as any).conversion_amount || 0).toFixed(2)}
+                              {(booking as any).conversion_amount ? `£${((booking as any).conversion_amount).toFixed(2)}` : 'Paid'}
                             </Badge>
                             <Button
                               variant="ghost"
@@ -826,19 +827,32 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
                             </Button>
                           </div>
                         ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedBooking(booking);
-                              setConversionDialogOpen(true);
-                            }}
-                            disabled={booking.status !== 'completed'}
-                            title={booking.status !== 'completed' ? 'Only completed bookings can be marked as converted' : ''}
-                          >
-                            <PoundSterling className="w-4 h-4 mr-1" />
-                            Mark Converted
-                          </Button>
+                          <div className="flex flex-col gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => checkWhopPayment(booking)}
+                              disabled={checkingPayment === booking.id}
+                              className="w-full"
+                            >
+                              <RefreshCw className={cn("w-4 h-4 mr-1", checkingPayment === booking.id && "animate-spin")} />
+                              {checkingPayment === booking.id ? 'Checking...' : 'Check Whop'}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedBooking(booking);
+                                setConversionDialogOpen(true);
+                              }}
+                              disabled={booking.status !== 'completed'}
+                              title={booking.status !== 'completed' ? 'Only completed bookings can be marked as converted' : ''}
+                              className="w-full"
+                            >
+                              <PoundSterling className="w-4 h-4 mr-1" />
+                              Manual
+                            </Button>
+                          </div>
                         )}
                       </TableCell>
                       <TableCell>
