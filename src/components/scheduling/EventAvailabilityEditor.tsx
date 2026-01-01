@@ -57,7 +57,7 @@ export const EventAvailabilityEditor = ({ eventTypeId }: EventAvailabilityEditor
       if (!token) throw new Error("Not authenticated");
       const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/upsert-availability`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
         body: JSON.stringify({ event_type_id: eventTypeId, rules: newRules.map(r => ({ weekday: r.weekday, start_time: r.start_time, end_time: r.end_time })) })
       });
       if (!res.ok) {
@@ -81,7 +81,7 @@ export const EventAvailabilityEditor = ({ eventTypeId }: EventAvailabilityEditor
       if (!token) throw new Error("Not authenticated");
       const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/upsert-availability`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
         body: JSON.stringify({ event_type_id: eventTypeId, rules: newRules.map(r => ({ weekday: r.weekday, start_time: r.start_time, end_time: r.end_time })) })
       });
       if (!res.ok) {
@@ -105,7 +105,7 @@ export const EventAvailabilityEditor = ({ eventTypeId }: EventAvailabilityEditor
       if (!token) throw new Error("Not authenticated");
       const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/upsert-availability`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
         body: JSON.stringify({ event_type_id: eventTypeId, rules: newRules.map(r => ({ weekday: r.weekday, start_time: r.start_time, end_time: r.end_time })) })
       });
       if (!res.ok) {
