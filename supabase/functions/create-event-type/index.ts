@@ -48,11 +48,33 @@ serve(async (req) => {
       .eq('id', user.id)
       .single()
 
-    if (!profile?.company_id) {
-      return new Response(
-        JSON.stringify({ error: 'No company found for user' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      )
+    let companyId = profile?.company_id
+
+    // If no company exists, create one
+    if (!companyId) {
+      const companyName = user.user_metadata?.company_name || user.user_metadata?.name || user.email?.split('@')[0] || 'My Company'
+      
+      const { data: newCompany, error: companyError } = await supabaseClient
+        .from('companies')
+        .insert({ name: companyName })
+        .select()
+        .single()
+
+      if (companyError || !newCompany) {
+        console.error('Failed to create company:', companyError)
+        return new Response(
+          JSON.stringify({ error: 'Failed to create company for user' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        )
+      }
+
+      companyId = newCompany.id
+
+      // Update profile with company_id
+      await supabaseClient
+        .from('profiles')
+        .update({ company_id: companyId })
+        .eq('id', user.id)
     }
 
     // Create event type
@@ -61,7 +83,7 @@ serve(async (req) => {
       .insert({
         ...eventData,
         user_id: user.id,
-        company_id: profile.company_id,
+        company_id: companyId,
       })
       .select()
       .single()

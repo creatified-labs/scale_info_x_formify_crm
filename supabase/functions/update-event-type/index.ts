@@ -62,6 +62,42 @@ serve(async (req) => {
       )
     }
 
+    // Get user's company
+    const { data: profile } = await supabaseClient
+      .from('profiles')
+      .select('company_id')
+      .eq('id', user.id)
+      .single()
+
+    let companyId = profile?.company_id
+
+    // If no company exists, create one
+    if (!companyId) {
+      const companyName = user.user_metadata?.company_name || user.user_metadata?.name || user.email?.split('@')[0] || 'My Company'
+      
+      const { data: newCompany, error: companyError } = await supabaseClient
+        .from('companies')
+        .insert({ name: companyName })
+        .select()
+        .single()
+
+      if (companyError || !newCompany) {
+        console.error('Failed to create company:', companyError)
+        return new Response(
+          JSON.stringify({ error: 'Failed to create company for user' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        )
+      }
+
+      companyId = newCompany.id
+
+      // Update profile with company_id
+      await supabaseClient
+        .from('profiles')
+        .update({ company_id: companyId })
+        .eq('id', user.id)
+    }
+
     // Update event type
     const { data: eventType, error: updateError } = await supabaseClient
       .from('event_types')
