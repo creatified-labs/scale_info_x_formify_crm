@@ -91,7 +91,7 @@ export const EventTypesList = () => {
       const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-event-type`;
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
         body: JSON.stringify({ id, permanent_delete: true }),
       });
       if (!res.ok) {
@@ -287,7 +287,7 @@ export const EventTypesList = () => {
       const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-event-type`;
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
         body: JSON.stringify({ id, is_active: !currentStatus }),
       });
       if (!res.ok) {
@@ -354,7 +354,7 @@ export const EventTypesList = () => {
       const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-event-type`;
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
         body: JSON.stringify({ id: eventId, is_archived: true }),
       });
       if (!res.ok) {
@@ -408,7 +408,7 @@ export const EventTypesList = () => {
       const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-event-type`;
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
         body: JSON.stringify({ id, is_archived: false }),
       });
       if (!res.ok) {

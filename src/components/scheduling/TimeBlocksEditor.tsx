@@ -225,7 +225,7 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
           .map(b => ({ date: format(new Date(b.date), 'yyyy-MM-dd'), start_time: minutesToTime(b.start_minutes), end_time: minutesToTime(b.end_minutes), reason: b.note }))
         const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/upsert-time-blocks`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
           body: JSON.stringify({ event_type_id: eventTypeId, blocks: remaining })
         });
         if (!res.ok) {
