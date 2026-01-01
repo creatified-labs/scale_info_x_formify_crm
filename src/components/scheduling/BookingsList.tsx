@@ -216,6 +216,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
@@ -298,7 +299,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
     }
     const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-booking-status`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
       body: JSON.stringify({ booking_id: bookingId, status: newStatus })
     });
 
@@ -374,7 +375,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
 
       const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-booking`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
         body: JSON.stringify({
           booking_id: selectedBooking.id,
           invitee_name: editForm.invitee_name,
@@ -437,7 +438,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
     }
     const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/convert-booking`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
       body: JSON.stringify({ booking_id: selectedBooking.id, is_converted: true, conversion_amount: amount })
     });
 
@@ -474,7 +475,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
     }
     const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/convert-booking`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
       body: JSON.stringify({ booking_id: bookingId, is_converted: false })
     });
 
@@ -562,7 +563,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
     }
     const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-booking`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
       body: JSON.stringify({ booking_id: bookingId })
     });
 
@@ -592,7 +593,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
     }
     const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/save-booking-notes`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
       body: JSON.stringify({ booking_id: selectedBooking.id, notes: editableNotes.trim() })
     });
 

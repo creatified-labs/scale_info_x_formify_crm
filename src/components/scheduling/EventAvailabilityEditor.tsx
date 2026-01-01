@@ -127,6 +127,7 @@ export const EventAvailabilityEditor = ({ eventTypeId }: EventAvailabilityEditor
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ id: eventTypeId, use_custom_availability: enabled }),

@@ -180,7 +180,7 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
 
       const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/upsert-time-blocks`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
         body: JSON.stringify({
           scope,
           event_type_id: scope === 'event_only' ? eventTypeId ?? null : null,
@@ -237,7 +237,7 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
         // Keep existing delete endpoint for global scope for now
         const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-time-block`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
           body: JSON.stringify({ id })
         });
         if (!res.ok) {
