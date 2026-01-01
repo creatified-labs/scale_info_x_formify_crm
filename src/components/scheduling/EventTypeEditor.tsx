@@ -406,7 +406,11 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
         const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-event-type`;
         const res = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          headers: { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${token}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+          },
           body: JSON.stringify({ id: eventType.id, ...eventData }),
         });
         updatedEventType = await parseResponse(res, "update");
@@ -418,7 +422,11 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
         const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-event-type`;
         const res = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          headers: { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${token}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+          },
           body: JSON.stringify(eventData),
         });
         updatedEventType = await parseResponse(res, "create");
