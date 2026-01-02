@@ -20,9 +20,10 @@ serve(async (req) => {
       )
     }
 
-    const supabaseClient = createClient(
+    // Create client with user's JWT for authentication
+    const supabaseAuth = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       {
         global: {
           headers: { Authorization: authHeader },
@@ -30,14 +31,21 @@ serve(async (req) => {
       }
     )
 
-    // Get authenticated user
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+    // Verify user's JWT token
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser()
     if (userError || !user) {
+      console.error('Auth error:', userError)
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'Unauthorized', details: userError?.message }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       )
     }
+
+    // Create admin client for database operations (bypasses RLS)
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
 
     const { id, ...eventData } = await req.json()
 
