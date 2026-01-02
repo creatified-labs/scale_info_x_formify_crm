@@ -142,6 +142,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
+        apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
       },
       body: method === 'POST' ? JSON.stringify(payload ?? {}) : undefined,
     });
