@@ -386,7 +386,21 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
       };
 
       const parseResponse = async (res: Response, action: "create" | "update") => {
-        const payload = await res.json().catch(() => null);
+        // Clone response to read it multiple times
+        const resClone = res.clone();
+        const rawText = await resClone.text();
+        console.log(`Event type ${action} raw response:`, {
+          status: res.status,
+          statusText: res.statusText,
+          rawText: rawText.substring(0, 500),
+          contentType: res.headers.get('content-type')
+        });
+        
+        const payload = await res.json().catch((e) => {
+          console.error('Failed to parse JSON:', e, 'Raw text:', rawText);
+          return null;
+        });
+        
         if (!res.ok) {
           console.error(`Event type ${action} failed:`, {
             status: res.status,
