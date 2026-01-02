@@ -388,9 +388,16 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
       const parseResponse = async (res: Response, action: "create" | "update") => {
         const payload = await res.json().catch(() => null);
         if (!res.ok) {
+          console.error(`Event type ${action} failed:`, {
+            status: res.status,
+            statusText: res.statusText,
+            payload,
+            headers: Object.fromEntries(res.headers.entries())
+          });
           const detail = payload?.detail ? `: ${payload.detail}` : "";
+          const details = payload?.details ? ` (${payload.details})` : "";
           const errorMessage = payload?.error
-            ? `${payload.error}${detail}`
+            ? `${payload.error}${detail}${details}`
             : `Failed to ${action} event type${detail}`;
           throw new Error(errorMessage);
         }
@@ -419,6 +426,14 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
         const { data: session } = await supabase.auth.getSession();
         const token = session?.session?.access_token;
         if (!token) throw new Error("Not authenticated. Please refresh to initialize your session.");
+        
+        console.log('Creating event type:', {
+          hasToken: !!token,
+          tokenPrefix: token?.substring(0, 20) + '...',
+          hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+          eventData
+        });
+        
         const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-event-type`;
         const res = await fetch(url, {
           method: 'POST',
