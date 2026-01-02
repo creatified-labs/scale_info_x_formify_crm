@@ -55,11 +55,16 @@ serve(async (req) => {
         .from('sales_goals')
         .insert({
           company_id: payload.company_id,
-          goal_date: payload.deadline || new Date().toISOString().split('T')[0],
+          goal_type: payload.category_type || 'revenue',
+          period_type: payload.period_key ? (payload.period_key.includes('-W') ? 'weekly' : payload.period_key.length === 4 ? 'yearly' : payload.period_key.length === 7 ? 'monthly' : 'daily') : 'deadline',
           target_amount: payload.target_amount,
-          actual_amount: 0,
-          category: payload.category,
+          period_key: payload.period_key,
+          deadline: payload.deadline,
           description: payload.description || payload.title,
+          category: payload.category,
+          category_name: payload.category_name,
+          category_color: payload.category_color,
+          category_type: payload.category_type,
         })
         .select()
         .single()
