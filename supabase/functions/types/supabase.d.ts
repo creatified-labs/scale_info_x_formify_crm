@@ -22,21 +22,34 @@ declare module "https://esm.sh/@supabase/supabase-js@2" {
           email: string;
           email_confirm?: boolean;
           user_metadata?: Record<string, any>;
-        }): Promise<{
-          data: any;
-          error: any | null;
-        }>;
+        }): Promise<{ data: any; error: any }>;
         generateLink(params: {
           type: string;
           email: string;
         }): Promise<{
-          data: any;
-          error: any | null;
+          data: {
+            properties: {
+              action_link: string;
+            };
+          } | null;
+          error: any;
         }>;
         listUsers(): Promise<{
-          data: { users: any[] };
-          error: any | null;
+          data: {
+            users: Array<{
+              id: string;
+              email: string;
+              user_metadata?: Record<string, any>;
+            }>;
+          } | null;
+          error: any;
         }>;
+        updateUserById(
+          userId: string,
+          params: {
+            user_metadata?: Record<string, any>;
+          }
+        ): Promise<{ data: any; error: any }>;
       };
     };
     from(table: string): any;

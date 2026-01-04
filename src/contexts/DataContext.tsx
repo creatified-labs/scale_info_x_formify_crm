@@ -474,8 +474,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const addGoal = async (goal: Omit<Goal, 'id' | 'createdAt'>) => {
     try {
+      console.log('🎯 Adding goal:', goal);
       const companyId = await getCompanyId({ allowFallback: false });
+      console.log('🏢 Company ID for goal:', companyId);
       if (!companyId) {
+        console.error('❌ No company ID found - cannot add goal');
         showAuthRequiredToast(
           "We couldn’t find your company",
           "Sign back in so we can refresh your workspace access.",

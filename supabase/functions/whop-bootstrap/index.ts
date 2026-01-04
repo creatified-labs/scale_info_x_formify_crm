@@ -245,7 +245,23 @@ serve(async (req) => {
       }
     }
 
-    // 3. Generate access tokens for the user
+    // 3. Update user metadata with company_id
+    console.log('Updating user metadata with company_id:', company.id)
+    const { error: updateMetadataError } = await supabaseClient.auth.admin.updateUserById(
+      user.id,
+      {
+        user_metadata: {
+          company_id: company.id,
+          whop_org_id: whop_org_id,
+        }
+      }
+    )
+    
+    if (updateMetadataError) {
+      console.error('Failed to update user metadata:', updateMetadataError)
+    }
+
+    // 4. Generate access tokens for the user
     console.log('Generating session tokens for user:', user.id)
     
     const { data: tokenData, error: tokenError } = await supabaseClient.auth.admin.generateLink({
