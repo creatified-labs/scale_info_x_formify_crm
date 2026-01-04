@@ -17,7 +17,21 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
-    const payload = await req.json()
+    const payload = await req.json() as {
+      event_type_id: string;
+      invitee_name: string;
+      invitee_email: string;
+      invitee_phone?: string;
+      invitee_timezone: string;
+      start_time: string;
+      end_time: string;
+      status: string;
+      chosen_call_type?: string;
+      video_join_url?: string;
+      location_text?: string;
+      provider_pending?: boolean;
+      answers?: any;
+    }
     const {
       event_type_id,
       invitee_name,
@@ -70,7 +84,7 @@ serve(async (req) => {
       )
 
       if (availabilityResponse.ok) {
-        const availabilityData = await availabilityResponse.json()
+        const availabilityData = await availabilityResponse.json() as { available: boolean; conflicts?: any }
         if (!availabilityData.available) {
           return new Response(
             JSON.stringify({ 
@@ -145,7 +159,7 @@ serve(async (req) => {
         )
         
         if (calendarResponse.ok) {
-          const calendarData = await calendarResponse.json()
+          const calendarData = await calendarResponse.json() as { meet_link?: string }
           meetLink = calendarData.meet_link
           
           // Update booking with meet link

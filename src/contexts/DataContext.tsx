@@ -132,22 +132,67 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Edge function helper
   const callFunction = async (name: string, method: 'POST' | 'GET', payload?: any, query?: Record<string, string>) => {
+    // For localhost dev, use proxy to call Edge Functions server-side with service role key
+    const isLocalhost = typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    console.log('🔑 Calling Edge Function:', {
+      function: name,
+      isLocalhost,
+      viaProxy: isLocalhost,
+    });
+
+    // For localhost, use the dev proxy (server-side with service role key)
+    if (isLocalhost) {
+      const res = await fetch('/api/edge-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          functionName: name,
+          payload,
+          method,
+        }),
+      });
+
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({} as any));
+        console.error(`Edge Function ${name} failed (via proxy):`, {
+          status: res.status,
+          error: j,
+        });
+        toast.error(j?.error || 'Request failed');
+        throw new Error(j?.error || `Function ${name} failed`);
+      }
+
+      return res.json().catch(() => ({}));
+    }
+
+    // For production, call Edge Function directly with user JWT
     const { data: session } = await supabase.auth.getSession();
-    const token = session?.session?.access_token;
-    if (!token) throw new Error('Not authenticated');
+    const userToken = session?.session?.access_token;
+
+    if (!userToken) throw new Error('Not authenticated');
+
     const base = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${name}`;
     const url = query ? `${base}?${new URLSearchParams(query).toString()}` : base;
+
     const res = await fetch(url, {
       method,
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+        'Authorization': `Bearer ${userToken}`,
+        'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
       },
       body: method === 'POST' ? JSON.stringify(payload ?? {}) : undefined,
     });
     if (!res.ok) {
       const j = await res.json().catch(() => ({} as any));
+      console.error(`Edge Function ${name} failed:`, {
+        status: res.status,
+        statusText: res.statusText,
+        error: j,
+        url,
+      });
       if (res.status === 403 && (j?.code === 'PLAN_UPGRADE_REQUIRED' || String(j?.code || '').includes('PREVIEW'))) {
         toast.error(j?.message || 'Upgrade required to use this feature');
         track('feature_blocked', { feature: name, code: j?.code || 'FORBIDDEN' });

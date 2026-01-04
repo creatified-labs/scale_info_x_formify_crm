@@ -5,6 +5,11 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "https://deno.land/std@0.168.0/http/server.ts": ["./types/deno-std-http.d.ts"],
+      "https://esm.sh/@supabase/supabase-js@2": ["./types/supabase.d.ts"]
+    }
   }
 }

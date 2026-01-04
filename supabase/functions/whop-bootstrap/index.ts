@@ -23,7 +23,14 @@ serve(async (req) => {
       }
     )
 
-    const body = await req.json()
+    const body = await req.json() as {
+      whop_org_id: string;
+      whop_email?: string;
+      whop_name?: string;
+      whop_username?: string;
+      whop_user_id?: string;
+      whop_profile_picture?: string;
+    }
     const {
       whop_org_id,
       whop_email,
@@ -125,31 +132,69 @@ serve(async (req) => {
       })
 
       if (authError) {
-        // If user already exists in auth, try to find them by email in users table
+        // If user already exists in auth, look them up and create user record if needed
         if (authError.message.includes('already been registered')) {
-          console.log('Auth user exists, looking up in users table by email...')
-          const { data: existingUserByEmail } = await supabaseClient
-            .from('users')
-            .select('*')
-            .eq('email', userEmail)
-            .single()
+          console.log('Auth user exists, looking up auth user...')
           
-          if (existingUserByEmail) {
-            user = existingUserByEmail
-            console.log('Found existing user by email after auth conflict:', user.id)
+          // Get the auth user by email
+          const { data: { users: authUsers }, error: listError } = await supabaseClient.auth.admin.listUsers()
+          
+          if (!listError && authUsers) {
+            authUser = authUsers.find(u => u.email === userEmail)
             
-            // Update with latest Whop data
-            await supabaseClient
-              .from('users')
-              .update({
-                name: whop_name || user.name,
-                whop_user_id: whop_user_id || user.whop_user_id,
-                avatar_url: whop_profile_picture || user.avatar_url,
-                company_id: company.id,
-              })
-              .eq('id', user.id)
+            if (authUser) {
+              console.log('Found auth user:', authUser.id)
+              
+              // Try to find user record by auth user ID
+              const { data: existingUserByAuthId } = await supabaseClient
+                .from('users')
+                .select('*')
+                .eq('id', authUser.id)
+                .single()
+              
+              if (existingUserByAuthId) {
+                user = existingUserByAuthId
+                console.log('Found existing user record:', user.id)
+                
+                // Update with latest Whop data
+                await supabaseClient
+                  .from('users')
+                  .update({
+                    name: whop_name || user.name,
+                    whop_user_id: whop_user_id || user.whop_user_id,
+                    avatar_url: whop_profile_picture || user.avatar_url,
+                    company_id: company.id,
+                  })
+                  .eq('id', user.id)
+              } else {
+                // Auth user exists but no user record - create it
+                console.log('Creating user record for existing auth user...')
+                const { data: newUser, error: insertError } = await supabaseClient
+                  .from('users')
+                  .insert({
+                    id: authUser.id,
+                    email: userEmail,
+                    name: whop_name || whop_username || 'Whop User',
+                    whop_user_id,
+                    avatar_url: whop_profile_picture,
+                    company_id: company.id,
+                  })
+                  .select()
+                  .single()
+                
+                if (insertError) {
+                  console.error('Failed to create user record:', insertError)
+                  throw new Error(`Failed to create user record: ${insertError.message}`)
+                }
+                
+                user = newUser
+                console.log('Created user record:', user.id)
+              }
+            } else {
+              throw new Error(`Auth user not found for email: ${userEmail}`)
+            }
           } else {
-            throw new Error(`Auth user exists but no user record found for email: ${userEmail}`)
+            throw new Error('Failed to list auth users')
           }
         } else {
           console.error('Failed to create auth user:', authError)
@@ -200,26 +245,46 @@ serve(async (req) => {
       }
     }
 
-    // 3. Create session token for the user using service role
-    // Generate a session by creating an access token
-    const { data: sessionData, error: sessionError } = await supabaseClient.auth.admin.createUser({
-      email: user.email,
-      email_confirm: true,
-      user_metadata: {
-        whop_org_id,
-        whop_user_id,
-      },
-    })
-
-    // If user already exists, that's fine - we just need to generate a session
-    // Use the existing user ID to create a session token
-    const sessionToken = await supabaseClient.auth.admin.generateLink({
+    // 3. Generate access tokens for the user
+    console.log('Generating session tokens for user:', user.id)
+    
+    const { data: tokenData, error: tokenError } = await supabaseClient.auth.admin.generateLink({
       type: 'magiclink',
       email: user.email,
     })
 
-    if (sessionError && !sessionError.message.includes('already been registered')) {
-      console.error('Failed to generate session:', sessionError)
+    if (tokenError) {
+      console.error('Failed to generate tokens:', tokenError)
+      return new Response(
+        JSON.stringify({
+          error: 'Failed to generate session tokens',
+          details: tokenError.message,
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500,
+        }
+      )
+    }
+
+    // Extract tokens from the magic link
+    const actionLink = tokenData?.properties?.action_link
+    let accessToken = null
+    let refreshToken = null
+    
+    if (actionLink) {
+      try {
+        const url = new URL(actionLink)
+        accessToken = url.searchParams.get('access_token')
+        refreshToken = url.searchParams.get('refresh_token')
+        
+        console.log('Extracted tokens from magic link:', {
+          hasAccessToken: !!accessToken,
+          hasRefreshToken: !!refreshToken,
+        })
+      } catch (e) {
+        console.error('Failed to parse action link:', e)
+      }
     }
 
     return new Response(
@@ -228,8 +293,9 @@ serve(async (req) => {
         user_id: user.id,
         company_id: company.id,
         whop_org_id,
-        access_token: sessionToken.data?.properties?.hashed_token,
-        session_url: sessionToken.data?.properties?.action_link,
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        session_url: actionLink,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

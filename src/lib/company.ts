@@ -153,11 +153,9 @@ export async function getCompanyId(options?: GetCompanyIdOptions): Promise<strin
   const cid = (user.user_metadata as any)?.company_id as string | undefined;
   if (cid) return cid;
 
-  // Check for Whop company ID from environment
-  const whopCompanyId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
-  if (whopCompanyId) {
-    return whopCompanyId;
-  }
+  // NOTE: NEXT_PUBLIC_WHOP_COMPANY_ID is the Whop biz_id (e.g. "biz_xxx"), NOT a Supabase company UUID
+  // We should NEVER return it directly as company_id for database operations
+  // The dev-auth endpoint uses it to find/create the actual company record and sets the UUID in user metadata
 
   const ensuredCompanyId = await ensureCompanyIdViaEdge();
   if (ensuredCompanyId) {

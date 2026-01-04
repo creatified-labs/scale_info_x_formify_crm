@@ -58,6 +58,7 @@ export async function bootstrapWhopUser(): Promise<{
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
         },
         body: JSON.stringify({
           whop_org_id: whopIdentity.orgId,
@@ -80,32 +81,51 @@ export async function bootstrapWhopUser(): Promise<{
     }
     
     const data = await response.json();
-    console.log('Whop user bootstrapped successfully');
+    console.log('Whop user bootstrapped successfully:', {
+      hasAccessToken: !!data.access_token,
+      hasRefreshToken: !!data.refresh_token,
+    });
     
-    // If we got a session URL, use it to sign in
-    if (data.session_url) {
-      console.log('Signing in with session URL...');
+    // If we got tokens, establish a session
+    if (data.access_token && data.refresh_token) {
+      console.log('Setting session with tokens from bootstrap...');
       try {
-        // Extract the token from the magic link URL
-        const url = new URL(data.session_url);
-        const token = url.searchParams.get('token');
+        const { error: setSessionError } = await supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        });
         
-        if (token) {
-          const { supabase } = await import('@/integrations/supabase/client');
-          const { error: verifyError } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: 'magiclink',
+        if (setSessionError) {
+          console.error('Failed to set session:', setSessionError);
+          return {
+            success: false,
+            error: `Failed to set session: ${setSessionError.message}`,
+          };
+        }
+        
+        console.log('Session established successfully');
+        
+        // Verify the session was set
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          console.log('Session verified:', {
+            userId: session.user.id,
+            hasToken: !!session.access_token,
           });
-          
-          if (verifyError) {
-            console.error('Failed to verify session token:', verifyError);
-          } else {
-            console.log('Session established successfully');
-          }
         }
       } catch (e) {
         console.error('Failed to establish session:', e);
+        return {
+          success: false,
+          error: `Failed to establish session: ${e instanceof Error ? e.message : 'Unknown error'}`,
+        };
       }
+    } else {
+      console.warn('No tokens returned from bootstrap');
+      return {
+        success: false,
+        error: 'No authentication tokens returned from bootstrap',
+      };
     }
     
     return {

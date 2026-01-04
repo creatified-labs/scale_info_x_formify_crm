@@ -85,21 +85,26 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
     if (goal.type === 'deadline' && goal.deadline) {
       return `Deadline: ${format(new Date(goal.deadline), 'MMMM d, yyyy')}`;
     }
-    
+
+    // Handle missing period
+    if (!goal.period) {
+      return '';
+    }
+
     switch (goal.type) {
       case 'daily':
-        return new Date(goal.period!).toLocaleDateString();
+        return new Date(goal.period).toLocaleDateString();
       case 'weekly':
-        const [year, week] = goal.period!.split('-W');
+        const [year, week] = goal.period.split('-W');
         return `Week ${week}, ${year}`;
       case 'monthly':
-        const [monthYear, month] = goal.period!.split('-');
-        return new Date(parseInt(monthYear), parseInt(month) - 1).toLocaleDateString('en-US', { 
-          month: 'long', 
-          year: 'numeric' 
+        const [monthYear, month] = goal.period.split('-');
+        return new Date(parseInt(monthYear), parseInt(month) - 1).toLocaleDateString('en-US', {
+          month: 'long',
+          year: 'numeric'
         });
       case 'yearly':
-        return goal.period!;
+        return goal.period;
       default:
         return '';
     }

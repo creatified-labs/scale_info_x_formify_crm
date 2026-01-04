@@ -37,26 +37,100 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // THEN check for existing session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
-        setSession(session);
-        setUser(session.user);
-        setLoading(false);
+        // In development (localhost), check if user metadata has company_id
+        // If not, force re-authentication to pick up the latest metadata
+        const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+        if (isLocalhost && !session.user.user_metadata?.company_id) {
+          console.log('Session missing company_id, re-authenticating...');
+
+          // Sign out first to clear the old session
+          await supabase.auth.signOut();
+
+          // Then bootstrap with dev-auth-v2
+          try {
+            const response = await fetch('/api/dev-auth-v2');
+
+            if (response.ok) {
+              const data = await response.json();
+
+              if (data.access_token && data.refresh_token) {
+                const { error: setSessionError } = await supabase.auth.setSession({
+                  access_token: data.access_token,
+                  refresh_token: data.refresh_token,
+                });
+
+                if (setSessionError) {
+                  console.error('Failed to set session:', setSessionError);
+                } else {
+                  console.log('Dev re-authentication successful');
+                  const { data: { session: newSession } } = await supabase.auth.getSession();
+                  setSession(newSession);
+                  setUser(newSession?.user ?? null);
+                  console.log('Session refreshed with metadata:', newSession?.user?.user_metadata);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Failed to re-authenticate:', error);
+          }
+
+          setLoading(false);
+        } else {
+          setSession(session);
+          setUser(session.user);
+          setLoading(false);
+        }
       } else {
-        // No session - try to bootstrap from Whop
+        // No session - try to bootstrap
         try {
-          const { bootstrapWhopUser } = await import('@/lib/whop-bootstrap');
-          const result = await bootstrapWhopUser();
-          
-          if (result.success) {
-            console.log('Whop user bootstrapped, refreshing session...');
-            // Refresh session after bootstrap
-            const { data: { session: newSession } } = await supabase.auth.getSession();
-            setSession(newSession);
-            setUser(newSession?.user ?? null);
+          // In development (localhost), use dev-auth for automatic authentication
+          const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+          if (isLocalhost) {
+            console.log('Development mode: bootstrapping with dev-auth-v2...');
+            const response = await fetch('/api/dev-auth-v2');
+
+            if (response.ok) {
+              const data = await response.json();
+
+              if (data.access_token && data.refresh_token) {
+                console.log('Setting session with tokens from dev-auth-v2...');
+                console.log('📥 Token from dev-auth-v2:', data.access_token.substring(0, 30) + '...');
+                const { error: setSessionError } = await supabase.auth.setSession({
+                  access_token: data.access_token,
+                  refresh_token: data.refresh_token,
+                });
+
+                if (setSessionError) {
+                  console.error('Failed to set session:', setSessionError);
+                } else {
+                  console.log('Dev authentication successful');
+                  const { data: { session: newSession } } = await supabase.auth.getSession();
+                  console.log('📤 Token after setSession:', newSession?.access_token?.substring(0, 30) + '...');
+                  setSession(newSession);
+                  setUser(newSession?.user ?? null);
+                  console.log('Session created with metadata:', newSession?.user?.user_metadata);
+                }
+              }
+            } else {
+              console.error('Dev auth failed:', await response.text());
+            }
+          } else {
+            // Production: bootstrap from Whop
+            const { bootstrapWhopUser } = await import('@/lib/whop-bootstrap');
+            const result = await bootstrapWhopUser();
+
+            if (result.success) {
+              console.log('Whop user bootstrapped, refreshing session...');
+              // Refresh session after bootstrap
+              const { data: { session: newSession } } = await supabase.auth.getSession();
+              setSession(newSession);
+              setUser(newSession?.user ?? null);
+            }
           }
         } catch (error) {
-          console.error('Failed to bootstrap Whop user:', error);
+          console.error('Failed to bootstrap user:', error);
         }
-        
+
         setLoading(false);
       }
     });

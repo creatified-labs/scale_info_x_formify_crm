@@ -121,7 +121,7 @@ export async function ensureLocalDevAuth() {
   if (!companyId) return false;
 
   try {
-    const response = await fetch(`/api/dev-auth?companyId=${companyId}&returnTo=${encodeURIComponent(window.location.pathname)}`);
+    const response = await fetch(`/api/dev-auth-v2?companyId=${companyId}`);
     if (response.ok) {
       return true;
     }

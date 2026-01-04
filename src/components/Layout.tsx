@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { PreviewModeToggle } from "@/components/PreviewModeToggle";
-import { BarChart3, PoundSterling, Target, Calendar, TrendingUp, Menu, X, Phone, Coins, Star, Settings, LogOut, UserCircle, Bell } from "lucide-react";
+import { BarChart3, PoundSterling, Target, Calendar, TrendingUp, Menu, X, Phone, Coins, Star, Settings, LogOut } from "lucide-react";
 import { Newsletter } from "@/components/Newsletter";
 import { IntegrationsSettings } from "@/components/scheduling/IntegrationsSettings";
 import { RevenueEntry, Goal } from "@/types/revenue";
@@ -589,26 +589,28 @@ export const Layout = ({
 
               {/* Right side controls */}
               <div className="flex items-center gap-1.5">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="flex h-9 w-9"
-                      aria-label="Account menu"
-                    >
-                      <Settings className="h-5 w-5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem asChild>
-                      <Link href="/account" className="cursor-pointer">
-                        <Settings className="mr-2 h-4 w-4" />
-                        <span>Account settings</span>
-                      </Link>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {user && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="flex h-9 w-9"
+                        aria-label="Account menu"
+                      >
+                        <Settings className="h-5 w-5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem asChild>
+                        <Link href="/account" className="cursor-pointer">
+                          <Settings className="mr-2 h-4 w-4" />
+                          <span>Account settings</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
                 
                 {/* Mobile menu button */}
                 <Button

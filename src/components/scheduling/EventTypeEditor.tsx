@@ -21,6 +21,7 @@ import { useEntitlements } from "@/contexts/EntitlementsContext";
 import { EventTypePreview } from "./EventTypePreview";
 import { AppearanceSection } from "@/components/calendar/editor-sections/AppearanceSection";
 import { TimeBlocksEditor } from "./TimeBlocksEditor";
+import { getCompanyId } from "@/lib/company";
 
 const createDefaultNotifications = (): NotificationSettings => ({
   email: { enabled: true, confirmation: true, reminders: [1440, 60], followup: 0 },
@@ -437,28 +438,46 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
         updatedEventType = await parseResponse(res, "update");
       } else {
         // Create via Edge Function with plan enforcement
-        const { data: session } = await supabase.auth.getSession();
-        const token = session?.session?.access_token;
-        if (!token) throw new Error("Not authenticated. Please refresh to initialize your session.");
-        
-        console.log('Creating event type:', {
-          hasToken: !!token,
-          tokenPrefix: token?.substring(0, 20) + '...',
-          hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-          eventData
-        });
-        
-        const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-event-type`;
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json', 
-            'Authorization': `Bearer ${token}`,
-            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-          },
-          body: JSON.stringify(eventData),
-        });
-        updatedEventType = await parseResponse(res, "create");
+        const isLocalhost = typeof window !== 'undefined' &&
+          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+        if (isLocalhost) {
+          // Use proxy for localhost
+          const companyId = await getCompanyId();
+          if (!companyId) throw new Error("No company ID available");
+
+          // Get user ID from session
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) throw new Error("No user found");
+
+          const res = await fetch('/api/edge-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              functionName: 'create-event-type',
+              payload: { ...eventData, company_id: companyId, user_id: user.id },
+              method: 'POST',
+            }),
+          });
+          updatedEventType = await parseResponse(res, "create");
+        } else {
+          // Production: Direct call with JWT
+          const { data: session } = await supabase.auth.getSession();
+          const token = session?.session?.access_token;
+          if (!token) throw new Error("Not authenticated. Please refresh to initialize your session.");
+
+          const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-event-type`;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+              'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+            },
+            body: JSON.stringify(eventData),
+          });
+          updatedEventType = await parseResponse(res, "create");
+        }
       }
 
       if (!closeAfterSave) {
