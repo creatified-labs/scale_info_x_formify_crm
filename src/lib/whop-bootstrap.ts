@@ -91,6 +91,8 @@ export async function bootstrapWhopUser(): Promise<{
     console.log('Whop user bootstrapped successfully:', {
       hasAccessToken: !!data.access_token,
       hasRefreshToken: !!data.refresh_token,
+      userId: data.user_id,
+      companyId: data.company_id,
     });
     
     // If we got tokens, establish a session

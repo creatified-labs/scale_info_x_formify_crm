@@ -64,6 +64,12 @@ serve(async (req) => {
       console.log('Found existing company:', company.id)
     } else {
       // Create new company - use whop_org_id as the ID
+      console.log('Creating new company with data:', {
+        id: whop_org_id,
+        name: whop_name || whop_org_id,
+        whop_company_id: whop_org_id,
+      })
+      
       const { data: newCompany, error: companyError } = await supabaseClient
         .from('companies')
         .insert({
@@ -75,8 +81,37 @@ serve(async (req) => {
         .single()
 
       if (companyError) {
-        console.error('Failed to create company:', companyError)
-        throw new Error(`Failed to create company: ${companyError.message}`)
+        console.error('Failed to create company:', {
+          error: companyError,
+          message: companyError.message,
+          details: companyError.details,
+          hint: companyError.hint,
+          code: companyError.code,
+        })
+        return new Response(
+          JSON.stringify({
+            error: 'Failed to create company',
+            details: companyError.message,
+            code: companyError.code,
+          }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 500,
+          }
+        )
+      }
+
+      if (!newCompany) {
+        console.error('Company creation returned no data')
+        return new Response(
+          JSON.stringify({
+            error: 'Company creation returned no data',
+          }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 500,
+          }
+        )
       }
 
       company = newCompany
