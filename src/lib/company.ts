@@ -138,6 +138,18 @@ export async function getCompanyId(options?: GetCompanyIdOptions): Promise<strin
     return envCompanyId;
   }
 
+  // PRIORITY 1: Check user metadata first (most reliable source)
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    const cid = (user.user_metadata as any)?.company_id as string | undefined;
+    if (cid) {
+      // Cache it for future use
+      cacheLocalCompanyId(cid);
+      return cid;
+    }
+  }
+
+  // PRIORITY 2: Check localStorage only if user metadata doesn't have it
   const storedCompanyId = getStoredCompanyId();
   if (storedCompanyId) {
     if (!allowFallback && storedCompanyId.startsWith("dev-company-")) {
@@ -147,11 +159,7 @@ export async function getCompanyId(options?: GetCompanyIdOptions): Promise<strin
     }
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-
-  const cid = (user.user_metadata as any)?.company_id as string | undefined;
-  if (cid) return cid;
 
   // NOTE: NEXT_PUBLIC_WHOP_COMPANY_ID is the Whop biz_id (e.g. "biz_xxx"), NOT a Supabase company UUID
   // We should NEVER return it directly as company_id for database operations
