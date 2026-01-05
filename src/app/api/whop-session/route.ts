@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Generate magic link and extract token to verify directly (no redirect needed)
+    // Generate magic link and use the hashed_token directly
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email: userEmail,
@@ -195,30 +195,38 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Extract the token from the magic link and verify it to get session tokens
-    const actionLink = linkData.properties.action_link;
-    const linkUrl = new URL(actionLink);
-    const tokenHash = linkUrl.searchParams.get('token_hash');
-    const type = linkUrl.searchParams.get('type') as 'magiclink';
+    // Use the hashed_token directly from the response (more reliable than parsing URL)
+    let tokenHash: string | undefined = linkData.properties.hashed_token;
+    
+    console.log('[whop-session] Generated link for:', userEmail, 'tokenHash from properties:', !!tokenHash);
 
     if (!tokenHash) {
-      console.error('[whop-session] No token_hash in magic link');
-      return NextResponse.json(
-        { error: 'Failed to extract token' },
-        { status: 500 }
-      );
+      // Fallback: try to extract from URL
+      const actionLink = linkData.properties.action_link;
+      console.log('[whop-session] action_link:', actionLink);
+      const linkUrl = new URL(actionLink);
+      tokenHash = linkUrl.searchParams.get('token_hash') || linkUrl.searchParams.get('token') || undefined;
+      
+      if (!tokenHash) {
+        console.error('[whop-session] No token found in link properties or URL');
+        return NextResponse.json(
+          { error: 'Failed to extract token' },
+          { status: 500 }
+        );
+      }
+      console.log('[whop-session] Using token from URL');
     }
 
     // Verify the OTP to get actual session tokens
     const { data: sessionData, error: verifyError } = await supabaseAdmin.auth.verifyOtp({
       token_hash: tokenHash,
-      type: type || 'magiclink',
+      type: 'magiclink',
     });
 
     if (verifyError || !sessionData.session) {
       console.error('[whop-session] Failed to verify OTP:', verifyError);
       return NextResponse.json(
-        { error: 'Failed to create session' },
+        { error: 'Failed to create session', details: verifyError?.message },
         { status: 500 }
       );
     }
