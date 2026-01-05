@@ -81,6 +81,49 @@ export async function bootstrapWhopUser(): Promise<{
     if (!response.ok) {
       const error = await response.text();
       console.error('Failed to bootstrap Whop user:', error);
+      
+      // Fallback: Try the simpler whop-auth endpoint
+      console.log('Trying fallback whop-auth endpoint...');
+      try {
+        const authResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/whop-auth`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': anonKey || '',
+            },
+            body: JSON.stringify({
+              whop_org_id: whopIdentity.orgId,
+            }),
+          }
+        );
+
+        if (!authResponse.ok) {
+          const authError = await authResponse.text();
+          console.error('Fallback auth also failed:', authError);
+          return {
+            success: false,
+            error: `Bootstrap failed: ${error}`,
+          };
+        }
+
+        const authData = await authResponse.json();
+        console.log('Fallback auth succeeded, redirecting to action link...');
+        
+        // Redirect to the magic link to establish session
+        if (authData.action_link) {
+          window.location.href = authData.action_link;
+          return {
+            success: true,
+            userId: authData.user_id,
+            companyId: authData.company_id,
+          };
+        }
+      } catch (fallbackError) {
+        console.error('Fallback auth error:', fallbackError);
+      }
+      
       return {
         success: false,
         error: `Bootstrap failed: ${error}`,
