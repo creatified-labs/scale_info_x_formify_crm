@@ -63,31 +63,13 @@ export async function bootstrapWhopUser(): Promise<{
     const data = await response.json();
     console.log('Whop session response:', {
       success: data.success,
-      hasActionLink: !!data.action_link,
+      hasAccessToken: !!data.access_token,
+      hasRefreshToken: !!data.refresh_token,
       userId: data.user_id,
       companyId: data.company_id,
     });
     
-    // If we got an action_link, redirect to establish session
-    if (data.action_link) {
-      console.log('Redirecting to magic link to establish session...');
-      
-      // Add a return URL so we come back to the current page
-      const currentUrl = window.location.href;
-      const actionUrl = new URL(data.action_link);
-      actionUrl.searchParams.set('redirect_to', currentUrl);
-      
-      window.location.href = actionUrl.toString();
-      
-      // Return success - the page will redirect
-      return {
-        success: true,
-        userId: data.user_id,
-        companyId: data.company_id,
-      };
-    }
-    
-    // If we got tokens directly, establish a session
+    // Establish session with tokens
     if (data.access_token && data.refresh_token) {
       console.log('Setting session with tokens from bootstrap...');
       try {

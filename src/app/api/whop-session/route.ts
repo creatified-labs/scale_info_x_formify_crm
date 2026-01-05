@@ -181,25 +181,54 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Generate magic link to get session tokens
+    // Generate magic link and extract token to verify directly (no redirect needed)
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email: userEmail,
     });
 
     if (linkError || !linkData) {
-      console.error('[whop-session] Failed to generate session:', linkError);
+      console.error('[whop-session] Failed to generate link:', linkError);
       return NextResponse.json(
         { error: 'Failed to generate session' },
         { status: 500 }
       );
     }
 
-    console.log('[whop-session] Session generated for user:', authUser.id);
+    // Extract the token from the magic link and verify it to get session tokens
+    const actionLink = linkData.properties.action_link;
+    const linkUrl = new URL(actionLink);
+    const tokenHash = linkUrl.searchParams.get('token_hash');
+    const type = linkUrl.searchParams.get('type') as 'magiclink';
+
+    if (!tokenHash) {
+      console.error('[whop-session] No token_hash in magic link');
+      return NextResponse.json(
+        { error: 'Failed to extract token' },
+        { status: 500 }
+      );
+    }
+
+    // Verify the OTP to get actual session tokens
+    const { data: sessionData, error: verifyError } = await supabaseAdmin.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: type || 'magiclink',
+    });
+
+    if (verifyError || !sessionData.session) {
+      console.error('[whop-session] Failed to verify OTP:', verifyError);
+      return NextResponse.json(
+        { error: 'Failed to create session' },
+        { status: 500 }
+      );
+    }
+
+    console.log('[whop-session] Session created for user:', authUser.id);
 
     return NextResponse.json({
       success: true,
-      action_link: linkData.properties.action_link,
+      access_token: sessionData.session.access_token,
+      refresh_token: sessionData.session.refresh_token,
       user_id: authUser.id,
       company_id: companyId,
     });
