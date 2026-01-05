@@ -52,13 +52,20 @@ export async function bootstrapWhopUser(): Promise<{
     }
     
     // Call Edge Function to bootstrap user and company
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    console.log('Bootstrap request:', {
+      url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/whop-bootstrap`,
+      hasAnonKey: !!anonKey,
+      anonKeyLength: anonKey?.length,
+    });
+    
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/whop-bootstrap`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+          'apikey': anonKey || '',
         },
         body: JSON.stringify({
           whop_org_id: whopIdentity.orgId,

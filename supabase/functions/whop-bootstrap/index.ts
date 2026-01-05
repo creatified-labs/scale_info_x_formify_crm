@@ -118,12 +118,13 @@ serve(async (req) => {
       // No user found in users table - create new user
       const userEmail = whop_email || `${whop_org_id}@whop.placeholder`
       
-      // Create auth user with upsert behavior
+      // Try to create the auth user with metadata
       const { data: authData, error: authError } = await supabaseClient.auth.admin.createUser({
         email: userEmail,
         email_confirm: true,
         user_metadata: {
-          whop_org_id,
+          company_id: company.id,
+          whop_org_id: whop_org_id,
           whop_user_id,
           whop_name,
           whop_username,
@@ -245,7 +246,7 @@ serve(async (req) => {
       }
     }
 
-    // 3. Update user metadata with company_id
+    // 3. Update user metadata with company_id (for existing users)
     console.log('Updating user metadata with company_id:', company.id)
     const { error: updateMetadataError } = await supabaseClient.auth.admin.updateUserById(
       user.id,
@@ -253,15 +254,22 @@ serve(async (req) => {
         user_metadata: {
           company_id: company.id,
           whop_org_id: whop_org_id,
+          whop_user_id,
+          whop_name,
+          whop_username,
+          whop_profile_picture,
         }
       }
     )
     
     if (updateMetadataError) {
       console.error('Failed to update user metadata:', updateMetadataError)
+    } else {
+      console.log('Successfully updated user metadata')
     }
 
     // 4. Generate access tokens for the user
+    // IMPORTANT: Generate tokens AFTER updating metadata so they include the company_id
     console.log('Generating session tokens for user:', user.id)
     
     const { data: tokenData, error: tokenError } = await supabaseClient.auth.admin.generateLink({
@@ -302,6 +310,8 @@ serve(async (req) => {
         console.error('Failed to parse action link:', e)
       }
     }
+    
+    console.log('Returning bootstrap response with company_id:', company.id)
 
     return new Response(
       JSON.stringify({
