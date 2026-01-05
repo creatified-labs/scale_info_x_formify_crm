@@ -1,9 +1,12 @@
 import { supabase } from '@/integrations/supabase/client';
-import { detectWhopContext, readWhopIdentity, type WhopIdentity } from './embed';
+import { detectWhopContext, readWhopIdentity } from './embed';
 
 /**
  * Bootstrap Whop user and company data
  * This ensures user and company exist in Supabase when app loads
+ * 
+ * The new flow uses a server-side API route that can access the x-whop-user-token header
+ * sent by Whop's iframe, which provides proper user authentication.
  */
 export async function bootstrapWhopUser(): Promise<{
   success: boolean;
@@ -12,35 +15,6 @@ export async function bootstrapWhopUser(): Promise<{
   error?: string;
 }> {
   try {
-    // Check if in Whop context
-    const isWhop = detectWhopContext();
-    
-    // Get Whop identity
-    let whopIdentity = readWhopIdentity();
-    
-    // Fallback to environment variable if not detected
-    if (!whopIdentity.orgId && process.env.NEXT_PUBLIC_WHOP_COMPANY_ID) {
-      whopIdentity = {
-        ...whopIdentity,
-        orgId: process.env.NEXT_PUBLIC_WHOP_COMPANY_ID,
-      };
-      console.log('Using fallback Whop company ID from environment');
-    }
-    
-    if (!whopIdentity.orgId) {
-      return {
-        success: false,
-        error: 'No Whop organization ID available',
-      };
-    }
-    
-    console.log('Bootstrapping Whop user:', {
-      orgId: whopIdentity.orgId,
-      email: whopIdentity.email,
-      name: whopIdentity.name,
-      userId: whopIdentity.userId,
-    });
-    
     // Check if user already has a session
     const { data: sessionData } = await supabase.auth.getSession();
     if (sessionData?.session) {
@@ -48,97 +22,72 @@ export async function bootstrapWhopUser(): Promise<{
       return {
         success: true,
         userId: sessionData.session.user.id,
+        companyId: sessionData.session.user.user_metadata?.company_id,
       };
     }
+
+    // Get Whop identity from URL/window for company ID
+    const whopIdentity = readWhopIdentity();
+    const companyId = whopIdentity.orgId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
     
-    // Call Edge Function to bootstrap user and company
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    console.log('Bootstrap request:', {
-      url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/whop-bootstrap`,
-      hasAnonKey: !!anonKey,
-      anonKeyLength: anonKey?.length,
+    console.log('Bootstrapping Whop user:', {
+      companyId,
+      isWhopContext: detectWhopContext(),
     });
-    
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/whop-bootstrap`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': anonKey || '',
-        },
-        body: JSON.stringify({
-          whop_org_id: whopIdentity.orgId,
-          whop_email: whopIdentity.email,
-          whop_name: whopIdentity.name,
-          whop_username: whopIdentity.username,
-          whop_user_id: whopIdentity.userId,
-          whop_profile_picture: whopIdentity.profilePicture,
-        }),
-      }
-    );
-    
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('Failed to bootstrap Whop user:', error);
-      
-      // Fallback: Try the simpler whop-auth endpoint
-      console.log('Trying fallback whop-auth endpoint...');
-      try {
-        const authResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/whop-auth`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'apikey': anonKey || '',
-            },
-            body: JSON.stringify({
-              whop_org_id: whopIdentity.orgId,
-            }),
-          }
-        );
 
-        if (!authResponse.ok) {
-          const authError = await authResponse.text();
-          console.error('Fallback auth also failed:', authError);
-          return {
-            success: false,
-            error: `Bootstrap failed: ${error}`,
-          };
-        }
-
-        const authData = await authResponse.json();
-        console.log('Fallback auth succeeded, redirecting to action link...');
-        
-        // Redirect to the magic link to establish session
-        if (authData.action_link) {
-          window.location.href = authData.action_link;
-          return {
-            success: true,
-            userId: authData.user_id,
-            companyId: authData.company_id,
-          };
-        }
-      } catch (fallbackError) {
-        console.error('Fallback auth error:', fallbackError);
-      }
-      
+    if (!companyId) {
       return {
         success: false,
-        error: `Bootstrap failed: ${error}`,
+        error: 'No company ID available',
       };
     }
     
+    // Call server-side API route which has access to x-whop-user-token header
+    // This route is proxied through Next.js and receives Whop headers
+    console.log('Calling server-side whop-session API...');
+    
+    const response = await fetch(`/api/whop-session?companyId=${companyId}`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Server-side auth failed:', errorText);
+      return {
+        success: false,
+        error: `Authentication failed: ${errorText}`,
+      };
+    }
+
     const data = await response.json();
-    console.log('Whop user bootstrapped successfully:', {
-      hasAccessToken: !!data.access_token,
-      hasRefreshToken: !!data.refresh_token,
+    console.log('Whop session response:', {
+      success: data.success,
+      hasActionLink: !!data.action_link,
       userId: data.user_id,
       companyId: data.company_id,
     });
     
-    // If we got tokens, establish a session
+    // If we got an action_link, redirect to establish session
+    if (data.action_link) {
+      console.log('Redirecting to magic link to establish session...');
+      
+      // Add a return URL so we come back to the current page
+      const currentUrl = window.location.href;
+      const actionUrl = new URL(data.action_link);
+      actionUrl.searchParams.set('redirect_to', currentUrl);
+      
+      window.location.href = actionUrl.toString();
+      
+      // Return success - the page will redirect
+      return {
+        success: true,
+        userId: data.user_id,
+        companyId: data.company_id,
+      };
+    }
+    
+    // If we got tokens directly, establish a session
     if (data.access_token && data.refresh_token) {
       console.log('Setting session with tokens from bootstrap...');
       try {
@@ -156,15 +105,6 @@ export async function bootstrapWhopUser(): Promise<{
         }
         
         console.log('Session established successfully');
-        
-        // Verify the session was set
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          console.log('Session verified:', {
-            userId: session.user.id,
-            hasToken: !!session.access_token,
-          });
-        }
       } catch (e) {
         console.error('Failed to establish session:', e);
         return {
@@ -172,12 +112,6 @@ export async function bootstrapWhopUser(): Promise<{
           error: `Failed to establish session: ${e instanceof Error ? e.message : 'Unknown error'}`,
         };
       }
-    } else {
-      console.warn('No tokens returned from bootstrap');
-      return {
-        success: false,
-        error: 'No authentication tokens returned from bootstrap',
-      };
     }
     
     return {
