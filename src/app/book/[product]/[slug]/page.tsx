@@ -338,7 +338,14 @@ const PublicBooking = () => {
       trackEventAnalytics("submission");
 
       // Use Meet link if available, otherwise use original join URL
-      const finalJoinUrl = meetLink || joinUrl;
+      // For google_meet/zoom, if no meet link was created yet, use the placeholder
+      let finalJoinUrl = joinUrl;
+      if (meetLink && (callType === 'zoom' || callType === 'google_meet')) {
+        finalJoinUrl = meetLink;
+      } else if (callType !== 'zoom' && callType !== 'google_meet') {
+        // For other call types, use the original joinUrl
+        finalJoinUrl = joinUrl;
+      }
 
       // Track submission
       const confirmation: ConfirmationDetails = {

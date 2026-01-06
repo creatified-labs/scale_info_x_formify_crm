@@ -89,75 +89,90 @@ export const IntegrationsSettings = () => {
       const isWhop = detectWhopContext();
       console.log('Whop context detected:', isWhop);
       
-      if (isWhop) {
-        const whopIdentity = readWhopIdentity();
-        console.log('Whop identity:', whopIdentity);
-        
-        if (whopIdentity?.orgId) {
-          // Store Whop identity in localStorage
-          const identityData = {
-            orgId: whopIdentity.orgId,
-            email: whopIdentity.email,
-            name: whopIdentity.name,
-            timestamp: Date.now()
-          };
-          
-          localStorage.setItem('whop_oauth_identity', JSON.stringify(identityData));
-          console.log('✅ Whop identity stored in localStorage:', identityData);
-          
-          // Verify it was stored
-          const verification = localStorage.getItem('whop_oauth_identity');
-          console.log('✅ Verification - can read back:', verification ? 'YES' : 'NO');
-          
-          // Also store in sessionStorage as backup
-          sessionStorage.setItem('whop_oauth_identity', JSON.stringify(identityData));
-          console.log('✅ Also stored in sessionStorage as backup');
-        } else {
-          console.error('❌ No orgId in Whop identity!');
-        }
-      } else {
-        console.warn('⚠️ Not in Whop context - identity will not be stored');
-      }
-      
-      // Use direct Google OAuth flow (works in both Whop iframe and standalone)
-      const { data: session } = await supabase.auth.getSession();
-      const token = session?.session?.access_token;
-      
-      // Build URL with Whop identity as parameters
-      const url = new URL(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/google-auth-url`);
-      url.searchParams.set('scope', scope);
-      
-      // Pass Whop identity to Edge Function so it can encode in redirect_uri
+      // Get Whop identity - either from context or environment variable
       let whopOrgId = null;
       let whopEmail = null;
       let whopName = null;
-      
+
       if (isWhop) {
         const whopIdentity = readWhopIdentity();
+        console.log('Whop identity from context:', whopIdentity);
         whopOrgId = whopIdentity?.orgId;
         whopEmail = whopIdentity?.email;
         whopName = whopIdentity?.name;
       }
-      
-      // Fallback to environment variable if not detected from Whop context
+
+      // Fallback to environment variable if not found in Whop context
       if (!whopOrgId && process.env.NEXT_PUBLIC_WHOP_COMPANY_ID) {
         whopOrgId = process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
-        console.log('Using fallback Whop company ID from environment:', whopOrgId);
+        console.log('📦 Using Whop company ID from environment:', whopOrgId);
       }
-      
+
+      // Store identity in localStorage for OAuth callback if we have an orgId
       if (whopOrgId) {
-        url.searchParams.set('whop_org_id', whopOrgId);
-        if (whopEmail) url.searchParams.set('whop_email', whopEmail);
-        if (whopName) url.searchParams.set('whop_name', whopName);
-        console.log('Passing Whop identity to Edge Function:', whopOrgId);
+        const identityData = {
+          orgId: whopOrgId,
+          email: whopEmail,
+          name: whopName,
+          timestamp: Date.now()
+        };
+
+        localStorage.setItem('whop_oauth_identity', JSON.stringify(identityData));
+        sessionStorage.setItem('whop_oauth_identity', JSON.stringify(identityData));
+        console.log('✅ Whop identity stored for OAuth callback:', identityData);
       } else {
-        console.error('❌ No Whop org ID available - OAuth will fail!');
+        console.error('❌ No Whop org ID available - Set NEXT_PUBLIC_WHOP_COMPANY_ID in .env.local');
       }
-      
-      console.log('Fetching OAuth URL from:', url.toString());
-      const res = await fetch(url.toString(), { 
-        method: 'GET', 
-        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } 
+
+      // Get current user ID to ensure integration is linked to the right user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const currentUserId = user?.id;
+
+      console.log('🔍 Getting current user...');
+      console.log('User error:', userError);
+      console.log('User object:', user);
+      console.log('Current user ID:', currentUserId);
+
+      if (!currentUserId) {
+        console.error('❌ No user ID found! Cannot proceed with OAuth.');
+        toast.error('Unable to get user session. Please refresh the page and try again.');
+        setLoadingScope(null);
+        return;
+      }
+
+      // Build query parameters
+      const query: Record<string, string> = { scope };
+      if (whopOrgId) query.whop_org_id = whopOrgId;
+      if (whopEmail) query.whop_email = whopEmail;
+      if (whopName) query.whop_name = whopName;
+
+      // Pass current user ID through state parameter
+      const stateData: Record<string, string> = {};
+      if (whopOrgId) stateData.whop_org_id = whopOrgId;
+      if (whopEmail) stateData.whop_email = whopEmail;
+      if (whopName) stateData.whop_name = whopName;
+      if (currentUserId) stateData.user_id = currentUserId;
+
+      // Encode state to match the format expected by google-exchange-token
+      // Must use TextEncoder to match the decoding logic
+      const encoder = new TextEncoder();
+      const stateBytes = encoder.encode(JSON.stringify(stateData));
+      const stateParam = btoa(String.fromCharCode(...stateBytes));
+      query.state_override = stateParam;
+
+      console.log('State data being sent:', stateData);
+      console.log('Encoded state param:', stateParam);
+      console.log('Full query object:', query);
+
+      console.log('Fetching OAuth URL via edge-proxy');
+      const res = await fetch('/api/edge-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          functionName: 'google-auth-url',
+          method: 'GET',
+          query,
+        }),
       });
       
       console.log('OAuth URL response status:', res.status);
@@ -295,11 +310,14 @@ export const IntegrationsSettings = () => {
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <img
-                src="https://www.google.com/calendar/images/ext/gc_button1_en.gif"
-                alt="Google Calendar"
-                className="w-9 h-9 rounded"
-              />
+              <div className="w-10 h-10 flex items-center justify-center bg-white rounded-lg border shadow-sm">
+                <svg viewBox="0 0 48 48" className="w-6 h-6">
+                  <path fill="#1976D2" d="M38,6H10c-2.209,0-4,1.791-4,4v28c0,2.209,1.791,4,4,4h28c2.209,0,4-1.791,4-4V10C42,7.791,40.209,6,38,6z"/>
+                  <path fill="#FFF" d="M34,14h-4v-2c0-0.552-0.447-1-1-1h-2c-0.553,0-1,0.448-1,1v2h-4v-2c0-0.552-0.447-1-1-1h-2c-0.553,0-1,0.448-1,1v2h-4c-1.104,0-2,0.896-2,2v16c0,1.104,0.896,2,2,2h20c1.104,0,2-0.896,2-2V16C36,14.896,35.104,14,34,14z M32,30H16V20h16V30z"/>
+                  <rect x="20" y="24" fill="#1976D2" width="3" height="3"/>
+                  <rect x="25" y="24" fill="#1976D2" width="3" height="3"/>
+                </svg>
+              </div>
               <div>
                 <h3 className="font-semibold">Google Calendar</h3>
                 <p className="text-sm text-muted-foreground">

@@ -57,12 +57,27 @@ serve(async (req) => {
       )
     }
 
-    // Get integration account with access token
-    const { data: integration, error: integrationError } = await supabaseClient
-      .from('integration_accounts')
-      .select('access_token, refresh_token')
+    // Get user_id from company (via profiles table)
+    const { data: profile, error: profileError } = await supabaseClient
+      .from('profiles')
+      .select('id')
       .eq('company_id', company_id)
-      .eq('provider', 'google_calendar')
+      .limit(1)
+      .maybeSingle()
+
+    if (profileError || !profile) {
+      return new Response(
+        JSON.stringify({ available: true, conflicts: [], message: 'No user found for company' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      )
+    }
+
+    // Get integration from user_integrations table
+    const { data: integration, error: integrationError } = await supabaseClient
+      .from('user_integrations')
+      .select('access_token, refresh_token, expires_at')
+      .eq('user_id', profile.id)
+      .eq('provider', 'google')
       .maybeSingle()
 
     if (integrationError || !integration?.access_token) {

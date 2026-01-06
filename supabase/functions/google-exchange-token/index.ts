@@ -7,7 +7,26 @@ const GOOGLE_REDIRECT_URI = Deno.env.get('GOOGLE_REDIRECT_URI') || 'https://rwmm
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-dev-proxy',
+}
+
+// Type definitions
+interface RequestBody {
+  code?: string
+  state?: string
+}
+
+interface GoogleTokenResponse {
+  access_token: string
+  refresh_token?: string
+  expires_in: number
+  token_type: string
+}
+
+interface GoogleUserInfo {
+  email: string
+  name?: string
+  picture?: string
 }
 
 serve(async (req) => {
@@ -61,23 +80,37 @@ serve(async (req) => {
       data: { user },
     } = await supabaseClient.auth.getUser()
 
-    const body = await req.json()
+    const body = await req.json() as RequestBody
     code = body.code
     const stateParam = body.state
 
     console.log('Received code:', code ? 'yes' : 'no')
     console.log('Received state:', stateParam ? 'yes' : 'no')
-    
-    // Extract Whop identity from OAuth state parameter
+    console.log('State param value:', stateParam)
+
+    // Extract state data (user_id, Whop identity) from OAuth state parameter
     let whopIdentity = null
+    let stateUserId = null
     if (stateParam) {
       try {
         // Use Deno's built-in base64 decoding
         const decoded = atob(stateParam)
+        console.log('Decoded state (raw):', decoded)
         const decoder = new TextDecoder()
         const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0))
-        const stateData = JSON.parse(decoder.decode(bytes))
-        
+        const decodedStr = decoder.decode(bytes)
+        console.log('Decoded state (string):', decodedStr)
+        const stateData = JSON.parse(decodedStr)
+        console.log('Parsed state data:', JSON.stringify(stateData))
+
+        // Extract user_id from state (passed from main window)
+        if (stateData.user_id) {
+          stateUserId = stateData.user_id
+          console.log('✅ User ID from state parameter:', stateUserId)
+        } else {
+          console.log('❌ No user_id in state data!')
+        }
+
         if (stateData.whop_org_id) {
           whopIdentity = {
             orgId: stateData.whop_org_id,
@@ -88,9 +121,11 @@ serve(async (req) => {
         }
       } catch (e) {
         console.error('Failed to decode state parameter:', e)
+        console.error('Error details:', e.message, e.stack)
       }
     }
 
+    console.log('Received state user_id:', stateUserId ? 'yes' : 'no')
     console.log('Received whop_identity:', whopIdentity ? 'yes' : 'no')
     if (whopIdentity) {
       console.log('Whop org ID:', whopIdentity.orgId)
@@ -100,8 +135,24 @@ serve(async (req) => {
       throw new Error('Missing authorization code')
     }
 
-    // If no user but we have Whop identity, create/get user with service role
+    // Determine which user to use for the integration
     let effectiveUser = user
+    console.log('Session user:', user ? user.id : 'none')
+    console.log('State user_id:', stateUserId || 'none')
+
+    // Priority 1: Use user_id from state parameter (passed from main window)
+    // This ensures we use the SAME user as the main window, not the popup's session
+    if (stateUserId) {
+      console.log('✅ Using user ID from state parameter (main window user):', stateUserId)
+      // Create a minimal user object with just the ID
+      // We don't need to look up the full user object - just the ID is enough
+      effectiveUser = { id: stateUserId } as any
+      console.log('effectiveUser set to:', effectiveUser.id)
+    } else {
+      console.log('⚠️ No stateUserId - will use session user or create from Whop identity')
+    }
+
+    // Priority 2: If no user but we have Whop identity, create/get user with service role
     if (!effectiveUser && whopIdentity?.orgId) {
       console.log('Creating user from Whop identity:', whopIdentity)
       
@@ -166,9 +217,8 @@ serve(async (req) => {
         }
       } else {
         console.log('Found existing user:', userId)
-        // Get existing user
-        const { data: existingUser } = await supabaseAdmin.auth.admin.getUserById(userId)
-        effectiveUser = existingUser?.user || null
+        // Use the user ID directly
+        effectiveUser = { id: userId } as any
       }
     }
 
@@ -193,7 +243,7 @@ serve(async (req) => {
       throw new Error(`Token exchange failed: ${errorText}`)
     }
 
-    const tokens = await tokenResponse.json()
+    const tokens = await tokenResponse.json() as GoogleTokenResponse
 
     // Get user info from Google
     const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -202,7 +252,7 @@ serve(async (req) => {
       },
     })
 
-    const userInfo = await userInfoResponse.json()
+    const userInfo = await userInfoResponse.json() as GoogleUserInfo
 
     // Calculate expiration time
     const expiresAt = new Date()
@@ -231,11 +281,13 @@ serve(async (req) => {
       )
     }
 
-    // Store integration in database (use admin client if we created the user)
-    const clientForInsert = effectiveUser.id === user?.id ? supabaseClient : createClient(
+    // Store integration in database
+    // Use admin client if we got user from state parameter or created a user (not from session)
+    const useAdminClient = stateUserId || effectiveUser.id !== user?.id
+    const clientForInsert = useAdminClient ? createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-    )
+    ) : supabaseClient
 
     const { error: dbError } = await clientForInsert
       .from('user_integrations')

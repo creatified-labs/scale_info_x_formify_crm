@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useEntitlements } from "@/contexts/EntitlementsContext";
 import { track } from "@/lib/track";
 
@@ -9,20 +8,16 @@ export function useUpgrade() {
   const { refetch } = useEntitlements();
 
   const startTrial = useCallback(async (plan: PlanTier) => {
-    const { data: session } = await supabase.auth.getSession();
-    const token = session?.session?.access_token;
-    if (!token) {
-      throw new Error("Not authenticated");
-    }
-
-    const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/start-trial`;
-    const res = await fetch(url, {
+    const res = await fetch('/api/edge-proxy', {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
       },
-      body: JSON.stringify({ plan_id: plan }),
+      body: JSON.stringify({
+        functionName: 'start-trial',
+        payload: { plan_id: plan },
+        method: 'POST',
+      }),
     });
 
     if (!res.ok) {

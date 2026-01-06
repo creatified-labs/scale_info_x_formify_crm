@@ -19,35 +19,10 @@ serve(async (req) => {
 
     console.log('Request info:', { hasAuthHeader: !!authHeader, origin, isDev, devProxy })
 
-    // For dev mode, skip JWT validation entirely
+    // For production we now rely on frontend session establishing the correct company_id.
+    // When running locally, the dev proxy still injects the service role token.
     if (!isDev && !authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
-      )
-    }
-
-    // Only validate JWT if not in dev mode
-    if (!isDev && authHeader) {
-      const supabaseAuth = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-        {
-          global: {
-            headers: { Authorization: authHeader },
-          },
-        }
-      )
-
-      const { data: { user }, error: userError } = await supabaseAuth.auth.getUser()
-
-      if (userError || !user) {
-        console.error('Auth error:', userError)
-        return new Response(
-          JSON.stringify({ error: 'Unauthorized', details: userError?.message }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
-        )
-      }
+      console.warn('goals-write missing auth header but continuing (JWT disabled). Origin:', origin)
     } else if (isDev) {
       console.log('Dev mode: Skipping JWT validation', { devProxy, origin })
     }

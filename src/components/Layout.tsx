@@ -377,6 +377,7 @@ export const Layout = ({
         const j = await res.json().catch(() => ({}));
         throw new Error((j as any)?.error || "Failed to update branding");
       }
+      const responseData = await res.json().catch(() => ({}));
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("branding:updated", {
@@ -384,7 +385,21 @@ export const Layout = ({
           }),
         );
       }
-      toast({ title: "Branding settings updated" });
+
+      // Update booking prefix state
+      if (responseData.booking_slug_prefix) {
+        setBookingPrefix(responseData.booking_slug_prefix);
+      }
+
+      // Show success message with URL change notification
+      if (responseData.slug_changed) {
+        toast({
+          title: "Branding updated",
+          description: `Your booking URL is now: /book/${responseData.booking_slug_prefix}/...`,
+        });
+      } else {
+        toast({ title: "Branding settings updated" });
+      }
     } catch (error: any) {
       toast({
         title: "Could not update branding",
@@ -462,21 +477,23 @@ export const Layout = ({
           ? company.booking_slug_prefix
           : DEFAULT_PRODUCT_SEGMENT;
 
-        setBrandName(normalizedBranding);
+        // Default to "Scale Info" if no branding name is set
+        const brandingWithDefault = normalizedBranding || "Scale Info";
+        setBrandName(brandingWithDefault);
         setOrgDisplayName(normalizedOrg);
         setBookingPrefix(prefix);
-        setBrandingNameInput(normalizedBranding);
+        setBrandingNameInput(brandingWithDefault);
         if (typeof company?.branding_hide_badge === "boolean") {
           setBrandingHideBadge(Boolean(company.branding_hide_badge));
         }
         const contactEmail = typeof company?.primary_contact_email === "string" ? company.primary_contact_email.trim() : "";
         setOrgContactEmail(contactEmail.length > 0 ? contactEmail : null);
       } catch {
-        setBrandName("");
+        setBrandName("Scale Info");
         setOrgDisplayName("");
         setOrgContactEmail(null);
         setBookingPrefix(DEFAULT_PRODUCT_SEGMENT);
-        setBrandingNameInput("");
+        setBrandingNameInput("Scale Info");
         setBrandingHideBadge(false);
       }
     })();
@@ -702,29 +719,29 @@ export const Layout = ({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="timezone-select">Timezone</Label>
-                <Select value={userTimezone} onValueChange={setUserTimezone}>
-                  <SelectTrigger id="timezone-select">
-                    <SelectValue placeholder="Select a timezone" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIMEZONES.map((tz) => (
-                      <SelectItem key={tz.value} value={tz.value}>
-                        {tz.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <Select value={userTimezone} onValueChange={setUserTimezone}>
+                    <SelectTrigger id="timezone-select">
+                      <SelectValue placeholder="Select a timezone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIMEZONES.map((tz) => (
+                        <SelectItem key={tz.value} value={tz.value}>
+                          {tz.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button variant="secondary" size="sm" onClick={handleTimezoneSave} disabled={timezoneSaving} className="whitespace-nowrap">
+                    {timezoneSaving ? "Saving..." : "Save"}
+                  </Button>
+                </div>
                 <p className="text-xs text-muted-foreground">
                   Current time: {new Date().toLocaleString("en-US", {
                     timeZone: userTimezone,
                     timeStyle: "short",
                   })}
                 </p>
-                <div className="flex justify-end">
-                  <Button variant="secondary" size="sm" onClick={handleTimezoneSave} disabled={timezoneSaving}>
-                    {timezoneSaving ? "Saving..." : "Save timezone"}
-                  </Button>
-                </div>
               </div>
             </div>
 
@@ -736,64 +753,80 @@ export const Layout = ({
               <IntegrationsSettings />
             </div>
 
-            {/* Branding Section */}
+            {/* Brand Name Section - Always Visible */}
             <div className="space-y-4 border-t pt-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-medium">Branding</h3>
-                  <p className="text-xs text-muted-foreground">Configure your product name and watermark badge.</p>
-                </div>
+              <div>
+                <h3 className="text-sm font-medium">Brand name</h3>
+                <p className="text-xs text-muted-foreground">Customize your product name shown in the header and booking pages.</p>
               </div>
-
-              {!removeWatermark ? (
-                <LockTile
-                  title="Custom brand name and watermark"
-                  description={plan === "preview" ? "Available on Pro. Try a 7-day Pro trial." : "Available on Pro"}
-                  primaryPlan="pro"
-                />
-              ) : (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="font-medium text-sm">Product name</div>
-                    <p className="text-xs text-muted-foreground">
-                      Shown in the top-left header (replaces "Formify CRM") and on public pages.
-                    </p>
-                    <div className="flex gap-2">
-                      <Input
-                        value={brandingNameInput}
-                        onChange={(event) => setBrandingNameInput(event.target.value)}
-                        placeholder="Your brand e.g. Acme CRM"
-                        disabled={brandingSaving}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 border rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-medium text-sm">Hide "Powered by Formify CRM" badge</div>
-                        <p className="text-xs text-muted-foreground">
-                          Available on the Pro plan. Toggle on to remove the badge from public pages.
-                        </p>
-                      </div>
-                      <Switch
-                        checked={brandingHideBadge}
-                        onCheckedChange={setBrandingHideBadge}
-                        disabled={brandingSaving}
-                      />
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      The badge remains on Preview/Solo plans. Changes apply to booking pages and public forms.
-                    </p>
-                  </div>
-
-                  <div className="flex justify-end">
-                    <Button variant="secondary" type="button" disabled={brandingSaving} onClick={handleBrandingSave}>
-                      {brandingSaving ? "Saving…" : "Save branding"}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="brand-name-input">Product name</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="brand-name-input"
+                      value={brandingNameInput}
+                      onChange={(event) => setBrandingNameInput(event.target.value)}
+                      placeholder="e.g. Scale Info"
+                      disabled={brandingSaving}
+                    />
+                    <Button variant="secondary" size="sm" onClick={handleBrandingSave} disabled={brandingSaving} className="whitespace-nowrap">
+                      {brandingSaving ? "Saving..." : "Save"}
                     </Button>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Replaces "Formify CRM" in the header and appears on public pages.
+                  </p>
                 </div>
-              )}
+
+                {/* Booking URL Display */}
+                <div className="space-y-2 border rounded-lg p-3 bg-muted/30">
+                  <div className="font-medium text-sm">Booking URL preview</div>
+                  <p className="text-xs text-muted-foreground">
+                    Your public booking links use this format:
+                  </p>
+                  <div className="font-mono text-xs bg-background border rounded px-2 py-1.5">
+                    /book/<span className="text-primary font-semibold">{bookingPrefix || 'your-name'}</span>/event-slug
+                  </div>
+                  {brandingNameInput.trim() && brandingNameInput.trim().toLowerCase().replace(/[^a-z0-9]+/g, '') !== bookingPrefix && (
+                    <div className="flex gap-2 items-start p-2 bg-yellow-500/10 border border-yellow-500/20 rounded text-xs">
+                      <div className="text-yellow-600 dark:text-yellow-500 mt-0.5">⚠️</div>
+                      <div className="flex-1">
+                        <div className="font-medium text-yellow-700 dark:text-yellow-400">Your booking URLs will change</div>
+                        <div className="text-yellow-600 dark:text-yellow-500 mt-1">
+                          New format: /book/<span className="font-semibold">{brandingNameInput.trim().toLowerCase().replace(/[^a-z0-9]+/g, '') || 'your-name'}</span>/event-slug
+                        </div>
+                        <div className="mt-1 text-yellow-600/80 dark:text-yellow-500/80">
+                          Update any shared links after saving!
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Watermark Section */}
+            <div className="space-y-4 border-t pt-4">
+              <div>
+                <h3 className="text-sm font-medium">Watermark</h3>
+                <p className="text-xs text-muted-foreground">Remove the "Powered by Formify CRM" badge from public pages.</p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between border rounded-lg p-3">
+                  <div>
+                    <div className="font-medium text-sm">Hide "Powered by Formify CRM" badge</div>
+                    <p className="text-xs text-muted-foreground">
+                      Toggle on to remove the badge from booking pages and public forms.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={brandingHideBadge}
+                    onCheckedChange={setBrandingHideBadge}
+                    disabled={brandingSaving}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </DialogContent>

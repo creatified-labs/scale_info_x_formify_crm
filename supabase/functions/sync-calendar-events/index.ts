@@ -17,7 +17,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
-    const { company_id } = await req.json()
+    const { company_id } = await req.json() as { company_id: string }
 
     if (!company_id) {
       return new Response(
@@ -44,12 +44,29 @@ serve(async (req) => {
       )
     }
 
-    // Get integration account
-    const { data: integration } = await supabaseClient
-      .from('integration_accounts')
-      .select('access_token, user_id')
+    // Get user_id from company (via profiles table)
+    const { data: profile } = await supabaseClient
+      .from('profiles')
+      .select('id')
       .eq('company_id', company_id)
-      .eq('provider', 'google_calendar')
+      .limit(1)
+      .maybeSingle()
+
+    if (!profile) {
+      return new Response(
+        JSON.stringify({ error: 'No user found for company' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      )
+    }
+
+    const userId = profile.id
+
+    // Get integration from user_integrations table
+    const { data: integration } = await supabaseClient
+      .from('user_integrations')
+      .select('access_token')
+      .eq('user_id', userId)
+      .eq('provider', 'google')
       .maybeSingle()
 
     if (!integration?.access_token) {
@@ -58,8 +75,6 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
-
-    const userId = integration.user_id
     const now = new Date()
     const futureDate = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000) // 90 days ahead
 
@@ -87,7 +102,7 @@ serve(async (req) => {
           continue
         }
 
-        const data = await response.json()
+        const data = await response.json() as { items?: any[] }
         const events = data.items || []
 
         // Filter busy events (not declined, not all-day)

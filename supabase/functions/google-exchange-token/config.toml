@@ -1,0 +1,2 @@
+# Disable JWT verification for this function since it handles unauthenticated OAuth callbacks
+verify_jwt = false

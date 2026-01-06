@@ -85,14 +85,21 @@ export const EventTypesList = () => {
     setArchivedEventTypes((prev) => prev.filter((event) => event.id !== id));
 
     try {
-      const { data: session } = await supabase.auth.getSession();
-      const token = session?.session?.access_token;
-      if (!token) throw new Error("Not authenticated. Please refresh to initialize your session.");
-      const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-event-type`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
-        body: JSON.stringify({ id, permanent_delete: true }),
+      // Get user ID for development mode
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const res = await fetch('/api/edge-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          functionName: 'update-event-type',
+          payload: {
+            id,
+            permanent_delete: true,
+            user_id: user?.id, // Explicitly pass user_id for dev mode
+          },
+          method: 'POST',
+        }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -281,14 +288,21 @@ export const EventTypesList = () => {
     }
 
     try {
-      const { data: session } = await supabase.auth.getSession();
-      const token = session?.session?.access_token;
-      if (!token) throw new Error("Not authenticated. Please refresh to initialize your session.");
-      const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-event-type`;
-      const res = await fetch(url, {
+      // Get user ID for development mode
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const res = await fetch('/api/edge-proxy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
-        body: JSON.stringify({ id, is_active: !currentStatus }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          functionName: 'update-event-type',
+          payload: {
+            id,
+            is_active: !currentStatus,
+            user_id: user?.id, // Explicitly pass user_id for dev mode
+          },
+          method: 'POST',
+        }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -348,14 +362,21 @@ export const EventTypesList = () => {
 
     // Update database in background
     try {
-      const { data: session } = await supabase.auth.getSession();
-      const token = session?.session?.access_token;
-      if (!token) throw new Error("Not authenticated. Please refresh to initialize your session.");
-      const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-event-type`;
-      const res = await fetch(url, {
+      // Get user ID for development mode
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const res = await fetch('/api/edge-proxy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
-        body: JSON.stringify({ id: eventId, is_archived: true }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          functionName: 'update-event-type',
+          payload: {
+            id: eventId,
+            is_archived: true,
+            user_id: user?.id, // Explicitly pass user_id for dev mode
+          },
+          method: 'POST',
+        }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -402,14 +423,21 @@ export const EventTypesList = () => {
 
     // Update database in background
     try {
-      const { data: session } = await supabase.auth.getSession();
-      const token = session?.session?.access_token;
-      if (!token) throw new Error("Not authenticated. Please refresh to initialize your session.");
-      const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-event-type`;
-      const res = await fetch(url, {
+      // Get user ID for development mode
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const res = await fetch('/api/edge-proxy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
-        body: JSON.stringify({ id, is_archived: false }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          functionName: 'update-event-type',
+          payload: {
+            id,
+            is_archived: false,
+            user_id: user?.id, // Explicitly pass user_id for dev mode
+          },
+          method: 'POST',
+        }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));

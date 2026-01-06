@@ -17,7 +17,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
-    const { booking_id, template_type, recipient } = await req.json()
+    const { booking_id, template_type, recipient } = await req.json() as { booking_id: string; template_type: string; recipient: string }
 
     if (!booking_id || !template_type || !recipient) {
       return new Response(
@@ -75,6 +75,10 @@ serve(async (req) => {
       'booking_cancelled': {
         subject: 'Booking Cancelled: {{event_name}}',
         body: `Hi {{invitee_name}},\n\nYour booking for {{event_name}} on {{call_date}} at {{call_time}} has been cancelled.\n\nIf you'd like to reschedule, please visit our booking page.\n\nBest regards`
+      },
+      'booking_reminder': {
+        subject: 'Reminder: {{event_name}} upcoming',
+        body: `Hi {{invitee_name}},\n\nThis is a reminder that you have {{event_name}} scheduled.\n\nDate: {{call_date}}\nTime: {{call_time}}\nLocation: {{location}}\n\nLooking forward to speaking with you!\n\nBest regards`
       },
     }
 
@@ -156,7 +160,7 @@ serve(async (req) => {
       }),
     })
 
-    const emailData = await emailResponse.json()
+    const emailData = await emailResponse.json() as { id?: string; [key: string]: any }
 
     // Log email
     await supabaseClient.from('email_logs').insert({

@@ -38,20 +38,28 @@ serve(async (req) => {
     // If product is provided, also filter by company's whop_company_id
     let query = supabaseClient
       .from('event_types')
-      .select(`
+      .select(
+        `
         *,
         companies!inner(
           id,
           name,
-          whop_company_id
+          whop_company_id,
+          booking_slug_prefix
         )
-      `)
+      `,
+        { head: false, count: null }
+      )
       .eq('slug', slug)
-      .eq('active', true)
+      .eq('is_active', true)
 
-    // If product parameter is provided, filter by company's whop_company_id
+    // If product is provided, filter by Whop org (biz_) or booking slug prefix
     if (product) {
-      query = query.eq('companies.whop_company_id', product)
+      if (product.startsWith('biz_')) {
+        query = query.eq('companies.whop_company_id', product)
+      } else {
+        query = query.eq('companies.booking_slug_prefix', product)
+      }
     }
 
     const { data: eventType, error } = await query.single()

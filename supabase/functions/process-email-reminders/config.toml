@@ -1,0 +1,5 @@
+# Cron schedule for automated email reminder processing
+# Runs every minute to check for and send pending reminders
+
+[cron]
+schedule = "* * * * *"  # Every minute

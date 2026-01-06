@@ -115,16 +115,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               console.error('Dev auth failed:', await response.text());
             }
           } else {
-            // Production: bootstrap from Whop
+            console.log('[Auth] No existing session – bootstrapping via Whop');
             const { bootstrapWhopUser } = await import('@/lib/whop-bootstrap');
-            const result = await bootstrapWhopUser();
+            try {
+              const result = await bootstrapWhopUser();
 
-            if (result.success) {
-              console.log('Whop user bootstrapped, refreshing session...');
-              // Refresh session after bootstrap
-              const { data: { session: newSession } } = await supabase.auth.getSession();
-              setSession(newSession);
-              setUser(newSession?.user ?? null);
+              console.log('[Auth] bootstrapWhopUser result:', result);
+
+              if (result.success) {
+                console.log('[Auth] Whop user bootstrapped, refreshing session...');
+                // Refresh session after bootstrap
+                const { data: { session: newSession } } = await supabase.auth.getSession();
+                console.log('[Auth] Session after bootstrap:', {
+                  hasSession: !!newSession,
+                  userId: newSession?.user?.id,
+                  companyId: newSession?.user?.user_metadata?.company_id,
+                });
+                setSession(newSession);
+                setUser(newSession?.user ?? null);
+              } else {
+                console.error('[Auth] bootstrapWhopUser reported failure:', result.error);
+              }
+            } catch (error) {
+              console.error('[Auth] bootstrapWhopUser threw error:', error);
             }
           }
         } catch (error) {

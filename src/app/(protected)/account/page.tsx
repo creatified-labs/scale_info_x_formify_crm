@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -31,7 +32,16 @@ export default function AccountSettingsPage() {
   const { toast } = useToast();
   const [userTimezone, setUserTimezone] = useState("America/New_York");
   const [timezoneSaving, setTimezoneSaving] = useState(false);
-  
+  const [currentTime, setCurrentTime] = useState<string>("");
+
+  // Brand Name Settings
+  const [brandingNameInput, setBrandingNameInput] = useState("Scale Info");
+  const [bookingPrefix, setBookingPrefix] = useState("");
+  const [brandingSaving, setBrandingSaving] = useState(false);
+
+  // Watermark Settings
+  const [brandingHideBadge, setBrandingHideBadge] = useState(false);
+
   // Google Calendar Integration Settings
   const [autoAddToCalendar, setAutoAddToCalendar] = useState(true);
   const [checkCalendarConflicts, setCheckCalendarConflicts] = useState(true);
@@ -39,18 +49,38 @@ export default function AccountSettingsPage() {
   const [syncExistingEvents, setSyncExistingEvents] = useState(false);
   const [calendarSyncInterval, setCalendarSyncInterval] = useState("realtime");
   const [integrationSettingsSaving, setIntegrationSettingsSaving] = useState(false);
-  
+
   // Calendar Selection
   const [availableCalendars, setAvailableCalendars] = useState<Array<{ id: string; summary: string; primary?: boolean }>>([]);
   const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>([]);
+  const [selectedCalendarForEvents, setSelectedCalendarForEvents] = useState<string>("");
   const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
-    loadUserTimezone();
-    loadIntegrationSettings();
-    loadGoogleCalendars();
+    const initializeSettings = async () => {
+      loadUserTimezone();
+      loadBrandingSettings();
+      await loadIntegrationSettings(); // Load settings FIRST
+      await loadGoogleCalendars(); // Then load calendars (won't overwrite)
+    };
+    initializeSettings();
   }, []);
+
+  // Update current time on client-side to prevent hydration mismatch
+  useEffect(() => {
+    const updateTime = () => {
+      setCurrentTime(new Date().toLocaleString("en-US", {
+        timeZone: userTimezone,
+        timeStyle: "short",
+      }));
+    };
+
+    updateTime(); // Initial update
+    const interval = setInterval(updateTime, 1000); // Update every second
+
+    return () => clearInterval(interval);
+  }, [userTimezone]);
 
   const loadUserTimezone = async () => {
     try {
@@ -68,6 +98,36 @@ export default function AccountSettingsPage() {
       }
     } catch (error) {
       console.error("Error loading timezone:", error);
+    }
+  };
+
+  const loadBrandingSettings = async () => {
+    try {
+      const companyId = await getCompanyId({ allowFallback: true });
+      if (!companyId) return;
+
+      const { data: company } = await supabase
+        .from("companies")
+        .select("branding_name, branding_hide_badge, booking_slug_prefix")
+        .eq("id", companyId)
+        .maybeSingle();
+
+      if (company) {
+        const brandingName = typeof company.branding_name === "string" ? company.branding_name.trim() : "";
+        const finalBrandName = brandingName || "Scale Info";
+
+        // If booking slug is "formifycrm" and brand name is "Scale Info", use "scaleinfo" instead
+        let finalBookingSlug = company.booking_slug_prefix || "";
+        if (finalBookingSlug === "formifycrm" && finalBrandName === "Scale Info") {
+          finalBookingSlug = "scaleinfo";
+        }
+
+        setBrandingNameInput(finalBrandName);
+        setBookingPrefix(finalBookingSlug);
+        setBrandingHideBadge(Boolean(company.branding_hide_badge));
+      }
+    } catch (error) {
+      console.error("Error loading branding settings:", error);
     }
   };
 
@@ -91,6 +151,7 @@ export default function AccountSettingsPage() {
           setSyncExistingEvents(settings.google_calendar.sync_existing_events ?? false);
           setCalendarSyncInterval(settings.google_calendar.sync_interval ?? "realtime");
           setSelectedCalendarIds(settings.google_calendar.selected_calendars ?? []);
+          setSelectedCalendarForEvents(settings.google_calendar.add_events_to_calendar ?? "");
         }
       }
     } catch (error) {
@@ -101,15 +162,16 @@ export default function AccountSettingsPage() {
   const loadGoogleCalendars = async () => {
     setLoadingCalendars(true);
     try {
-      const companyId = await getCompanyId({ allowFallback: true });
-      if (!companyId) return;
+      // Get user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-      // Get integration account with access token
+      // Get integration from user_integrations table
       const { data: integrationData } = await supabase
-        .from("integration_accounts")
+        .from("user_integrations")
         .select("access_token, refresh_token")
-        .eq("company_id", companyId)
-        .eq("provider", "google_calendar")
+        .eq("user_id", user.id)
+        .eq("provider", "google")
         .maybeSingle();
 
       if (!integrationData?.access_token) {
@@ -138,11 +200,35 @@ export default function AccountSettingsPage() {
 
       setAvailableCalendars(calendars);
 
-      // Auto-select primary calendar if no calendars selected yet
-      if (selectedCalendarIds.length === 0 && calendars.length > 0) {
-        const primaryCal = calendars.find((c: any) => c.primary);
-        if (primaryCal) {
-          setSelectedCalendarIds([primaryCal.id]);
+      // Check if user has already saved settings in the database
+      const companyId = await getCompanyId({ allowFallback: true });
+      if (companyId) {
+        const { data: company } = await supabase
+          .from("companies")
+          .select("settings")
+          .eq("id", companyId)
+          .maybeSingle();
+
+        const existingSettings = company?.settings as any;
+        const hasExistingCalendarSettings = existingSettings?.google_calendar?.selected_calendars || existingSettings?.google_calendar?.add_events_to_calendar;
+
+        // Only auto-select if user has NEVER configured calendar settings before
+        if (!hasExistingCalendarSettings && calendars.length > 0) {
+          const primaryCal = calendars.find((c: any) => c.primary);
+
+          // Auto-select primary calendar for conflict checking
+          if (primaryCal && selectedCalendarIds.length === 0) {
+            setSelectedCalendarIds([primaryCal.id]);
+          }
+
+          // Auto-select primary calendar for adding events
+          if (!selectedCalendarForEvents) {
+            if (primaryCal) {
+              setSelectedCalendarForEvents(primaryCal.id);
+            } else if (calendars[0]) {
+              setSelectedCalendarForEvents(calendars[0].id);
+            }
+          }
         }
       }
     } catch (error) {
@@ -175,6 +261,57 @@ export default function AccountSettingsPage() {
     }
   };
 
+  const handleBrandingSave = async () => {
+    setBrandingSaving(true);
+    try {
+      // Get user ID for development mode
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Call the update-branding Edge Function via dev proxy
+      const res = await fetch('/api/edge-proxy', {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          functionName: 'update-branding',
+          payload: {
+            branding_name: brandingNameInput,
+            branding_hide_badge: brandingHideBadge,
+            user_id: user?.id, // Explicitly pass user_id for dev mode
+          },
+          method: 'POST',
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.details || "Failed to update branding");
+      }
+
+      const responseData = await res.json().catch(() => ({}));
+
+      // Update booking prefix state
+      if (responseData.booking_slug_prefix) {
+        setBookingPrefix(responseData.booking_slug_prefix);
+      }
+
+      // Show success message with URL change notification
+      if (responseData.slug_changed) {
+        toast({
+          title: "Branding updated",
+          description: `Your booking URL is now: /book/${responseData.booking_slug_prefix}/...`,
+        });
+      } else {
+        toast({ title: "Branding settings updated" });
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setBrandingSaving(false);
+    }
+  };
+
   const handleIntegrationSettingsSave = async () => {
     setIntegrationSettingsSaving(true);
     try {
@@ -184,7 +321,17 @@ export default function AccountSettingsPage() {
         return;
       }
 
+      // Fetch existing settings to merge with (don't overwrite other settings)
+      const { data: existingCompany } = await supabase
+        .from("companies")
+        .select("settings")
+        .eq("id", companyId)
+        .single();
+
+      const existingSettings = (existingCompany?.settings as any) || {};
+
       const settings = {
+        ...existingSettings,
         google_calendar: {
           auto_add_bookings: autoAddToCalendar,
           check_conflicts: checkCalendarConflicts,
@@ -192,6 +339,7 @@ export default function AccountSettingsPage() {
           sync_existing_events: syncExistingEvents,
           sync_interval: calendarSyncInterval,
           selected_calendars: selectedCalendarIds,
+          add_events_to_calendar: selectedCalendarForEvents,
         },
       };
 
@@ -203,6 +351,9 @@ export default function AccountSettingsPage() {
       if (error) throw error;
 
       toast({ title: "Saved", description: "Integration settings updated" });
+
+      // Reload settings to confirm they were saved
+      await loadIntegrationSettings();
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
@@ -219,16 +370,17 @@ export default function AccountSettingsPage() {
         return;
       }
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/sync-calendar-events`,
-        {
+      const response = await fetch('/api/edge-proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          functionName: 'sync-calendar-events',
+          payload: { company_id: companyId },
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ company_id: companyId }),
-        }
-      );
+        }),
+      });
 
       const data = await response.json();
 
@@ -274,29 +426,138 @@ export default function AccountSettingsPage() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="timezone-select">Timezone</Label>
-            <Select value={userTimezone} onValueChange={setUserTimezone}>
-              <SelectTrigger id="timezone-select">
-                <SelectValue placeholder="Select a timezone" />
-              </SelectTrigger>
-              <SelectContent>
-                {TIMEZONES.map((tz) => (
-                  <SelectItem key={tz.value} value={tz.value}>
-                    {tz.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <Select value={userTimezone} onValueChange={setUserTimezone}>
+                <SelectTrigger id="timezone-select">
+                  <SelectValue placeholder="Select a timezone" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIMEZONES.map((tz) => (
+                    <SelectItem key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="secondary" size="sm" onClick={handleTimezoneSave} disabled={timezoneSaving} className="whitespace-nowrap">
+                {timezoneSaving ? "Saving..." : "Save"}
+              </Button>
+            </div>
             <p className="text-xs text-muted-foreground">
-              Current time: {new Date().toLocaleString("en-US", {
-                timeZone: userTimezone,
-                timeStyle: "short",
-              })}
+              Current time: {currentTime || "Loading..."}
             </p>
           </div>
-          <div className="flex justify-end">
-            <Button onClick={handleTimezoneSave} disabled={timezoneSaving}>
-              {timezoneSaving ? "Saving..." : "Save timezone"}
-            </Button>
+        </CardContent>
+      </Card>
+
+      {/* Brand Name Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Brand name</CardTitle>
+          <CardDescription>
+            Customize your product name shown in the header and booking pages
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="brand-name-input">Product name</Label>
+            <div className="flex gap-2">
+              <Input
+                id="brand-name-input"
+                value={brandingNameInput}
+                onChange={(e) => setBrandingNameInput(e.target.value)}
+                placeholder="e.g. Scale Info"
+                disabled={brandingSaving}
+              />
+              <Button variant="secondary" size="sm" onClick={handleBrandingSave} disabled={brandingSaving} className="whitespace-nowrap">
+                {brandingSaving ? "Saving..." : "Save"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Replaces "Formify CRM" in the header and appears on public pages.
+            </p>
+          </div>
+
+          {/* Booking URL Preview */}
+          <div className="space-y-2 border rounded-lg p-3 bg-muted/30">
+            <div className="font-medium text-sm">Booking URL preview</div>
+            <p className="text-xs text-muted-foreground">
+              Your public booking links use this format:
+            </p>
+            <div className="font-mono text-xs bg-background border rounded px-2 py-1.5">
+              /book/<span className="text-primary font-semibold">{bookingPrefix || 'your-name'}</span>/event-slug
+            </div>
+            {brandingNameInput.trim() && brandingNameInput.trim().toLowerCase().replace(/[^a-z0-9]+/g, '') !== bookingPrefix && (
+              <div className="flex gap-2 items-start p-2 bg-yellow-500/10 border border-yellow-500/20 rounded text-xs">
+                <div className="text-yellow-600 dark:text-yellow-500 mt-0.5">⚠️</div>
+                <div className="flex-1">
+                  <div className="font-medium text-yellow-700 dark:text-yellow-400">Your booking URLs will change</div>
+                  <div className="text-yellow-600 dark:text-yellow-500 mt-1">
+                    New format: /book/<span className="font-semibold">{brandingNameInput.trim().toLowerCase().replace(/[^a-z0-9]+/g, '') || 'your-name'}</span>/event-slug
+                  </div>
+                  <div className="mt-1 text-yellow-600/80 dark:text-yellow-500/80">
+                    Update any shared links after saving!
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Watermark Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Watermark</CardTitle>
+          <CardDescription>
+            Remove the "Powered by Formify CRM" badge from public pages
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between border rounded-lg p-3">
+            <div>
+              <div className="font-medium text-sm">Hide "Powered by Formify CRM" badge</div>
+              <p className="text-xs text-muted-foreground">
+                Toggle on to remove the badge from booking pages and public forms
+              </p>
+            </div>
+            <Switch
+              checked={brandingHideBadge}
+              onCheckedChange={async (checked) => {
+                setBrandingHideBadge(checked);
+                // Auto-save when toggled
+                setBrandingSaving(true);
+                try {
+                  // Get user ID for development mode
+                  const { data: { user } } = await supabase.auth.getUser();
+
+                  const res = await fetch('/api/edge-proxy', {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      functionName: 'update-branding',
+                      payload: {
+                        branding_name: brandingNameInput,
+                        branding_hide_badge: checked,
+                        user_id: user?.id, // Explicitly pass user_id for dev mode
+                      },
+                      method: 'POST',
+                    }),
+                  });
+
+                  if (res.ok) {
+                    toast({ title: "Watermark setting updated" });
+                  }
+                } catch (error) {
+                  console.error("Error saving watermark setting:", error);
+                } finally {
+                  setBrandingSaving(false);
+                }
+              }}
+              disabled={brandingSaving}
+            />
           </div>
         </CardContent>
       </Card>
@@ -315,131 +576,174 @@ export default function AccountSettingsPage() {
           <div className="border-t pt-6 space-y-4">
             <h3 className="text-sm font-semibold">Calendar Sync Settings</h3>
             
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="auto-add">Automatically add bookings to calendar</Label>
-                <p className="text-xs text-muted-foreground">
-                  New bookings will be automatically added to your Google Calendar
-                </p>
-              </div>
-              <Switch
-                id="auto-add"
-                checked={autoAddToCalendar}
-                onCheckedChange={setAutoAddToCalendar}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="check-conflicts">Check calendar for conflicts</Label>
-                <p className="text-xs text-muted-foreground">
-                  Prevent double-bookings by checking your calendar in real-time
-                </p>
-              </div>
-              <Switch
-                id="check-conflicts"
-                checked={checkCalendarConflicts}
-                onCheckedChange={setCheckCalendarConflicts}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="auto-meet">Auto-create Google Meet links</Label>
-                <p className="text-xs text-muted-foreground">
-                  Automatically generate Google Meet links for all bookings
-                </p>
-              </div>
-              <Switch
-                id="auto-meet"
-                checked={autoCreateMeetLinks}
-                onCheckedChange={setAutoCreateMeetLinks}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="sync-existing">Sync existing calendar events</Label>
-                <p className="text-xs text-muted-foreground">
-                  Block times for existing events in your Google Calendar
-                </p>
-              </div>
-              <Switch
-                id="sync-existing"
-                checked={syncExistingEvents}
-                onCheckedChange={setSyncExistingEvents}
-              />
-            </div>
-
-            <div className="space-y-3">
+            {/* Add to calendar section */}
+            <div className="space-y-4 border rounded-lg p-6 bg-card">
               <div>
-                <Label>Calendars to check for conflicts</Label>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Select which calendars to check when preventing double-bookings
+                <h3 className="font-semibold text-base">Add to calendar</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Select where to add events when you're booked.
                 </p>
               </div>
-              
+
+              <div className="space-y-3">
+                <Label htmlFor="add-to-calendar" className="text-sm font-medium">Add events to</Label>
+                <Select
+                  value={selectedCalendarForEvents || availableCalendars.find(c => c.primary)?.id || availableCalendars[0]?.id || ""}
+                  onValueChange={(value) => {
+                    setSelectedCalendarForEvents(value);
+                  }}
+                >
+                  <SelectTrigger id="add-to-calendar">
+                    <SelectValue placeholder="Select calendar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableCalendars.map((calendar) => (
+                      <SelectItem key={calendar.id} value={calendar.id}>
+                        {calendar.summary} {calendar.primary && '(Google - Primary)'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  You can override this on a per-event basis in Advanced settings in each event type.
+                </p>
+              </div>
+
+              <div className="pt-2 space-y-4 border-t">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="auto-add" className="text-sm font-medium">Automatically add bookings</Label>
+                    <p className="text-xs text-muted-foreground">
+                      New bookings will be added to your calendar
+                    </p>
+                  </div>
+                  <Switch
+                    id="auto-add"
+                    checked={autoAddToCalendar}
+                    onCheckedChange={setAutoAddToCalendar}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="auto-meet" className="text-sm font-medium">Auto-create Google Meet links</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Generate Google Meet links for all bookings
+                    </p>
+                  </div>
+                  <Switch
+                    id="auto-meet"
+                    checked={autoCreateMeetLinks}
+                    onCheckedChange={setAutoCreateMeetLinks}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Check for conflicts section */}
+            <div className="space-y-4 border rounded-lg p-6 bg-card">
+              <div>
+                <h3 className="font-semibold text-base">Check for conflicts</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Select which calendars you want to check for conflicts to prevent double bookings.
+                </p>
+              </div>
+
               {loadingCalendars ? (
                 <p className="text-sm text-muted-foreground">Loading calendars...</p>
               ) : availableCalendars.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Connect your Google Calendar to select calendars
-                </p>
+                <div className="text-center py-6">
+                  <p className="text-sm text-muted-foreground">
+                    Connect your Google Calendar above to select calendars
+                  </p>
+                </div>
               ) : (
-                <div className="space-y-2 border rounded-lg p-3">
-                  {availableCalendars.map((calendar) => (
-                    <div key={calendar.id} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id={`calendar-${calendar.id}`}
-                        checked={selectedCalendarIds.includes(calendar.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedCalendarIds([...selectedCalendarIds, calendar.id]);
-                          } else {
-                            setSelectedCalendarIds(selectedCalendarIds.filter(id => id !== calendar.id));
-                          }
-                        }}
-                        className="h-4 w-4 rounded border-gray-300"
-                      />
-                      <label
-                        htmlFor={`calendar-${calendar.id}`}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                      >
-                        {calendar.summary}
-                        {calendar.primary && (
-                          <span className="ml-2 text-xs text-muted-foreground">(Primary)</span>
-                        )}
-                      </label>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 p-4 border rounded-lg">
+                    <div className="w-10 h-10 flex items-center justify-center bg-white rounded-lg border shadow-sm">
+                      <svg viewBox="0 0 48 48" className="w-6 h-6">
+                        <path fill="#1976D2" d="M38,6H10c-2.209,0-4,1.791-4,4v28c0,2.209,1.791,4,4,4h28c2.209,0,4-1.791,4-4V10C42,7.791,40.209,6,38,6z"/>
+                        <path fill="#FFF" d="M34,14h-4v-2c0-0.552-0.447-1-1-1h-2c-0.553,0-1,0.448-1,1v2h-4v-2c0-0.552-0.447-1-1-1h-2c-0.553,0-1,0.448-1,1v2h-4c-1.104,0-2,0.896-2,2v16c0,1.104,0.896,2,2,2h20c1.104,0,2-0.896,2-2V16C36,14.896,35.104,14,34,14z M32,30H16V20h16V30z"/>
+                        <rect x="20" y="24" fill="#1976D2" width="3" height="3"/>
+                        <rect x="25" y="24" fill="#1976D2" width="3" height="3"/>
+                      </svg>
                     </div>
-                  ))}
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-medium text-sm">Google Calendar</h4>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {availableCalendars[0]?.summary}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-0.5">
+                    <p className="text-sm text-muted-foreground px-1">
+                      Toggle the calendars you want to check for conflicts to prevent double bookings.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    {availableCalendars.map((calendar) => (
+                      <div key={calendar.id} className="flex items-center justify-between py-2 px-1">
+                        <Label htmlFor={`calendar-toggle-${calendar.id}`} className="text-sm font-normal cursor-pointer">
+                          {calendar.summary}
+                        </Label>
+                        <Switch
+                          id={`calendar-toggle-${calendar.id}`}
+                          checked={selectedCalendarIds.includes(calendar.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedCalendarIds([...selectedCalendarIds, calendar.id]);
+                            } else {
+                              setSelectedCalendarIds(selectedCalendarIds.filter(id => id !== calendar.id));
+                            }
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="sync-interval">Calendar sync frequency</Label>
-              <Select value={calendarSyncInterval} onValueChange={setCalendarSyncInterval}>
-                <SelectTrigger id="sync-interval">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="realtime">Real-time (recommended)</SelectItem>
-                  <SelectItem value="5min">Every 5 minutes</SelectItem>
-                  <SelectItem value="15min">Every 15 minutes</SelectItem>
-                  <SelectItem value="30min">Every 30 minutes</SelectItem>
-                  <SelectItem value="1hour">Every hour</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                How often to check your calendar for updates
-              </p>
+              <div className="pt-2 space-y-4 border-t">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="check-conflicts" className="text-sm font-medium">Enable conflict checking</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Prevent double-bookings in real-time
+                    </p>
+                  </div>
+                  <Switch
+                    id="check-conflicts"
+                    checked={checkCalendarConflicts}
+                    onCheckedChange={setCheckCalendarConflicts}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="sync-existing" className="text-sm font-medium">Sync existing events</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Block times for existing calendar events
+                    </p>
+                  </div>
+                  <Switch
+                    id="sync-existing"
+                    checked={syncExistingEvents}
+                    onCheckedChange={setSyncExistingEvents}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button 
-                variant="outline" 
-                onClick={handleSyncNow} 
+              <Button
+                variant="outline"
+                onClick={handleSyncNow}
                 disabled={syncing || !syncExistingEvents}
               >
                 {syncing ? "Syncing..." : "Sync Now"}

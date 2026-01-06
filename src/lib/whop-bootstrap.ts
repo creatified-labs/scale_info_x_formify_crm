@@ -87,6 +87,14 @@ export async function bootstrapWhopUser(): Promise<{
         }
         
         console.log('Session established successfully');
+
+        // Refresh the session so we pick up the latest user metadata (company_id, etc.)
+        await supabase.auth.refreshSession();
+        const { data: userData } = await supabase.auth.getUser();
+        console.log('Refreshed user metadata after bootstrap:', {
+          userId: userData.user?.id,
+          companyId: userData.user?.user_metadata?.company_id,
+        });
       } catch (e) {
         console.error('Failed to establish session:', e);
         return {

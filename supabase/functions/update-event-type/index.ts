@@ -6,38 +6,65 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Type definitions
+interface UpdateEventTypeBody {
+  id?: string
+  user_id?: string
+  [key: string]: any // For other event type fields
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+    const body = await req.json() as UpdateEventTypeBody
+    const { id, user_id, ...eventData } = body
+
+    // Check if this is a dev proxy request (from /api/edge-proxy)
+    const isDevProxy = req.headers.get('X-Dev-Proxy') === 'true'
+    let userId = user_id
+
+    // If NOT using dev proxy, verify JWT and get user from token
+    if (!isDevProxy) {
+      const authHeader = req.headers.get('Authorization')
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ error: 'Missing authorization header' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+        )
+      }
+
+      // Create client with user's JWT for authentication
+      const supabaseAuth = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        {
+          global: {
+            headers: { Authorization: authHeader },
+          },
+        }
       )
+
+      // Verify user's JWT token
+      const { data: { user }, error: userError } = await supabaseAuth.auth.getUser()
+      if (userError || !user) {
+        console.error('Auth error:', userError)
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized', details: userError?.message }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+        )
+      }
+
+      userId = user.id
     }
 
-    // Create client with user's JWT for authentication
-    const supabaseAuth = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
-    )
-
-    // Verify user's JWT token
-    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser()
-    if (userError || !user) {
-      console.error('Auth error:', userError)
+    // If using dev proxy and no user_id provided, return error
+    if (!userId) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized', details: userError?.message }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+        JSON.stringify({ error: 'Missing user_id in payload for dev proxy' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
 
@@ -46,8 +73,6 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
-
-    const { id, ...eventData } = await req.json()
 
     if (!id) {
       return new Response(
@@ -63,7 +88,7 @@ serve(async (req) => {
       .eq('id', id)
       .single()
 
-    if (!existingEvent || existingEvent.user_id !== user.id) {
+    if (!existingEvent || existingEvent.user_id !== userId) {
       return new Response(
         JSON.stringify({ error: 'Event type not found or unauthorized' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
@@ -74,18 +99,16 @@ serve(async (req) => {
     const { data: profile } = await supabaseClient
       .from('profiles')
       .select('company_id')
-      .eq('id', user.id)
+      .eq('id', userId)
       .single()
 
     let companyId = profile?.company_id
 
     // If no company exists, create one
     if (!companyId) {
-      const companyName = user.user_metadata?.company_name || user.user_metadata?.name || user.email?.split('@')[0] || 'My Company'
-      
       const { data: newCompany, error: companyError } = await supabaseClient
         .from('companies')
-        .insert({ name: companyName })
+        .insert({ name: 'My Company' })
         .select()
         .single()
 
@@ -103,7 +126,7 @@ serve(async (req) => {
       await supabaseClient
         .from('profiles')
         .update({ company_id: companyId })
-        .eq('id', user.id)
+        .eq('id', userId)
     }
 
     // Update event type

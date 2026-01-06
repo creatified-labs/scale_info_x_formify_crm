@@ -1,0 +1,2 @@
+# Disable JWT verification for this function since it generates OAuth URLs
+verify_jwt = false

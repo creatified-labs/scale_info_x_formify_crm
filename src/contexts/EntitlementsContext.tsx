@@ -6,23 +6,16 @@ async function ensureProPlanForCompany(companyId: string, currentPlan: string): 
   }
 
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-    if (!token) return currentPlan;
-
-    const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!baseUrl || !anonKey) return currentPlan;
-
-    await fetch(`${baseUrl}/functions/v1/ensure-company`, {
+    await fetch('/api/edge-proxy', {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        apikey: anonKey as string,
       },
-      body: JSON.stringify({ name: null }),
+      body: JSON.stringify({
+        functionName: 'ensure-company',
+        payload: { name: null },
+        method: 'POST',
+      }),
     }).catch(err => {
       console.error("ensure-company invocation failed", err);
     });

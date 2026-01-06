@@ -17,7 +17,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
-    const { booking_id } = await req.json()
+    const { booking_id } = await req.json() as { booking_id: string }
 
     if (!booking_id) {
       return new Response(
@@ -67,6 +67,7 @@ serve(async (req) => {
     const settings = company?.settings as any
     const autoAdd = settings?.google_calendar?.auto_add_bookings ?? true
     const autoCreateMeet = settings?.google_calendar?.auto_create_meet_links ?? true
+    const targetCalendar = settings?.google_calendar?.add_events_to_calendar || 'primary'
 
     if (!autoAdd) {
       return new Response(
@@ -75,12 +76,21 @@ serve(async (req) => {
       )
     }
 
-    // Get integration account
+    // Get user_id from event type
+    const userId = booking.event_types?.user_id
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ error: 'User not found for booking' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      )
+    }
+
+    // Get integration from user_integrations table
     const { data: integration, error: integrationError } = await supabaseClient
-      .from('integration_accounts')
+      .from('user_integrations')
       .select('access_token, refresh_token')
-      .eq('company_id', companyId)
-      .eq('provider', 'google_calendar')
+      .eq('user_id', userId)
+      .eq('provider', 'google')
       .maybeSingle()
 
     if (integrationError || !integration?.access_token) {
@@ -118,7 +128,7 @@ serve(async (req) => {
     }
 
     const response = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1`,
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendar)}/events?conferenceDataVersion=1`,
       {
         method: 'POST',
         headers: {
@@ -138,7 +148,13 @@ serve(async (req) => {
       )
     }
 
-    const calendarEvent = await response.json()
+    const calendarEvent = await response.json() as {
+      id: string
+      htmlLink: string
+      conferenceData?: {
+        entryPoints?: Array<{ entryPointType: string; uri: string }>
+      }
+    }
     const meetLink = calendarEvent.conferenceData?.entryPoints?.find(
       (ep: any) => ep.entryPointType === 'video'
     )?.uri

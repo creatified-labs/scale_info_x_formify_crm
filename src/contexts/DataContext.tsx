@@ -132,18 +132,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Edge function helper
   const callFunction = async (name: string, method: 'POST' | 'GET', payload?: any, query?: Record<string, string>) => {
-    // For localhost dev, use proxy to call Edge Functions server-side with service role key
     const isLocalhost = typeof window !== 'undefined' &&
       (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    // Whop embeds can't rely on user JWTs, so always use the proxy (service role key).
+    const useProxy = true;
 
     console.log('🔑 Calling Edge Function:', {
       function: name,
       isLocalhost,
-      viaProxy: isLocalhost,
+      viaProxy: useProxy,
     });
 
-    // For localhost, use the dev proxy (server-side with service role key)
-    if (isLocalhost) {
+    // Use the backend proxy when developing locally or when we want to bypass JWT validation in production.
+    if (useProxy) {
       const res = await fetch('/api/edge-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -151,6 +153,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           functionName: name,
           payload,
           method,
+          query,
         }),
       });
 
@@ -534,8 +537,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       const companyId = await getCompanyId({ allowFallback: false });
       if (!companyId) {
+        // Public booking flow - no company ID, skip silently
+        if (call.bookingId) {
+          return;
+        }
         showAuthRequiredToast(
-          "We couldn’t find your company",
+          "We couldn't find your company",
           "Sign back in so we can refresh your workspace access.",
           { id: "missing-company" }
         );
@@ -573,7 +580,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
     } catch (error: any) {
       console.error('Error adding call:', error);
-      toast.error(error.message || 'Failed to add call');
+      // Don't show error toast for public bookings (RLS errors are expected)
+      if (!call.bookingId) {
+        toast.error(error.message || 'Failed to add call');
+      }
     }
   };
 

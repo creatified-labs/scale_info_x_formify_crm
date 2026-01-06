@@ -63,18 +63,17 @@ const OAuthCallback = () => {
       }
 
       try {
-        const edgeFunctionUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/google-exchange-token`;
-        console.log("Calling Edge Function:", edgeFunctionUrl, "with code:", code?.substring(0, 20) + "...");
+        console.log("Calling google-exchange-token via edge-proxy with code:", code?.substring(0, 20) + "...");
 
-        const res = await fetch(edgeFunctionUrl, {
+        const res = await fetch('/api/edge-proxy', {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
-          body: JSON.stringify({ 
-            code,
-            state
+          body: JSON.stringify({
+            functionName: 'google-exchange-token',
+            payload: { code, state },
+            method: 'POST',
           }),
         });
 

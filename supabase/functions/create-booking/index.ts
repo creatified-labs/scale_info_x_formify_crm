@@ -175,6 +175,39 @@ serve(async (req) => {
       }
     }
 
+    // Schedule email reminders if enabled
+    const notifications = eventType.notifications as any
+    if (notifications?.email?.enabled && notifications?.email?.reminders) {
+      const reminders = notifications.email.reminders as number[] // Array of minutes before event
+      const bookingStartTime = new Date(start_time)
+
+      console.log(`Scheduling ${reminders.length} reminders for booking ${booking.id}`)
+
+      for (const minutesBefore of reminders) {
+        const scheduledFor = new Date(bookingStartTime.getTime() - minutesBefore * 60 * 1000)
+
+        // Only schedule if the reminder time is in the future
+        if (scheduledFor > new Date()) {
+          const { error: reminderError } = await supabaseClient
+            .from('email_reminders')
+            .insert({
+              booking_id: booking.id,
+              reminder_type: 'booking_reminder',
+              scheduled_for: scheduledFor.toISOString(),
+              sent: false,
+            })
+
+          if (reminderError) {
+            console.error(`Failed to schedule reminder for ${minutesBefore} minutes before:`, reminderError)
+          } else {
+            console.log(`Scheduled reminder for ${scheduledFor.toISOString()} (${minutesBefore} min before event)`)
+          }
+        } else {
+          console.log(`Skipping reminder for ${minutesBefore} min before (would be in the past)`)
+        }
+      }
+    }
+
     // Send confirmation email (async, don't wait)
     fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-booking-email`, {
       method: 'POST',

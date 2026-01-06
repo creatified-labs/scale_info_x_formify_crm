@@ -419,65 +419,46 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
         return (payload?.event_type as EventType | null) ?? null;
       };
 
+      const companyId = await getCompanyId();
+      if (!companyId) {
+        throw new Error("No company ID available. Please refresh to re-authenticate.");
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("No user found. Please refresh to re-authenticate.");
+      }
+
+      const callEdgeFunction = async (functionName: string, payload: Record<string, unknown>, action: "create" | "update") => {
+        const res = await fetch('/api/edge-proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            functionName,
+            payload: {
+              ...payload,
+              company_id: companyId,
+              user_id: user.id,
+            },
+            method: 'POST',
+          }),
+        });
+        return parseResponse(res, action);
+      };
+
       let updatedEventType: EventType | null = null;
       if (eventType) {
-        // Update via Edge Function (RLS denies client writes)
-        const { data: session } = await supabase.auth.getSession();
-        const token = session?.session?.access_token;
-        if (!token) throw new Error("Not authenticated. Please refresh to initialize your session.");
-        const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-event-type`;
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json', 
-            'Authorization': `Bearer ${token}`,
-            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-          },
-          body: JSON.stringify({ id: eventType.id, ...eventData }),
-        });
-        updatedEventType = await parseResponse(res, "update");
+        updatedEventType = await callEdgeFunction(
+          'update-event-type',
+          { id: eventType.id, ...eventData },
+          'update'
+        );
       } else {
-        // Create via Edge Function with plan enforcement
-        const isLocalhost = typeof window !== 'undefined' &&
-          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
-        if (isLocalhost) {
-          // Use proxy for localhost
-          const companyId = await getCompanyId();
-          if (!companyId) throw new Error("No company ID available");
-
-          // Get user ID from session
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) throw new Error("No user found");
-
-          const res = await fetch('/api/edge-proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              functionName: 'create-event-type',
-              payload: { ...eventData, company_id: companyId, user_id: user.id },
-              method: 'POST',
-            }),
-          });
-          updatedEventType = await parseResponse(res, "create");
-        } else {
-          // Production: Direct call with JWT
-          const { data: session } = await supabase.auth.getSession();
-          const token = session?.session?.access_token;
-          if (!token) throw new Error("Not authenticated. Please refresh to initialize your session.");
-
-          const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-event-type`;
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-              'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-            },
-            body: JSON.stringify(eventData),
-          });
-          updatedEventType = await parseResponse(res, "create");
-        }
+        updatedEventType = await callEdgeFunction(
+          'create-event-type',
+          eventData,
+          'create'
+        );
       }
 
       if (!closeAfterSave) {
