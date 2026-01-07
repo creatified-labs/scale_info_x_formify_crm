@@ -8,6 +8,14 @@ export interface RevenueEntry {
   categoryColor?: string; // Color for category
   createdAt: Date;
   metadata?: Record<string, unknown>;
+  goalId?: string; // Linked goal ID
+  eventTypeId?: string; // Event type that generated this revenue
+  eventTypeName?: string; // Event type name for display
+}
+
+export interface GoalRule {
+  type: 'date_range' | 'event_type' | 'category' | 'amount_range' | 'source';
+  value: string | number | { min?: number; max?: number } | { start?: string; end?: string };
 }
 
 export interface Goal {
@@ -23,6 +31,8 @@ export interface Goal {
   categoryType?: 'revenue' | 'sales' | 'profit' | 'clients' | 'custom';
   goalType: 'revenue' | 'clients' | 'calls'; // What we're measuring: revenue amount, client count, or calls booked
   createdAt: Date;
+  rules?: GoalRule[]; // Automated matching rules
+  autoLink?: boolean; // Whether to automatically link matching entries
 }
 
 export interface GoalProgress {

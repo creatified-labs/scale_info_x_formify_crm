@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, PoundSterling } from "lucide-react";
 import { RevenueEntry } from "@/types/revenue";
-import { DEFAULT_REVENUE_CATEGORIES } from "@/types/categories";
+import { useData } from "@/contexts/DataContext";
 
 interface RevenueEntryFormProps {
   onAddEntry: (entry: Omit<RevenueEntry, 'id' | 'createdAt'>) => Promise<void>;
@@ -21,7 +21,12 @@ export const RevenueEntryForm = ({ onAddEntry }: RevenueEntryFormProps) => {
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [category, setCategory] = useState("");
+  const [goalId, setGoalId] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { categories, goals } = useData();
+  
+  // Filter to only revenue goals
+  const revenueGoals = goals.filter(g => g.goalType === 'revenue');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +35,7 @@ export const RevenueEntryForm = ({ onAddEntry }: RevenueEntryFormProps) => {
       return;
     }
 
-    const selectedCategory = DEFAULT_REVENUE_CATEGORIES.find(cat => cat.id === category);
+    const selectedCategory = categories.find(cat => cat.id === category);
     
     setIsSubmitting(true);
     try {
@@ -41,12 +46,14 @@ export const RevenueEntryForm = ({ onAddEntry }: RevenueEntryFormProps) => {
         category: category.trim() || undefined,
         categoryName: selectedCategory?.name,
         categoryColor: selectedCategory?.color,
+        goalId: goalId || undefined,
       });
       
       // Reset form
       setAmount("");
       setDescription("");
       setCategory("");
+      setGoalId("");
     } finally {
       setIsSubmitting(false);
     }
@@ -100,7 +107,7 @@ export const RevenueEntryForm = ({ onAddEntry }: RevenueEntryFormProps) => {
                 <SelectValue placeholder="Select a category" />
               </SelectTrigger>
               <SelectContent>
-                {DEFAULT_REVENUE_CATEGORIES.map((cat) => (
+                {categories.map((cat) => (
                   <SelectItem key={cat.id} value={cat.id}>
                     <div className="flex items-center gap-2">
                       <div 
@@ -109,6 +116,23 @@ export const RevenueEntryForm = ({ onAddEntry }: RevenueEntryFormProps) => {
                       />
                       {cat.name}
                     </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="goal">Link to Goal (optional)</Label>
+            <Select value={goalId} onValueChange={setGoalId}>
+              <SelectTrigger>
+                <SelectValue placeholder="No goal linked" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">No goal</SelectItem>
+                {revenueGoals.map((goal) => (
+                  <SelectItem key={goal.id} value={goal.id}>
+                    {goal.description || `${goal.type} goal - £${goal.targetAmount.toLocaleString()}`}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -5,6 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Lock, Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { getCompanyId } from "@/lib/company";
 import Link from "next/link";
 import { useEntitlements } from "@/contexts/EntitlementsContext";
 import { useFeature } from "@/lib/entitlements/useFeature";
@@ -23,6 +25,9 @@ export const IntegrationsSettings = () => {
   const [disconnecting, setDisconnecting] = useState(false);
   const isDev = process.env.NODE_ENV === 'development';
   const [hasSession, setHasSession] = useState(true);
+  const [autoAddBookings, setAutoAddBookings] = useState(true);
+  const [autoCreateMeetLinks, setAutoCreateMeetLinks] = useState(true);
+  const [savingPreferences, setSavingPreferences] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -44,6 +49,29 @@ export const IntegrationsSettings = () => {
         return;
       }
       setGoogleIntegration({ connected: Boolean(data), email: data?.email ?? null });
+
+      // Load company settings for Google Calendar preferences
+      if (data) {
+        try {
+          const companyId = await getCompanyId();
+          if (companyId) {
+            const { data: company } = await supabase
+              .from('companies')
+              .select('settings')
+              .eq('id', companyId)
+              .maybeSingle();
+            
+            if (company?.settings) {
+              const settings = company.settings as any;
+              const gcalSettings = settings?.google_calendar || {};
+              setAutoAddBookings(gcalSettings.auto_add_bookings ?? true);
+              setAutoCreateMeetLinks(gcalSettings.auto_create_meet_links ?? true);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to load calendar preferences:', err);
+        }
+      }
     };
 
     loadIntegration();
@@ -254,6 +282,64 @@ export const IntegrationsSettings = () => {
     }
   }
 
+  const handlePreferenceChange = async (preference: 'auto_add_bookings' | 'auto_create_meet_links', value: boolean) => {
+    console.log(`Toggling ${preference} to ${value}`);
+    
+    // Update local state immediately for responsive UI
+    if (preference === 'auto_add_bookings') {
+      setAutoAddBookings(value);
+    } else {
+      setAutoCreateMeetLinks(value);
+    }
+
+    setSavingPreferences(true);
+    try {
+      const companyId = await getCompanyId();
+      if (!companyId) {
+        throw new Error('No company ID found');
+      }
+
+      // Get current settings
+      const { data: company } = await supabase
+        .from('companies')
+        .select('settings')
+        .eq('id', companyId)
+        .maybeSingle();
+
+      const currentSettings = (company?.settings as any) || {};
+      const updatedSettings = {
+        ...currentSettings,
+        google_calendar: {
+          ...(currentSettings.google_calendar || {}),
+          [preference]: value,
+        },
+      };
+
+      console.log('Updating company settings:', updatedSettings);
+
+      const { error } = await supabase
+        .from('companies')
+        .update({ settings: updatedSettings })
+        .eq('id', companyId);
+
+      if (error) throw error;
+
+      console.log(`Successfully updated ${preference} to ${value}`);
+      toast.success('Preference saved');
+    } catch (error: any) {
+      console.error('Failed to update preference:', error);
+      toast.error(error?.message || 'Failed to save preference');
+      // Revert local state on error
+      if (preference === 'auto_add_bookings') {
+        setAutoAddBookings(!value);
+      } else {
+        setAutoCreateMeetLinks(!value);
+      }
+    } finally {
+      setSavingPreferences(false);
+    }
+  }
+
   const LockedIntegrationCard = ({
     name,
     logo,
@@ -336,7 +422,7 @@ export const IntegrationsSettings = () => {
           </div>
 
           {googleIntegration.connected ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="text-sm text-muted-foreground bg-emerald-50 border border-emerald-200 rounded-lg p-3">
                 <p className="font-medium text-emerald-900 mb-2">✓ Sync Active</p>
                 <ul className="space-y-1 text-emerald-800">
@@ -348,6 +434,36 @@ export const IntegrationsSettings = () => {
               <p className="text-sm text-muted-foreground">
                 Connected as: <span className="font-medium">{googleIntegration.email}</span>
               </p>
+
+              {/* Calendar Preferences */}
+              <div className="space-y-3 border-t pt-3">
+                <p className="text-sm font-medium">Calendar Preferences</p>
+                
+                <div className="flex items-center justify-between py-2">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Automatically add bookings</p>
+                    <p className="text-xs text-muted-foreground">New bookings will be added to your calendar</p>
+                  </div>
+                  <Switch
+                    checked={autoAddBookings}
+                    onCheckedChange={(checked) => handlePreferenceChange('auto_add_bookings', checked)}
+                    disabled={savingPreferences}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-2">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Auto-create Google Meet links</p>
+                    <p className="text-xs text-muted-foreground">Generate Google Meet links for all bookings</p>
+                  </div>
+                  <Switch
+                    checked={autoCreateMeetLinks}
+                    onCheckedChange={(checked) => handlePreferenceChange('auto_create_meet_links', checked)}
+                    disabled={savingPreferences}
+                  />
+                </div>
+              </div>
+
               <Button
                 variant="destructive"
                 size="sm"

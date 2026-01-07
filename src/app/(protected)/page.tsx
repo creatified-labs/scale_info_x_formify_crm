@@ -8,7 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RevenueEntryForm } from "@/components/RevenueEntryForm";
-import { RevenueHistory } from "@/components/RevenueHistory";
+import { EntriesList } from "@/components/RevenueHistory";
 import { RevenueChart } from "@/components/RevenueChart";
 import { CallsToday } from "@/components/CallsToday";
 import { FilterPanel } from "@/components/FilterPanel";
@@ -30,6 +30,7 @@ const Index = () => {
     revenueEntries,
     goals,
     calls,
+    categories,
     loading,
     addRevenueEntry,
     updateRevenueEntry,
@@ -114,7 +115,7 @@ const Index = () => {
     const fetchBookings = async () => {
       const { data } = await supabase
         .from('bookings')
-        .select('*')
+        .select('*, event_types(id, name)')
         .order('start_time', { ascending: true });
 
       if (data) {
@@ -146,6 +147,13 @@ const Index = () => {
           bookingId: booking.id,
         };
 
+        // Find the "Booking Conversions" category from the database
+        const bookingCategory = categories.find(c => c.name === "Booking Conversions");
+        
+        // Extract event type information if available
+        const eventTypeName = booking.event_types?.name || booking.event_type_name;
+        const eventTypeId = booking.event_type_id;
+        
         return {
           id: `booking-${booking.id}`,
           date: entryDate,
@@ -153,14 +161,16 @@ const Index = () => {
           description: booking.invitee_name
             ? `${booking.invitee_name} booking conversion`
             : "Booking conversion",
-          category: "booking_conversion",
-          categoryName: "Booking conversions",
-          categoryColor: "#6366F1",
+          category: bookingCategory?.id || "booking_conversion",
+          categoryName: bookingCategory?.name || "Booking Conversions",
+          categoryColor: bookingCategory?.color || "#6366F1",
           createdAt: new Date(baseDate ?? Date.now()),
           metadata,
+          eventTypeId: eventTypeId || undefined,
+          eventTypeName: eventTypeName || undefined,
         } satisfies RevenueEntry;
       });
-  }, [bookings]);
+  }, [bookings, categories]);
 
   const applyFilters = useCallback(
     (entries: RevenueEntry[]) => {
@@ -787,7 +797,7 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="history" className="space-y-6">
-            <RevenueHistory
+            <EntriesList
               entries={historyEntries}
               onUpdateEntry={updateRevenueEntry}
               onDeleteEntry={deleteRevenueEntry}

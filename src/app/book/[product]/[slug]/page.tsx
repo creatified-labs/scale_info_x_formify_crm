@@ -332,8 +332,13 @@ const PublicBooking = () => {
         throw new Error(j.error || 'Failed to create booking');
       }
       const json = await res.json().catch(() => null);
+      console.log('📅 Booking response:', json);
+      console.log('📅 Calendar sync error:', json?.calendar_sync_error);
+      console.log('📅 Debug info:', json?.debug);
+      
       const createdBookingId = json?.booking?.id as string | undefined;
       const meetLink = json?.meet_link || json?.booking?.video_join_url;
+      console.log('📅 Meet link extracted:', meetLink);
 
       trackEventAnalytics("submission");
 
@@ -430,10 +435,54 @@ const PublicBooking = () => {
     const dateLabel = format(startDate, 'EEEE, MMMM d, yyyy');
     const timeLabel = format(startDate, 'h:mm a');
     const endTimeLabel = format(endDate, 'h:mm a');
-    const googleStart = format(startDate, "yyyyMMdd'T'HHmmss'Z'");
-    const googleEnd = format(endDate, "yyyyMMdd'T'HHmmss'Z'");
-    const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(eventType.name)}&dates=${googleStart}%2F${googleEnd}&details=${encodeURIComponent(`Meeting with ${confirmationDetails.name}`)}&location=${encodeURIComponent(confirmationDetails.locationText || eventType.inperson_location || '')}`;
     const isJoinLink = confirmationDetails.joinUrl?.startsWith('http');
+    
+    // Generate ICS file content
+    const generateICS = () => {
+      const formatICSDate = (date: Date) => {
+        return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      };
+      
+      let description = `Meeting with ${confirmationDetails.name}`;
+      if (confirmationDetails.joinUrl && confirmationDetails.joinUrl.startsWith('http')) {
+        description += `\n\nJoin link: ${confirmationDetails.joinUrl}`;
+      }
+      
+      const location = confirmationDetails.joinUrl?.startsWith('http') 
+        ? confirmationDetails.joinUrl 
+        : (confirmationDetails.locationText || eventType.inperson_location || '');
+      
+      const icsContent = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Booking System//EN',
+        'BEGIN:VEVENT',
+        `DTSTART:${formatICSDate(startDate)}`,
+        `DTEND:${formatICSDate(endDate)}`,
+        `SUMMARY:${eventType.name}`,
+        `DESCRIPTION:${description.replace(/\n/g, '\\n')}`,
+        `LOCATION:${location}`,
+        `STATUS:CONFIRMED`,
+        `SEQUENCE:0`,
+        `UID:${Date.now()}@booking-system`,
+        'END:VEVENT',
+        'END:VCALENDAR'
+      ].join('\r\n');
+      
+      return icsContent;
+    };
+    
+    const downloadICS = () => {
+      const icsContent = generateICS();
+      const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `${eventType.name.replace(/[^a-z0-9]/gi, '_')}.ics`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    };
 
     return (
       <div className={cn("min-h-screen bg-background p-3 lg:p-4 flex items-center justify-center")}> 
@@ -488,18 +537,34 @@ const PublicBooking = () => {
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row gap-2">
-            <a
-              href={googleUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1"
-            >
-              <Button className="w-full">Add to Google Calendar</Button>
-            </a>
-            <Button variant="outline" className="flex-1" onClick={() => window.print()}>
-              Print confirmation
-            </Button>
+          <div className="space-y-3">
+            <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
+              <h4 className="text-sm font-semibold">📅 Accept Your Calendar Invite</h4>
+              <p className="text-xs text-muted-foreground">
+                A calendar invitation with the meeting link has been sent to <span className="font-medium">{confirmationDetails.email}</span>
+              </p>
+              <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                <li>Check your email inbox for the calendar invite</li>
+                <li>Click "Accept" or "Yes" in the invitation</li>
+                <li>The event will be added to your Google Calendar with the meeting link</li>
+              </ol>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button 
+                className="flex-1" 
+                onClick={() => window.open('https://calendar.google.com', '_blank')}
+              >
+                Check Google Calendar
+              </Button>
+              <Button 
+                variant="outline" 
+                className="flex-1" 
+                onClick={() => window.location.href = `mailto:${confirmationDetails.email}`}
+              >
+                Open Email
+              </Button>
+            </div>
           </div>
 
           <p className="text-xs text-muted-foreground">

@@ -22,10 +22,12 @@ import { EventTypePreview } from "./EventTypePreview";
 import { AppearanceSection } from "@/components/calendar/editor-sections/AppearanceSection";
 import { TimeBlocksEditor } from "./TimeBlocksEditor";
 import { getCompanyId } from "@/lib/company";
+import { NotificationsSection } from "@/components/calendar/editor-sections/NotificationsSection";
+import { AvailabilityScheduleSelector } from "./AvailabilityScheduleSelector";
 
 const createDefaultNotifications = (): NotificationSettings => ({
-  email: { enabled: true, confirmation: true, reminders: [1440, 60], followup: 0 },
-  sms: { enabled: false, confirmation: false, reminders: [], followup: 0 },
+  email: { enabled: true, confirmation: true, confirmationDelay: 0, reminders: [1440, 60], followup: 0 },
+  sms: { enabled: false, confirmation: false, confirmationDelay: 0, reminders: [], followup: 0 },
 });
 
 const cloneNotifications = (source?: NotificationSettings | null): NotificationSettings => {
@@ -168,6 +170,9 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
   const [bufferAfter, setBufferAfter] = useState(
     eventType?.buffer_after != null ? String(eventType.buffer_after) : "0"
   );
+  const [availabilityScheduleId, setAvailabilityScheduleId] = useState<string | undefined>(
+    eventType?.availability_schedule_id
+  );
   const [questions, setQuestions] = useState<InviteeQuestion[]>(
     cloneQuestions(eventType?.invitee_form_schema)
   );
@@ -175,6 +180,27 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
   const [notifications, setNotifications] = useState<NotificationSettings>(
     cloneNotifications(eventType?.notifications as NotificationSettings | undefined)
   );
+  const [templates, setTemplates] = useState({
+    email: {
+      confirmation: { 
+        subject: (eventType as any)?.templates?.email?.confirmation?.subject || "Booking Confirmed: {event_name}", 
+        body: (eventType as any)?.templates?.email?.confirmation?.body || "Hi {invitee_name},\n\nYour booking for {event_name} is confirmed!\n\nDate: {event_date}\nTime: {event_time}\nJoin: {join_url}\n\nLooking forward to meeting you!" 
+      },
+      reminder: { 
+        subject: (eventType as any)?.templates?.email?.reminder?.subject || "Reminder: {event_name} in {offset}", 
+        body: (eventType as any)?.templates?.email?.reminder?.body || "Hi {invitee_name},\n\nThis is a reminder that your meeting {event_name} is coming up.\n\nDate: {event_date}\nTime: {event_time}\nJoin: {join_url}\n\nSee you soon!" 
+      },
+      followup: { 
+        subject: (eventType as any)?.templates?.email?.followup?.subject || "Thank you for meeting!", 
+        body: (eventType as any)?.templates?.email?.followup?.body || "Hi {invitee_name},\n\nThank you for taking the time to meet with us. We appreciate it!\n\nBest regards" 
+      }
+    },
+    sms: {
+      confirmation: (eventType as any)?.templates?.sms?.confirmation || "Your booking for {event_name} on {event_date} at {event_time} is confirmed.",
+      reminder: (eventType as any)?.templates?.sms?.reminder || "Reminder: {event_name} in {offset}. Join: {join_url}",
+      followup: (eventType as any)?.templates?.sms?.followup || "Thank you for meeting with us!"
+    }
+  });
   const [saving, setSaving] = useState(false);
   const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'auto'>(eventType?.theme_mode as any || 'auto');
   const [successMessage, setSuccessMessage] = useState((eventType as any)?.success_message || "");
@@ -231,6 +257,7 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
     setMinNotice(eventType?.min_notice_hours != null ? String(eventType.min_notice_hours) : "24");
     setBufferBefore(eventType?.buffer_before != null ? String(eventType.buffer_before) : "0");
     setBufferAfter(eventType?.buffer_after != null ? String(eventType.buffer_after) : "0");
+    setAvailabilityScheduleId(eventType?.availability_schedule_id);
     setQuestions(cloneQuestions(eventType?.invitee_form_schema));
     setNotifications(cloneNotifications(eventType?.notifications as NotificationSettings | undefined));
     setThemeMode((eventType?.theme_mode as any) || 'auto');
@@ -374,12 +401,14 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
         min_notice_hours: parseInt(minNotice),
         buffer_before: parseInt(bufferBefore),
         buffer_after: parseInt(bufferAfter),
+        availability_schedule_id: availabilityScheduleId || null,
         phone_required_for_phone_type: phoneRequired,
         inperson_location: inPersonLocation,
         custom_link_label: customLinkLabel,
         custom_link_url: customLinkUrl,
         invitee_form_schema: serializeQuestionsForSave(questions),
         notifications: notifications as any,
+        templates: templates as any,
         theme_mode: themeMode,
         success_message: successMessage,
         redirect_url: redirectUrl || null,
@@ -643,6 +672,19 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
                     onChange={(e) => setBufferAfter(e.target.value)}
                   />
                 </div>
+              </div>
+
+              <Separator />
+
+              <div>
+                <Label htmlFor="availabilitySchedule">Availability Schedule</Label>
+                <AvailabilityScheduleSelector
+                  value={availabilityScheduleId}
+                  onChange={setAvailabilityScheduleId}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Select which availability schedule to use for this event type
+                </p>
               </div>
             </div>
           </Card>
@@ -911,14 +953,21 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
         </TabsContent>
 
         <TabsContent value="notifications" className="space-y-4 mt-6">
-          <Card className="p-6 text-center space-y-3 bg-muted/40 border-dashed border-muted">
-            <h3 className="text-lg font-semibold">Notifications</h3>
-            <p className="text-sm text-muted-foreground">
-              Email and SMS notification workflows are coming soon. We&apos;re polishing templates and automation so you can manage follow-ups from here.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Need access sooner? Contact support and we&apos;ll keep you in the early access loop.
-            </p>
+          <Card className="p-6">
+            <NotificationsSection 
+              data={{
+                notifications,
+                templates
+              }} 
+              onChange={(updates) => {
+                if (updates.notifications) {
+                  setNotifications(updates.notifications);
+                }
+                if (updates.templates) {
+                  setTemplates(updates.templates);
+                }
+              }} 
+            />
           </Card>
         </TabsContent>
 

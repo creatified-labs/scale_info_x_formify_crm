@@ -2,6 +2,50 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Calendar styling improvements */
+.rdp {
+  --rdp-cell-size: 40px;
+}
+
+.rdp-caption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 0.25rem;
+  margin-bottom: 1rem;
+}
+
+.rdp-nav {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.rdp-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rdp-head_row,
+.rdp-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  width: 100%;
+}
+
+.rdp-head_cell,
+.rdp-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--rdp-cell-size);
+  width: 100%;
+}
+
+.rdp-day {
+  height: var(--rdp-cell-size);
+  width: var(--rdp-cell-size);
+}
+
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here.
 All colors MUST be HSL.
 */
@@ -229,5 +273,12 @@ All colors MUST be HSL.
   .goals-grid {
     @apply grid gap-4 sm:gap-6;
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    max-width: 100%;
+  }
+  
+  @media (min-width: 1024px) {
+    .goals-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
   }
 }

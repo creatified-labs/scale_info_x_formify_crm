@@ -12,6 +12,7 @@ import { IntegrationsSettings } from "@/components/scheduling/IntegrationsSettin
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getCompanyId } from "@/lib/company";
+import { CURRENCIES } from "@/lib/currency";
 
 const TIMEZONES = [
   { value: "America/New_York", label: "Eastern Time (ET)" },
@@ -33,6 +34,10 @@ export default function AccountSettingsPage() {
   const [userTimezone, setUserTimezone] = useState("America/New_York");
   const [timezoneSaving, setTimezoneSaving] = useState(false);
   const [currentTime, setCurrentTime] = useState<string>("");
+
+  // Currency Settings
+  const [defaultCurrency, setDefaultCurrency] = useState("GBP");
+  const [currencySaving, setCurrencySaving] = useState(false);
 
   // Brand Name Settings
   const [brandingNameInput, setBrandingNameInput] = useState("Scale Info");
@@ -60,6 +65,7 @@ export default function AccountSettingsPage() {
   useEffect(() => {
     const initializeSettings = async () => {
       loadUserTimezone();
+      loadUserCurrency();
       loadBrandingSettings();
       await loadIntegrationSettings(); // Load settings FIRST
       await loadGoogleCalendars(); // Then load calendars (won't overwrite)
@@ -98,6 +104,53 @@ export default function AccountSettingsPage() {
       }
     } catch (error) {
       console.error("Error loading timezone:", error);
+    }
+  };
+
+  const loadUserCurrency = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("default_currency")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!error && data?.default_currency) {
+        setDefaultCurrency(data.default_currency);
+      }
+    } catch (error) {
+      console.error("Error loading currency:", error);
+    }
+  };
+
+  const handleCurrencySave = async () => {
+    setCurrencySaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({ default_currency: defaultCurrency })
+        .eq("id", user.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Currency updated",
+        description: `Default currency set to ${CURRENCIES.find(c => c.code === defaultCurrency)?.name}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update currency",
+        variant: "destructive",
+      });
+    } finally {
+      setCurrencySaving(false);
     }
   };
 
@@ -450,6 +503,41 @@ export default function AccountSettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Currency Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Currency</CardTitle>
+          <CardDescription>
+            Select your default currency for revenue tracking and displays
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="currency-select">Default Currency</Label>
+            <div className="flex gap-2">
+              <Select value={defaultCurrency} onValueChange={setDefaultCurrency}>
+                <SelectTrigger id="currency-select">
+                  <SelectValue placeholder="Select a currency" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CURRENCIES.map((currency) => (
+                    <SelectItem key={currency.code} value={currency.code}>
+                      {currency.symbol} {currency.name} ({currency.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="secondary" size="sm" onClick={handleCurrencySave} disabled={currencySaving} className="whitespace-nowrap">
+                {currencySaving ? "Saving..." : "Save"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This will be used as the default for new revenue entries. Individual entries can have different currencies.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Brand Name Settings */}
       <Card>
         <CardHeader>
@@ -607,36 +695,6 @@ export default function AccountSettingsPage() {
                 <p className="text-xs text-muted-foreground">
                   You can override this on a per-event basis in Advanced settings in each event type.
                 </p>
-              </div>
-
-              <div className="pt-2 space-y-4 border-t">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="auto-add" className="text-sm font-medium">Automatically add bookings</Label>
-                    <p className="text-xs text-muted-foreground">
-                      New bookings will be added to your calendar
-                    </p>
-                  </div>
-                  <Switch
-                    id="auto-add"
-                    checked={autoAddToCalendar}
-                    onCheckedChange={setAutoAddToCalendar}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="auto-meet" className="text-sm font-medium">Auto-create Google Meet links</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Generate Google Meet links for all bookings
-                    </p>
-                  </div>
-                  <Switch
-                    id="auto-meet"
-                    checked={autoCreateMeetLinks}
-                    onCheckedChange={setAutoCreateMeetLinks}
-                  />
-                </div>
               </div>
             </div>
 

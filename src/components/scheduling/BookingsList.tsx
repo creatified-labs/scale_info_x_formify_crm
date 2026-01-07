@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Calendar, Clock, Mail, Phone, Video, MapPin, Link as LinkIcon, FileText, Search, Check, X, UserX, RefreshCw, PoundSterling, Undo2, Trash2, Edit, Send } from "lucide-react";
+import { Calendar, Clock, Mail, Phone, Video, MapPin, Link as LinkIcon, FileText, Search, Check, X, UserX, RefreshCw, PoundSterling, Undo2, Trash2, Edit, Send, Loader2 } from "lucide-react";
 import { Booking } from "@/types/scheduling";
 import { supabase } from "@/integrations/supabase/client";
 import { getCompanyId } from "@/lib/company";
@@ -24,6 +24,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { normalizeBookingStatus, formatBookingStatus, statusTextColorClass } from "@/lib/status";
 
@@ -62,6 +63,11 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailTemplates, setEmailTemplates] = useState<{ id: string; name: string; subject: string; body: string }[]>([]);
   const [checkingPayment, setCheckingPayment] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [sendCancellationEmail, setSendCancellationEmail] = useState(false);
+  const [sendUpdateEmail, setSendUpdateEmail] = useState(false);
   const isLocalhost = typeof window !== "undefined" &&
     (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
@@ -291,25 +297,26 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
   }, [loadBookings]);
 
   const updateBookingStatus = async (bookingId: string, newStatus: string) => {
-    const { data: session } = await supabase.auth.getSession();
-    const token = session?.session?.access_token;
-    if (!token) {
-      toast({ title: "Error", description: "Not authenticated", variant: "destructive" });
-      return;
-    }
-    const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-booking-status`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
-      body: JSON.stringify({ booking_id: bookingId, status: newStatus })
-    });
-
-    if (!res.ok) {
-      toast({
-        title: "Error",
-        description: "Failed to update booking status",
-        variant: "destructive",
+    try {
+      // Use edge-proxy to call with service role key
+      const res = await fetch('/api/edge-proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          functionName: 'update-booking-status',
+          payload: { booking_id: bookingId, status: newStatus },
+          method: 'POST',
+        })
       });
-    } else {
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Update status error:', errorData);
+        throw new Error(errorData.error || 'Failed to update booking status');
+      }
+
       const normalized = formatBookingStatus(normalizeBookingStatus(newStatus));
       setBookings(bookings.map(b => 
         b.id === bookingId ? { ...b, status: normalizeBookingStatus(newStatus) } : b
@@ -319,6 +326,13 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
         description: `Booking status updated to ${normalized}`,
       });
       signalCallTrackerRefresh();
+    } catch (error: any) {
+      console.error('Error updating booking status:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update booking status",
+        variant: "destructive",
+      });
     }
   };
 
@@ -366,33 +380,35 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
       const startIso = start.toISOString();
       const endIso = end.toISOString();
 
-      const { data: session } = await supabase.auth.getSession();
-      const token = session?.session?.access_token;
-      if (!token) {
-        toast({ title: "Error", description: "Not authenticated", variant: "destructive" });
-        return;
-      }
-
-      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-booking`, {
+      // Use edge-proxy to call with service role key
+      const res = await fetch('/api/edge-proxy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          booking_id: selectedBooking.id,
-          invitee_name: editForm.invitee_name,
-          invitee_email: editForm.invitee_email,
-          invitee_phone: editForm.invitee_phone || null,
-          chosen_call_type: editForm.chosen_call_type,
-          start_time: startIso,
-          end_time: endIso,
-          status: editForm.status,
-          notes: editForm.notes,
-          video_join_url: editForm.video_join_url || null,
-        }),
+          functionName: 'update-booking',
+          payload: {
+            booking_id: selectedBooking.id,
+            invitee_name: editForm.invitee_name,
+            invitee_email: editForm.invitee_email,
+            invitee_phone: editForm.invitee_phone || null,
+            chosen_call_type: editForm.chosen_call_type,
+            start_time: startIso,
+            end_time: endIso,
+            status: editForm.status,
+            notes: editForm.notes,
+            video_join_url: editForm.video_join_url || null,
+            send_email: sendUpdateEmail,
+          },
+          method: 'POST',
+        })
       });
 
       if (!res.ok) {
-        const detail = await res.json().catch(() => null);
-        throw new Error(detail?.error || "Failed to update booking");
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Update booking error:', errorData);
+        throw new Error(errorData.error || "Failed to update booking");
       }
 
       const updatedBooking: Booking = {
@@ -408,9 +424,13 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
       } as Booking;
 
       setBookings(bookings.map((b) => (b.id === selectedBooking.id ? updatedBooking : b)));
-      toast({ title: "Booking updated" });
+      toast({ 
+        title: "Booking updated",
+        description: sendUpdateEmail ? "Invitee has been notified" : undefined
+      });
       setEditDialogOpen(false);
       setSelectedBooking(null);
+      setSendUpdateEmail(false);
       signalCallTrackerRefresh();
     } catch (error: any) {
       console.error('Error updating booking', error);
@@ -430,25 +450,34 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
       });
       return;
     }
-    const { data: session } = await supabase.auth.getSession();
-    const token = session?.session?.access_token;
-    if (!token) {
-      toast({ title: "Error", description: "Not authenticated", variant: "destructive" });
-      return;
-    }
-    const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/convert-booking`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
-      body: JSON.stringify({ booking_id: selectedBooking.id, is_converted: true, conversion_amount: amount })
-    });
-
-    if (!res.ok) {
-      toast({
-        title: "Error",
-        description: "Failed to mark as converted",
-        variant: "destructive",
+    try {
+      // Use edge-proxy to call with service role key
+      const res = await fetch('/api/edge-proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          functionName: 'convert-booking',
+          payload: { booking_id: selectedBooking.id, is_converted: true, conversion_amount: amount },
+          method: 'POST',
+        })
       });
-    } else {
+
+      const responseText = await res.text();
+      console.log('Convert booking response:', { status: res.status, text: responseText });
+
+      if (!res.ok) {
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch {
+          errorData = { error: responseText || 'Failed to mark as converted' };
+        }
+        console.error('Convert booking error:', errorData);
+        throw new Error(errorData.error || errorData.message || 'Failed to mark as converted');
+      }
+
       setBookings(bookings.map(b => 
         b.id === selectedBooking.id 
           ? { ...b, is_converted: true, conversion_amount: amount, converted_at: new Date().toISOString() } as any
@@ -463,29 +492,37 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
       setSelectedBooking(null);
 
       signalCallTrackerRefresh();
+    } catch (error: any) {
+      console.error('Error converting booking:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to mark as converted",
+        variant: "destructive",
+      });
     }
   };
 
   const undoConversion = async (bookingId: string) => {
-    const { data: session } = await supabase.auth.getSession();
-    const token = session?.session?.access_token;
-    if (!token) {
-      toast({ title: "Error", description: "Not authenticated", variant: "destructive" });
-      return;
-    }
-    const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/convert-booking`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
-      body: JSON.stringify({ booking_id: bookingId, is_converted: false })
-    });
-
-    if (!res.ok) {
-      toast({
-        title: "Error",
-        description: "Failed to undo conversion",
-        variant: "destructive",
+    try {
+      // Use edge-proxy to call with service role key
+      const res = await fetch('/api/edge-proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          functionName: 'convert-booking',
+          payload: { booking_id: bookingId, is_converted: false },
+          method: 'POST',
+        })
       });
-    } else {
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Undo conversion error:', errorData);
+        throw new Error(errorData.error || 'Failed to undo conversion');
+      }
+
       setBookings(bookings.map(b => 
         b.id === bookingId 
           ? { ...b, is_converted: false, conversion_amount: null, converted_at: null } as any
@@ -497,6 +534,13 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
       });
 
       signalCallTrackerRefresh();
+    } catch (error: any) {
+      console.error('Error undoing conversion:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to undo conversion",
+        variant: "destructive",
+      });
     }
   };
 
@@ -551,35 +595,69 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
     }
   };
 
-  const deleteBooking = async (bookingId: string) => {
-    if (!confirm("Are you sure you want to delete this booking? This will remove all associated data including conversions and revenue from analytics.")) {
-      return;
-    }
-    const { data: session } = await supabase.auth.getSession();
-    const token = session?.session?.access_token;
-    if (!token) {
-      toast({ title: "Error", description: "Not authenticated", variant: "destructive" });
-      return;
-    }
-    const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-booking`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
-      body: JSON.stringify({ booking_id: bookingId })
-    });
+  const confirmDeleteBooking = async () => {
+    if (!bookingToDelete) return;
 
-    if (!res.ok) {
+    setDeleting(true);
+    try {
+      // Use edge-proxy to call with service role key
+      const res = await fetch('/api/edge-proxy', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          functionName: 'delete-booking',
+          payload: { 
+            booking_id: bookingToDelete.id,
+            send_email: sendCancellationEmail 
+          },
+          method: 'POST',
+        })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Delete booking error:', errorData);
+        throw new Error(errorData.error || errorData.message || 'Failed to delete booking');
+      }
+
+      const result = await res.json();
+      console.log('Delete booking success:', result);
+
+      // Ensure mirrored call logs are cleaned up so analytics stay in sync
+      const deleteCallLogsPromise = supabase
+        .from("call_logs")
+        .delete()
+        .eq("booking_id", bookingToDelete.id);
+
+      setBookings(bookings.filter(b => b.id !== bookingToDelete.id));
+      toast({
+        title: "Booking deleted",
+        description: sendCancellationEmail 
+          ? "Calendar event removed and cancellation email sent to invitee"
+          : "Calendar event removed",
+      });
+
+      // Await call log cleanup so downstream dashboards re-compute correctly
+      try {
+        await deleteCallLogsPromise;
+      } catch (callLogError) {
+        console.error("Error deleting linked call logs:", callLogError);
+      }
+      signalCallTrackerRefresh();
+      setDeleteDialogOpen(false);
+      setBookingToDelete(null);
+      setSendCancellationEmail(false);
+    } catch (error: any) {
+      console.error('Error deleting booking:', error);
       toast({
         title: "Error",
-        description: "Failed to delete booking",
+        description: error.message || "Failed to delete booking",
         variant: "destructive",
       });
-    } else {
-      setBookings(bookings.filter(b => b.id !== bookingId));
-      toast({
-        title: "Success",
-        description: "Booking deleted and analytics updated",
-      });
-      signalCallTrackerRefresh();
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -804,10 +882,12 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
                       </TableCell>
                       <TableCell>
                         <div className="text-sm space-y-1">
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <Mail className="w-3 h-3" />
-                            <span className="truncate max-w-[200px]">{booking.invitee_email}</span>
-                          </div>
+                          <button
+                            onClick={() => openEmailDialog(booking)}
+                            className="text-primary hover:underline truncate max-w-[200px] block text-left"
+                          >
+                            {booking.invitee_email}
+                          </button>
                           {booking.invitee_phone && (
                             <div className="flex items-center gap-1 text-muted-foreground">
                               <Phone className="w-3 h-3" />
@@ -824,14 +904,23 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         {booking.chosen_call_type ? (
-                          <div className="flex items-center gap-2">
-                            {getCallTypeIcon(booking.chosen_call_type)}
-                            <span className="text-sm capitalize">
+                          booking.video_join_url && booking.video_join_url !== meetingLinkPlaceholder ? (
+                            <a
+                              href={booking.video_join_url as string}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <Badge variant="outline" className="capitalize cursor-pointer hover:bg-accent">
+                                {booking.chosen_call_type.replace('_', ' ')}
+                              </Badge>
+                            </a>
+                          ) : (
+                            <Badge variant="outline" className="capitalize">
                               {booking.chosen_call_type.replace('_', ' ')}
-                            </span>
-                          </div>
+                            </Badge>
+                          )
                         ) : (
                           <span className="text-sm text-muted-foreground">-</span>
                         )}
@@ -879,32 +968,19 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
                             </Button>
                           </div>
                         ) : (
-                          <div className="flex flex-col gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => checkWhopPayment(booking)}
-                              disabled={checkingPayment === booking.id}
-                              className="w-full"
-                            >
-                              <RefreshCw className={cn("w-4 h-4 mr-1", checkingPayment === booking.id && "animate-spin")} />
-                              {checkingPayment === booking.id ? 'Checking...' : 'Check Whop'}
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedBooking(booking);
-                                setConversionDialogOpen(true);
-                              }}
-                              disabled={booking.status !== 'completed'}
-                              title={booking.status !== 'completed' ? 'Only completed bookings can be marked as converted' : ''}
-                              className="w-full"
-                            >
-                              <PoundSterling className="w-4 h-4 mr-1" />
-                              Manual
-                            </Button>
-                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedBooking(booking);
+                              setConversionDialogOpen(true);
+                            }}
+                            disabled={booking.status !== 'completed'}
+                            title={booking.status !== 'completed' ? 'Only completed bookings can be marked as converted' : ''}
+                          >
+                            <PoundSterling className="w-4 h-4 mr-1" />
+                            Mark Converted
+                          </Button>
                         )}
                       </TableCell>
                       <TableCell>
@@ -931,16 +1007,6 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {isLocalhost && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openEmailDialog(booking)}
-                              title="Email invitee"
-                            >
-                              <Send className="w-4 h-4" />
-                            </Button>
-                          )}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -949,20 +1015,13 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
-                          {booking.video_join_url && booking.video_join_url !== meetingLinkPlaceholder && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => window.open(booking.video_join_url as string, '_blank')}
-                              title="Join meeting"
-                            >
-                              <Video className="w-4 h-4" />
-                            </Button>
-                          )}
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => deleteBooking(booking.id)}
+                            onClick={() => {
+                              setBookingToDelete(booking);
+                              setDeleteDialogOpen(true);
+                            }}
                             className="text-destructive hover:text-destructive"
                             title="Delete booking"
                           >
@@ -1118,8 +1177,22 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
               />
             </div>
 
+            <div className="flex items-center space-x-2 pt-2">
+              <Checkbox
+                id="send-update-email"
+                checked={sendUpdateEmail}
+                onCheckedChange={(checked) => setSendUpdateEmail(checked as boolean)}
+              />
+              <Label
+                htmlFor="send-update-email"
+                className="text-sm font-normal cursor-pointer"
+              >
+                Send update notification to invitee
+              </Label>
+            </div>
+
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => { setEditDialogOpen(false); setSelectedBooking(null); }}>
+              <Button type="button" variant="outline" onClick={() => { setEditDialogOpen(false); setSelectedBooking(null); setSendUpdateEmail(false); }}>
                 Cancel
               </Button>
               <Button type="submit">Update Booking</Button>
@@ -1329,6 +1402,84 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
+        setDeleteDialogOpen(open);
+        if (!open) {
+          setSendCancellationEmail(false);
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Booking?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete this booking? This action will:
+            </p>
+            <ul className="text-sm space-y-2 list-disc list-inside text-muted-foreground">
+              <li>Remove the booking from your calendar</li>
+              <li>Delete the Google Calendar event</li>
+              <li>Remove all associated data including conversions and revenue</li>
+            </ul>
+            {bookingToDelete && (
+              <div className="p-3 bg-muted rounded-md">
+                <p className="font-medium">{bookingToDelete.invitee_name}</p>
+                <p className="text-sm text-muted-foreground">{bookingToDelete.invitee_email}</p>
+                <p className="text-sm text-muted-foreground">
+                  {new Date(bookingToDelete.start_time).toLocaleString()}
+                </p>
+              </div>
+            )}
+            <div className="flex items-center space-x-2 p-3 rounded-lg border bg-muted/30">
+              <input
+                type="checkbox"
+                id="send-cancellation-email"
+                checked={sendCancellationEmail}
+                onChange={(e) => setSendCancellationEmail(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <label
+                htmlFor="send-cancellation-email"
+                className="text-sm font-medium leading-none cursor-pointer"
+              >
+                Send cancellation email to invitee
+              </label>
+            </div>
+            <p className="text-sm font-medium text-destructive">
+              This action cannot be undone.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setBookingToDelete(null);
+                setSendCancellationEmail(false);
+              }}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteBooking}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete Booking'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -21,6 +21,7 @@ serve(async (req) => {
   try {
     const body = await req.json() as UpdateEventTypeBody
     const { id, user_id, ...eventData } = body
+    const { permanent_delete: permanentDelete, ...updateFields } = eventData
 
     // Check if this is a dev proxy request (from /api/edge-proxy)
     const isDevProxy = req.headers.get('X-Dev-Proxy') === 'true'
@@ -129,10 +130,30 @@ serve(async (req) => {
         .eq('id', userId)
     }
 
+    if (permanentDelete) {
+      const { error: deleteError } = await supabaseClient
+        .from('event_types')
+        .delete()
+        .eq('id', id)
+
+      if (deleteError) {
+        console.error('Event type delete error:', deleteError)
+        return new Response(
+          JSON.stringify({ error: deleteError.message, detail: deleteError.details }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        )
+      }
+
+      return new Response(
+        JSON.stringify({ deleted: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      )
+    }
+
     // Update event type
     const { data: eventType, error: updateError } = await supabaseClient
       .from('event_types')
-      .update(eventData)
+      .update(updateFields)
       .eq('id', id)
       .select()
       .single()

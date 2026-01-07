@@ -30,7 +30,8 @@ export interface EventType {
   custom_link_label?: string;
   custom_link_url?: string;
   phone_required_for_phone_type: boolean;
-  use_custom_availability?: boolean;
+  use_custom_availability?: boolean; // DEPRECATED: Use availability_schedule_id instead
+  availability_schedule_id?: string; // NEW: Which schedule to use (NULL = use default)
   theme_mode?: 'light' | 'dark' | 'auto';
   branding_hide_badge?: boolean;
   created_at: string;
@@ -54,12 +55,14 @@ export interface NotificationSettings {
   email: {
     enabled: boolean;
     confirmation: boolean;
+    confirmationDelay?: number;
     reminders: number[];
     followup: number;
   };
   sms: {
     enabled: boolean;
     confirmation: boolean;
+    confirmationDelay?: number;
     reminders: number[];
     followup: number;
   };
@@ -87,9 +90,19 @@ export interface FormField {
   placeholder?: string;
 }
 
-export interface AvailabilityRule {
+export interface AvailabilitySchedule {
   id: string;
   user_id: string;
+  name: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AvailabilityRule {
+  id: string;
+  schedule_id: string; // NEW: Rules now belong to a schedule
+  user_id: string; // DEPRECATED: Kept for backwards compatibility
   weekday: number;
   start_time: string;
   end_time: string;
@@ -99,16 +112,19 @@ export interface AvailabilityRule {
 
 export interface AvailabilityOverride {
   id: string;
-  user_id: string;
+  schedule_id: string; // NEW: Overrides now belong to a schedule
+  user_id: string; // DEPRECATED: Kept for backwards compatibility
   date: string;
   is_available: boolean;
   start_time?: string;
   end_time?: string;
-  event_type_id?: string;
+  event_type_id?: string; // DEPRECATED: Removed in cleanup migration
   created_at: string;
 }
 
 export interface EventAvailabilityRule {
+  // DEPRECATED: This table will be removed in cleanup migration
+  // Event-specific availability is now handled by creating a named schedule
   id: string;
   event_type_id: string;
   weekday: number;

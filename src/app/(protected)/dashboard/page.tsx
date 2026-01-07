@@ -9,7 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RevenueEntryForm } from "@/components/RevenueEntryForm";
-import { RevenueHistory } from "@/components/RevenueHistory";
+import { EntriesList } from "@/components/RevenueHistory";
 import { RevenueChart } from "@/components/RevenueChart";
 import { CallsToday } from "@/components/CallsToday";
 import { FilterPanel } from "@/components/FilterPanel";
@@ -31,6 +31,7 @@ const Index = () => {
     revenueEntries,
     goals,
     calls,
+    categories,
     loading,
     addRevenueEntry,
     updateRevenueEntry,
@@ -115,7 +116,7 @@ const Index = () => {
     const fetchBookings = async () => {
       const { data } = await supabase
         .from('bookings')
-        .select('*')
+        .select('*, event_types(id, name)')
         .order('start_time', { ascending: true });
 
       if (data) {
@@ -147,6 +148,9 @@ const Index = () => {
           bookingId: booking.id,
         };
 
+        // Find the "Booking Conversions" category from the database
+        const bookingCategory = categories.find(c => c.name === "Booking Conversions");
+        
         return {
           id: `booking-${booking.id}`,
           date: entryDate,
@@ -154,9 +158,9 @@ const Index = () => {
           description: booking.invitee_name
             ? `${booking.invitee_name} booking conversion`
             : "Booking conversion",
-          category: "booking_conversion",
-          categoryName: "Booking conversions",
-          categoryColor: "#6366F1",
+          category: bookingCategory?.id || "booking_conversion",
+          categoryName: bookingCategory?.name || "Booking Conversions",
+          categoryColor: bookingCategory?.color || "#6366F1",
           createdAt: new Date(baseDate ?? Date.now()),
           metadata,
         } satisfies RevenueEntry;
@@ -227,22 +231,64 @@ const Index = () => {
     }
 
     return goals.map((goal) => {
-      let relevantEntries = filteredRevenueEntries;
+      // Combine filtered revenue entries with booking revenue entries
+      const allEntries = [...filteredRevenueEntries, ...filteredBookingRevenueEntries];
+      
+      let relevantEntries = allEntries;
+      
+      // Apply time-based filtering first
       if (goal.type === 'daily') {
-        relevantEntries = filteredRevenueEntries.filter((entry) => entry.date === goal.period);
+        relevantEntries = allEntries.filter((entry) => entry.date === goal.period);
       } else if (goal.type === 'weekly') {
         const [year, week] = (goal.period || '').split('-W');
         const weekStart = new Date(parseInt(year), 0, 1 + (parseInt(week) - 1) * 7);
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekEnd.getDate() + 6);
-        relevantEntries = filteredRevenueEntries.filter((entry) => {
+        relevantEntries = allEntries.filter((entry) => {
           const entryDate = new Date(entry.date);
           return entryDate >= weekStart && entryDate <= weekEnd;
         });
       } else if (goal.type === 'monthly') {
-        relevantEntries = filteredRevenueEntries.filter((entry) => entry.date.startsWith(goal.period || ''));
+        relevantEntries = allEntries.filter((entry) => entry.date.startsWith(goal.period || ''));
       } else if (goal.type === 'yearly') {
-        relevantEntries = filteredRevenueEntries.filter((entry) => entry.date.startsWith(goal.period || ''));
+        relevantEntries = allEntries.filter((entry) => entry.date.startsWith(goal.period || ''));
+      }
+      
+      // Apply rule-based filtering if goal has rules and auto-link enabled
+      if (goal.autoLink && goal.rules && goal.rules.length > 0) {
+        relevantEntries = relevantEntries.filter(entry => {
+          // Entry must match ALL rules (AND logic)
+          return goal.rules!.every(rule => {
+            switch (rule.type) {
+              case 'event_type':
+                return entry.eventTypeId === rule.value;
+              case 'category':
+                return entry.category === rule.value;
+              case 'source': {
+                const entrySource = (entry.metadata as { source?: string } | undefined)?.source;
+                return entrySource === rule.value;
+              }
+              case 'amount_range': {
+                const range = rule.value as { min?: number; max?: number };
+                if (range.min !== undefined && entry.amount < range.min) return false;
+                if (range.max !== undefined && entry.amount > range.max) return false;
+                return true;
+              }
+              case 'date_range': {
+                const dateRange = rule.value as { start?: string; end?: string };
+                const entryDate = new Date(entry.date);
+                if (dateRange.start && entryDate < new Date(dateRange.start)) return false;
+                if (dateRange.end && entryDate > new Date(dateRange.end)) return false;
+                return true;
+              }
+              default:
+                return true;
+            }
+          });
+        });
+      } else {
+        // Manual mode: only include explicitly linked entries
+        relevantEntries = relevantEntries.filter(entry => entry.goalId === goal.id);
       }
 
       const currentAmount = relevantEntries.reduce((sum, entry) => sum + entry.amount, 0);
@@ -254,7 +300,7 @@ const Index = () => {
         daysRemaining: 0,
       };
     });
-  }, [loading, goals, filteredRevenueEntries]);
+  }, [loading, goals, filteredRevenueEntries, filteredBookingRevenueEntries]);
 
   const summaryStats = useMemo(() => {
     if (loading) {
@@ -331,10 +377,27 @@ const Index = () => {
 
     const currentMonthCalls = calls.filter((call) => call.date.startsWith(currentMonthKey));
     const lastMonthCalls = calls.filter((call) => call.date.startsWith(lastMonthKey));
-    const currentMonthConversions = currentMonthCalls.filter((call) => call.isConverted).length;
-    const lastMonthConversions = lastMonthCalls.filter((call) => call.isConverted).length;
-    const currentMonthCompletedCalls = currentMonthCalls.filter((call) => call.status === 'completed').length;
-    const lastMonthCompletedCalls = lastMonthCalls.filter((call) => call.status === 'completed').length;
+    
+    // Include booking conversions in monthly stats
+    const currentMonthBookings = bookings?.filter((b: any) => {
+      const bookingDate = b.start_time ? new Date(b.start_time).toISOString().split('T')[0] : '';
+      return bookingDate.startsWith(currentMonthKey);
+    }) || [];
+    const lastMonthBookings = bookings?.filter((b: any) => {
+      const bookingDate = b.start_time ? new Date(b.start_time).toISOString().split('T')[0] : '';
+      return bookingDate.startsWith(lastMonthKey);
+    }) || [];
+    
+    const currentMonthConversions = currentMonthCalls.filter((call) => call.isConverted).length + 
+      currentMonthBookings.filter((b: any) => b.is_converted).length;
+    const lastMonthConversions = lastMonthCalls.filter((call) => call.isConverted).length +
+      lastMonthBookings.filter((b: any) => b.is_converted).length;
+    
+    const currentMonthCompletedCalls = currentMonthCalls.filter((call) => call.status === 'completed').length +
+      currentMonthBookings.filter((b: any) => b.status === 'completed').length;
+    const lastMonthCompletedCalls = lastMonthCalls.filter((call) => call.status === 'completed').length +
+      lastMonthBookings.filter((b: any) => b.status === 'completed').length;
+    
     const currentConversionRate = currentMonthCompletedCalls > 0
       ? (currentMonthConversions / currentMonthCompletedCalls) * 100
       : 0;
@@ -381,10 +444,24 @@ const Index = () => {
     const completed = calls.filter((call) => call.status === 'completed').length;
     const noShow = calls.filter((call) => call.status === 'no-show').length;
     const cancelled = calls.filter((call) => call.status === 'cancelled').length;
-    const conversions = calls.filter((call) => call.isConverted).length;
-    const revenue = calls.reduce((sum, call) => sum + Number(call.conversionAmount ?? 0), 0);
+    
+    // Include conversions from both calls and bookings
+    const callConversions = calls.filter((call) => call.isConverted).length;
+    const bookingConversions = bookings?.filter((b: any) => b.is_converted && b.status === 'completed').length || 0;
+    const conversions = callConversions + bookingConversions;
+    
+    // Include revenue from both calls and bookings
+    const callRevenue = calls.reduce((sum, call) => sum + Number(call.conversionAmount ?? 0), 0);
+    const bookingRevenue = bookings?.reduce((sum: number, b: any) => 
+      sum + (b.is_converted ? Number(b.conversion_amount ?? 0) : 0), 0) || 0;
+    const revenue = callRevenue + bookingRevenue;
+    
+    // Include completed bookings in the total for conversion rate calculation
+    const completedBookings = bookings?.filter((b: any) => b.status === 'completed').length || 0;
+    const totalCompleted = completed + completedBookings;
+    
     const showRate = completed + noShow > 0 ? (completed / (completed + noShow)) * 100 : 0;
-    const conversionRate = completed > 0 ? (conversions / completed) * 100 : 0;
+    const conversionRate = totalCompleted > 0 ? (conversions / totalCompleted) * 100 : 0;
 
     return {
       total,
@@ -396,7 +473,7 @@ const Index = () => {
       showRate,
       conversionRate,
     };
-  }, [calls, loading]);
+  }, [calls, bookings, loading]);
 
   const formatGrowthIndicator = (growth: number) => {
     if (growth === 0) return null;
@@ -536,11 +613,13 @@ const Index = () => {
                 {calls.filter(call => {
                 const now = new Date();
                 const currentMonth = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-                return call.date.startsWith(currentMonth);
+                const isThisMonth = call.date.startsWith(currentMonth);
+                const isActive = call.status === 'scheduled' || call.status === 'completed' || call.status === "hasn't paid yet";
+                return isThisMonth && isActive;
               }).length}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Total calls made
+                Active calls
               </p>
             </CardContent>
           </Card>
@@ -599,11 +678,13 @@ const Index = () => {
                     {calls.filter(call => {
                       const now = new Date();
                       const currentMonth = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-                      return call.date.startsWith(currentMonth);
+                      const isThisMonth = call.date.startsWith(currentMonth);
+                      const isActive = call.status === 'scheduled' || call.status === 'completed' || call.status === "hasn't paid yet";
+                      return isThisMonth && isActive;
                     }).length}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    This month
+                    Active calls this month
                   </p>
                 </CardContent>
               </Card>
@@ -618,7 +699,9 @@ const Index = () => {
                     {calls.filter(call => {
                       const now = new Date();
                       const currentMonth = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-                      return call.date.startsWith(currentMonth) && call.isConverted;
+                      const isThisMonth = call.date.startsWith(currentMonth);
+                      const isActive = call.status === 'scheduled' || call.status === 'completed' || call.status === "hasn't paid yet";
+                      return isThisMonth && call.isConverted && isActive;
                     }).length}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -717,16 +800,20 @@ const Index = () => {
                           }).length}
                         </span>
                       </div>
-                      <Progress 
-                        value={calls.filter(call => {
+                      <Progress
+                        value={(() => {
                           const now = new Date();
                           const currentMonth = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-                          return call.date.startsWith(currentMonth) && call.status === 'completed';
-                        }).length / calls.filter(call => {
-                          const now = new Date();
-                          const currentMonth = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-                          return call.date.startsWith(currentMonth);
-                        }).length * 100 || 0} 
+                          const completed = calls.filter(call =>
+                            call.date.startsWith(currentMonth) && call.status === 'completed'
+                          ).length;
+                          const active = calls.filter(call => {
+                            const isThisMonth = call.date.startsWith(currentMonth);
+                            const isActive = call.status === 'scheduled' || call.status === 'completed' || call.status === "hasn't paid yet";
+                            return isThisMonth && isActive;
+                          }).length;
+                          return active > 0 ? (completed / active) * 100 : 0;
+                        })()}
                       />
                     </div>
 
@@ -741,16 +828,20 @@ const Index = () => {
                           }).length}
                         </span>
                       </div>
-                      <Progress 
-                        value={calls.filter(call => {
+                      <Progress
+                        value={(() => {
                           const now = new Date();
                           const currentMonth = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-                          return call.date.startsWith(currentMonth) && call.status === 'cancelled';
-                        }).length / calls.filter(call => {
-                          const now = new Date();
-                          const currentMonth = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-                          return call.date.startsWith(currentMonth);
-                        }).length * 100 || 0} 
+                          const cancelled = calls.filter(call =>
+                            call.date.startsWith(currentMonth) && call.status === 'cancelled'
+                          ).length;
+                          const active = calls.filter(call => {
+                            const isThisMonth = call.date.startsWith(currentMonth);
+                            const isActive = call.status === 'scheduled' || call.status === 'completed' || call.status === "hasn't paid yet";
+                            return isThisMonth && isActive;
+                          }).length;
+                          return active > 0 ? (cancelled / active) * 100 : 0;
+                        })()}
                       />
                     </div>
 
@@ -765,16 +856,20 @@ const Index = () => {
                           }).length}
                         </span>
                       </div>
-                      <Progress 
-                        value={calls.filter(call => {
+                      <Progress
+                        value={(() => {
                           const now = new Date();
                           const currentMonth = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-                          return call.date.startsWith(currentMonth) && call.status === 'no-show';
-                        }).length / calls.filter(call => {
-                          const now = new Date();
-                          const currentMonth = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-                          return call.date.startsWith(currentMonth);
-                        }).length * 100 || 0} 
+                          const noShow = calls.filter(call =>
+                            call.date.startsWith(currentMonth) && call.status === 'no-show'
+                          ).length;
+                          const active = calls.filter(call => {
+                            const isThisMonth = call.date.startsWith(currentMonth);
+                            const isActive = call.status === 'scheduled' || call.status === 'completed' || call.status === "hasn't paid yet";
+                            return isThisMonth && isActive;
+                          }).length;
+                          return active > 0 ? (noShow / active) * 100 : 0;
+                        })()}
                       />
                     </div>
                   </div>
@@ -788,7 +883,7 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="history" className="space-y-6">
-            <RevenueHistory
+            <EntriesList
               entries={historyEntries}
               onUpdateEntry={updateRevenueEntry}
               onDeleteEntry={deleteRevenueEntry}

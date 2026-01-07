@@ -38,7 +38,7 @@ serve(async (req) => {
     // Get event type
     const { data: eventType, error: eventTypeError } = await supabaseClient
       .from('event_types')
-      .select('*')
+      .select('*, availability_schedule_id')
       .eq('id', eventTypeId)
       .eq('is_active', true)
       .single()
@@ -51,23 +51,49 @@ serve(async (req) => {
       )
     }
 
+    // Determine which availability schedule to use
+    let scheduleId = eventType.availability_schedule_id
+
+    // If no schedule specified, get user's default schedule
+    if (!scheduleId) {
+      const { data: defaultSchedule } = await supabaseClient
+        .from('availability_schedules')
+        .select('id')
+        .eq('user_id', eventType.user_id)
+        .eq('is_default', true)
+        .single()
+
+      scheduleId = defaultSchedule?.id
+      console.log(`Using default schedule for user ${eventType.user_id}: ${scheduleId}`)
+    } else {
+      console.log(`Using event-specific schedule: ${scheduleId}`)
+    }
+
+    if (!scheduleId) {
+      console.log('No availability schedule found for user')
+      return new Response(
+        JSON.stringify({ slots: [] }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      )
+    }
+
     const fromDate = new Date(from)
     const toDate = new Date(to)
     const weekday = fromDate.getDay() // 0 = Sunday, 6 = Saturday
 
-    // Get user's availability rules for this weekday
+    // Get availability rules for this schedule and weekday
     const { data: availabilityRules } = await supabaseClient
       .from('availability_rules')
       .select('*')
-      .eq('user_id', eventType.user_id)
+      .eq('schedule_id', scheduleId)
       .eq('weekday', weekday)
 
-    // Get availability overrides for this specific date
+    // Get availability overrides for this schedule and date
     const dateStr = fromDate.toISOString().split('T')[0]
     const { data: overrides } = await supabaseClient
       .from('availability_overrides')
       .select('*')
-      .eq('user_id', eventType.user_id)
+      .eq('schedule_id', scheduleId)
       .eq('date', dateStr)
 
     // Check if day is blocked
@@ -143,11 +169,12 @@ serve(async (req) => {
 
     console.log(`After min notice filter: ${filteredSlots.length}/${slots.length} slots`)
 
-    // Get existing bookings that might conflict
+    // Get existing bookings that might conflict (for THIS user, across ALL event types)
+    // This ensures archived event bookings still block availability
     const { data: existingBookings } = await supabaseClient
       .from('bookings')
       .select('start_time, end_time')
-      .eq('event_type_id', eventTypeId)
+      .eq('host_user_id', eventType.user_id)
       .in('status', ['scheduled', 'confirmed'])
       .gte('start_time', fromDate.toISOString())
       .lte('end_time', toDate.toISOString())
@@ -222,13 +249,54 @@ serve(async (req) => {
         // Get Google Calendar integration
         const { data: integration } = await supabaseClient
           .from('user_integrations')
-          .select('access_token')
+          .select('access_token, refresh_token, expires_at')
           .eq('user_id', eventType.user_id)
           .eq('provider', 'google')
           .maybeSingle()
 
         if (integration?.access_token) {
           console.log(`Checking Google Calendar conflicts for ${selectedCalendarIds.length} calendars`)
+
+          // Check if token needs refresh
+          let accessToken = integration.access_token
+          const expiresAt = integration.expires_at ? new Date(integration.expires_at) : null
+          const now = new Date()
+          
+          if (expiresAt && expiresAt <= now && integration.refresh_token) {
+            console.log('Access token expired, refreshing for conflict check...')
+            try {
+              const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                  client_id: Deno.env.get('GOOGLE_CLIENT_ID') ?? '',
+                  client_secret: Deno.env.get('GOOGLE_CLIENT_SECRET') ?? '',
+                  refresh_token: integration.refresh_token,
+                  grant_type: 'refresh_token',
+                }),
+              })
+
+              if (refreshResponse.ok) {
+                const refreshData = await refreshResponse.json() as { access_token: string; expires_in: number }
+                accessToken = refreshData.access_token
+                const newExpiresAt = new Date(Date.now() + refreshData.expires_in * 1000)
+                
+                // Update the token in database
+                await supabaseClient
+                  .from('user_integrations')
+                  .update({
+                    access_token: accessToken,
+                    expires_at: newExpiresAt.toISOString(),
+                  })
+                  .eq('user_id', eventType.user_id)
+                  .eq('provider', 'google')
+                
+                console.log('Token refreshed successfully for conflict check')
+              }
+            } catch (refreshErr) {
+              console.error('Token refresh failed for conflict check:', refreshErr)
+            }
+          }
 
           // Fetch Google Calendar events for the date range
           const googleEvents: Array<{ start: string; end: string }> = []
@@ -242,7 +310,7 @@ serve(async (req) => {
                 `singleEvents=true`,
                 {
                   headers: {
-                    Authorization: `Bearer ${integration.access_token}`,
+                    Authorization: `Bearer ${accessToken}`,
                   },
                 }
               )

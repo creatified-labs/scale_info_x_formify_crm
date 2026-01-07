@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
 import { ChevronLeft, ChevronRight, Calendar, Clock, User, FileText, Phone, CheckCircle, PoundSterling } from 'lucide-react';
-import { useData } from '@/contexts/DataContext';
-import { Call } from '@/types/calls';
+import { supabase } from '@/integrations/supabase/client';
+import { getCompanyId } from '@/lib/company';
+import { Booking } from '@/types/scheduling';
 import {
   format,
   startOfWeek,
@@ -23,11 +26,34 @@ import {
   isSameDay,
 } from 'date-fns';
 
+type CalendarEvent = {
+  id: string;
+  clientName: string;
+  eventName?: string;
+  date: string;
+  time: string;
+  duration: number;
+  status: string;
+  callType: string;
+  isConverted?: boolean;
+  conversionAmount?: number;
+  notes?: string;
+  email?: string;
+  phone?: string;
+  joinUrl?: string;
+  answers?: Record<string, any>;
+};
+
 const CalendarView = () => {
-  const { calls } = useData();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedCall, setSelectedCall] = useState<Call | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesValue, setNotesValue] = useState('');
+  const [savingNotes, setSavingNotes] = useState(false);
+  const { toast } = useToast();
 
   const periodStart =
     viewMode === 'week'
@@ -39,17 +65,79 @@ const CalendarView = () => {
       : endOfMonth(currentDate);
   const periodDays = eachDayOfInterval({ start: periodStart, end: periodEnd });
 
-  // Filter calls for the visible period (week or month)
-  const periodCalls = calls.filter((call) => {
-    const callDate = new Date(call.date);
-    return callDate >= periodStart && callDate <= periodEnd;
+  const loadBookings = useCallback(async () => {
+    setLoading(true);
+    const companyId = await getCompanyId({ allowFallback: false });
+    if (!companyId) {
+      setBookings([]);
+      setLoading(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*, event_types(*)')
+      .eq('company_id', companyId)
+      .order('start_time', { ascending: false });
+
+    if (!error && data) {
+      setBookings(data as any);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadBookings();
+  }, [loadBookings]);
+
+  useEffect(() => {
+    const handler = () => {
+      loadBookings();
+    };
+    window.addEventListener('bookings-refresh', handler);
+    window.addEventListener('call-tracker-refresh', handler);
+    return () => {
+      window.removeEventListener('bookings-refresh', handler);
+      window.removeEventListener('call-tracker-refresh', handler);
+    };
+  }, [loadBookings]);
+
+  // Convert bookings to calendar events
+  const events: CalendarEvent[] = bookings.map((booking) => {
+    const start = new Date(booking.start_time);
+    const end = new Date(booking.end_time);
+    const duration = Math.round((end.getTime() - start.getTime()) / 60000);
+    
+    return {
+      id: booking.id,
+      clientName: booking.invitee_name,
+      eventName: (booking as any).event_types?.name,
+      date: format(start, 'yyyy-MM-dd'),
+      time: format(start, 'HH:mm'),
+      duration,
+      status: booking.status,
+      callType: booking.chosen_call_type || 'meeting',
+      isConverted: (booking as any).is_converted,
+      conversionAmount: (booking as any).conversion_amount,
+      notes: (booking as any).notes,
+      email: booking.invitee_email,
+      phone: booking.invitee_phone,
+      joinUrl: booking.video_join_url || undefined,
+      answers: booking.answers as Record<string, any> | undefined,
+    };
   });
 
-  // Group calls by day
-  const callsByDay: Record<string, Call[]> = {};
+  // Filter events for the visible period (week or month)
+  const periodEvents = events.filter((event) => {
+    const eventDate = new Date(event.date);
+    return eventDate >= periodStart && eventDate <= periodEnd;
+  });
+
+  // Group events by day
+  const eventsByDay: Record<string, CalendarEvent[]> = {};
   periodDays.forEach((day) => {
     const dayKey = format(day, 'yyyy-MM-dd');
-    callsByDay[dayKey] = periodCalls.filter((call) => call.date === dayKey);
+    eventsByDay[dayKey] = periodEvents.filter((event) => event.date === dayKey);
   });
 
   const getStatusColor = (status: string) => {
@@ -136,8 +224,8 @@ const CalendarView = () => {
           <div className="grid grid-cols-7 gap-2">
             {periodDays.map((day, index) => {
               const dayKey = format(day, 'yyyy-MM-dd');
-              const dayCalls = callsByDay[dayKey] || [];
-              const dayCallsSorted = dayCalls.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+              const dayEvents = eventsByDay[dayKey] || [];
+              const dayEventsSorted = dayEvents.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
               
               return (
                 <div key={index} className="min-h-[120px]">
@@ -150,93 +238,219 @@ const CalendarView = () => {
                     </div>
                     
                     <div className="space-y-1">
-                      {dayCallsSorted.map((call) => (
-                        <Dialog key={call.id}>
+                      {dayEventsSorted.map((event) => (
+                        <Dialog key={event.id}>
                           <DialogTrigger asChild>
                             <div
-                              className={`text-xs p-1 rounded border cursor-pointer hover:opacity-80 transition-opacity ${getStatusColor(call.status)}`}
-                              onClick={() => setSelectedCall(call)}
+                              className={`text-xs p-1 rounded border cursor-pointer hover:opacity-80 transition-opacity ${getStatusColor(event.status)}`}
+                              onClick={() => setSelectedEvent(event)}
                             >
                               <div className="flex items-center gap-1 mb-1">
-                                {getCallTypeIcon(call.callType)}
-                                <span className="font-medium truncate">{call.clientName}</span>
+                                {getCallTypeIcon(event.callType)}
+                                <span className="font-medium truncate">{event.clientName}</span>
                               </div>
                               <div className="flex items-center gap-1 text-xs opacity-75">
                                 <Clock className="w-2 h-2" />
-                                <span>{call.time}</span>
-                                {call.isConverted && (
+                                <span>{event.time}</span>
+                                {event.isConverted && (
                                   <PoundSterling className="w-2 h-2 text-green-600" />
                                 )}
                               </div>
                             </div>
                           </DialogTrigger>
-                          <DialogContent className="max-w-md">
-                            <DialogHeader>
-                              <DialogTitle className="flex items-center gap-2">
-                                {getCallTypeIcon(call.callType)}
-                                Call Details
-                              </DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <label className="text-sm font-medium text-muted-foreground">Client</label>
-                                  <p className="text-sm">{call.clientName}</p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-muted-foreground">Type</label>
-                                  <p className="text-sm capitalize">{call.callType}</p>
-                                </div>
-                              </div>
-                              
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <label className="text-sm font-medium text-muted-foreground">Date</label>
-                                  <p className="text-sm">{call.date}</p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-muted-foreground">Time</label>
-                                  <p className="text-sm">{call.time}</p>
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <label className="text-sm font-medium text-muted-foreground">Duration</label>
-                                  <p className="text-sm">{call.duration} minutes</p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-muted-foreground">Status</label>
-                                  <Badge className={getStatusColor(call.status)}>
-                                    {call.status === 'completed' && <CheckCircle className="w-3 h-3 mr-1" />}
-                                    <span className="capitalize">{call.status}</span>
+                          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+                            <DialogHeader className="space-y-3 pr-8">
+                              <div className="space-y-3">
+                                <div className="flex items-start justify-between gap-4">
+                                  <DialogTitle className="text-2xl font-semibold">{event.clientName}</DialogTitle>
+                                  <Badge className={getStatusColor(event.status)}>
+                                    {event.status === 'completed' && <CheckCircle className="w-3 h-3 mr-1" />}
+                                    <span className="capitalize">{event.status}</span>
                                   </Badge>
                                 </div>
+                                {event.eventName && (
+                                  <div className="text-base font-medium text-muted-foreground">
+                                    {event.eventName}
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  {getCallTypeIcon(event.callType)}
+                                  <span className="capitalize">{event.callType.replace('_', ' ')}</span>
+                                </div>
+                              </div>
+                            </DialogHeader>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4">
+                              {/* Left Column - Main Details */}
+                              <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="space-y-1 rounded-lg border bg-muted/30 p-3">
+                                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                      <Calendar className="w-3.5 h-3.5" />
+                                      Date
+                                    </div>
+                                    <p className="text-sm font-medium">{format(new Date(event.date), 'MMM d, yyyy')}</p>
+                                  </div>
+                                  <div className="space-y-1 rounded-lg border bg-muted/30 p-3">
+                                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                      <Clock className="w-3.5 h-3.5" />
+                                      Time
+                                    </div>
+                                    <p className="text-sm font-medium">{event.time} ({event.duration} min)</p>
+                                  </div>
+                                </div>
+
+                                {event.email && (
+                                  <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                      <User className="w-3.5 h-3.5" />
+                                      Contact
+                                    </div>
+                                    <p className="text-sm font-medium break-all">{event.email}</p>
+                                    {event.phone && (
+                                      <p className="text-sm text-muted-foreground">{event.phone}</p>
+                                    )}
+                                  </div>
+                                )}
+
+                                {event.joinUrl && (
+                                  <div className="space-y-2 rounded-lg border bg-primary/5 border-primary/20 p-3">
+                                    <div className="flex items-center gap-2 text-xs font-medium text-primary uppercase tracking-wide">
+                                      <Phone className="w-3.5 h-3.5" />
+                                      Meeting Link
+                                    </div>
+                                    <a 
+                                      href={event.joinUrl} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer" 
+                                      className="text-sm font-medium text-primary hover:underline break-all block"
+                                    >
+                                      {event.joinUrl}
+                                    </a>
+                                    <Button 
+                                      size="sm" 
+                                      className="w-full mt-2"
+                                      onClick={() => window.open(event.joinUrl, '_blank')}
+                                    >
+                                      Join Meeting
+                                    </Button>
+                                  </div>
+                                )}
+
+                                {event.isConverted && (
+                                  <div className="space-y-2 rounded-lg border bg-green-50 border-green-200 p-3">
+                                    <div className="flex items-center gap-2 text-xs font-medium text-green-700 uppercase tracking-wide">
+                                      <PoundSterling className="w-3.5 h-3.5" />
+                                      Converted
+                                    </div>
+                                    <p className="text-lg font-semibold text-green-700">
+                                      £{event.conversionAmount?.toLocaleString()}
+                                    </p>
+                                  </div>
+                                )}
+
+                                {event.answers && Object.keys(event.answers).length > 0 && (
+                                  <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+                                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                      <FileText className="w-3.5 h-3.5" />
+                                      Invitee Responses
+                                    </div>
+                                    <div className="space-y-3">
+                                      {Object.entries(event.answers).map(([key, value]) => (
+                                        <div key={key} className="space-y-1">
+                                          <p className="text-xs font-medium text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</p>
+                                          <p className="text-sm leading-relaxed">
+                                            {Array.isArray(value) ? value.join(', ') : String(value)}
+                                          </p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
 
-                              {call.isConverted && (
-                                <div>
-                                  <label className="text-sm font-medium text-muted-foreground">Conversion</label>
-                                  <div className="flex items-center gap-2">
-                                    <Badge className="bg-green-100 text-green-800">
-                                      <PoundSterling className="w-3 h-3 mr-1" />
-                                      £{call.conversionAmount?.toLocaleString()}
-                                    </Badge>
-                                  </div>
-                                </div>
-                              )}
+                              {/* Right Column - Notes */}
+                              <div className="space-y-4">
+                                <div className="space-y-2 rounded-lg border bg-muted/30 p-3 h-full">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                      <FileText className="w-3.5 h-3.5" />
+                                      Notes
+                                    </div>
+                                    {!editingNotes ? (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          setEditingNotes(true);
+                                          setNotesValue(event.notes || '');
+                                        }}
+                                      >
+                                        Edit
+                                      </Button>
+                                    ) : (
+                                      <div className="flex gap-2">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => {
+                                            setEditingNotes(false);
+                                            setNotesValue('');
+                                          }}
+                                          disabled={savingNotes}
+                                        >
+                                          Cancel
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          onClick={async () => {
+                                            setSavingNotes(true);
+                                            try {
+                                              const { error } = await supabase
+                                                .from('bookings')
+                                                .update({ notes: notesValue })
+                                                .eq('id', event.id);
 
-                              {call.notes && (
-                                <div>
-                                  <label className="text-sm font-medium text-muted-foreground flex items-center gap-1 mb-2">
-                                    <FileText className="w-3 h-3" />
-                                    Notes
-                                  </label>
-                                  <div className="bg-muted/50 p-3 rounded-lg">
-                                    <p className="text-sm whitespace-pre-wrap">{call.notes}</p>
+                                              if (error) throw error;
+
+                                              toast({ title: 'Notes saved successfully' });
+                                              setEditingNotes(false);
+                                              loadBookings();
+                                            } catch (error: any) {
+                                              toast({
+                                                title: 'Error saving notes',
+                                                description: error.message,
+                                                variant: 'destructive',
+                                              });
+                                            } finally {
+                                              setSavingNotes(false);
+                                            }
+                                          }}
+                                          disabled={savingNotes}
+                                        >
+                                          {savingNotes ? 'Saving...' : 'Save'}
+                                        </Button>
+                                      </div>
+                                    )}
                                   </div>
+                                  {editingNotes ? (
+                                    <Textarea
+                                      value={notesValue}
+                                      onChange={(e) => setNotesValue(e.target.value)}
+                                      placeholder="Add notes about this booking..."
+                                      className="min-h-[300px] text-sm"
+                                    />
+                                  ) : (
+                                    <div className="min-h-[300px]">
+                                      {event.notes ? (
+                                        <p className="text-sm whitespace-pre-wrap leading-relaxed">{event.notes}</p>
+                                      ) : (
+                                        <p className="text-sm text-muted-foreground italic">No notes added. Click Edit to add notes.</p>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
-                              )}
+                              </div>
                             </div>
                           </DialogContent>
                         </Dialog>

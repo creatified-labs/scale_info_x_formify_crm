@@ -164,10 +164,6 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-      const { data: session } = await supabase.auth.getSession();
-      const token = session?.session?.access_token;
-      if (!token) throw new Error('Not authenticated');
-
       const blocksPayload = timeRanges.map(r => ({
         date: dateStr,
         start_time: r.start,
@@ -178,20 +174,25 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
         event_type_id: scope === 'event_only' ? eventTypeId ?? null : null,
       }));
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/upsert-time-blocks`, {
+      const res = await fetch('/api/edge-proxy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          scope,
-          event_type_id: scope === 'event_only' ? eventTypeId ?? null : null,
-          blocks: blocksPayload,
+          functionName: 'upsert-time-blocks',
+          payload: {
+            scope,
+            event_type_id: scope === 'event_only' ? eventTypeId ?? null : null,
+            blocks: blocksPayload,
+          },
+          method: 'POST',
         })
       });
 
+      const data = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        const j = await res.json().catch(() => ({} as any));
-        if (res.status === 403) track('feature_blocked', { feature: 'upsert-time-blocks', code: j?.code || 'FORBIDDEN' });
-        throw new Error(j.error || 'Failed to save time blocks');
+        if (res.status === 403) track('feature_blocked', { feature: 'upsert-time-blocks', code: data?.code || 'FORBIDDEN' });
+        throw new Error(data.error || 'Failed to save time blocks');
       }
 
       toast({
@@ -215,34 +216,41 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
 
   const deleteBlock = async (id: string) => {
     try {
-      const { data: session } = await supabase.auth.getSession();
-      const token = session?.session?.access_token;
-      if (!token) throw new Error('Not authenticated');
-
       if (scope === 'event_only' && eventTypeId) {
         // Rebuild blocks minus the deleted one and upsert
         const remaining = blocks.filter(b => b.id !== id)
           .map(b => ({ date: format(new Date(b.date), 'yyyy-MM-dd'), start_time: minutesToTime(b.start_minutes), end_time: minutesToTime(b.end_minutes), reason: b.note }))
-        const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/upsert-time-blocks`, {
+        
+        const res = await fetch('/api/edge-proxy', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
-          body: JSON.stringify({ event_type_id: eventTypeId, blocks: remaining })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            functionName: 'upsert-time-blocks',
+            payload: { event_type_id: eventTypeId, blocks: remaining },
+            method: 'POST',
+          })
         });
+
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          const j = await res.json().catch(() => ({} as any));
-          if (res.status === 403) track('feature_blocked', { feature: 'upsert-time-blocks', code: j?.code || 'FORBIDDEN' });
-          throw new Error(j.error || 'Failed to delete time block');
+          if (res.status === 403) track('feature_blocked', { feature: 'upsert-time-blocks', code: data?.code || 'FORBIDDEN' });
+          throw new Error(data.error || 'Failed to delete time block');
         }
       } else {
-        // Keep existing delete endpoint for global scope for now
-        const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-time-block`, {
+        // Use edge proxy for global scope delete
+        const res = await fetch('/api/edge-proxy', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
-          body: JSON.stringify({ id })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            functionName: 'delete-time-block',
+            payload: { id },
+            method: 'POST',
+          })
         });
+
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          const j = await res.json().catch(() => ({} as any));
-          throw new Error(j.error || 'Failed to delete time block');
+          throw new Error(data.error || 'Failed to delete time block');
         }
       }
 
@@ -273,78 +281,81 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
             Block specific time ranges on a date. These times will not be available for booking.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Date</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !selectedDate && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {selectedDate ? format(selectedDate, "PPP") : "Select a date"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={setSelectedDate}
-                  disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                  initialFocus
-                  className="pointer-events-auto"
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label>Time Ranges</Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addTimeRange}
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Range
-              </Button>
+        <CardContent className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2 md:items-start">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal h-10",
+                      !selectedDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {selectedDate ? format(selectedDate, "PPP") : "Select a date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={setSelectedDate}
+                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
 
-            {timeRanges.map((range, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <div className="flex-1">
-                  <Input
-                    type="time"
-                    value={range.start}
-                    onChange={(e) => updateTimeRange(index, 'start', e.target.value)}
-                  />
-                </div>
-                <span className="text-muted-foreground">to</span>
-                <div className="flex-1">
-                  <Input
-                    type="time"
-                    value={range.end}
-                    onChange={(e) => updateTimeRange(index, 'end', e.target.value)}
-                  />
-                </div>
-                {timeRanges.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeTimeRange(index)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between h-5">
+                <Label className="text-sm font-medium">Time Ranges</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addTimeRange}
+                  className="h-7"
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Add Range
+                </Button>
               </div>
-            ))}
+
+              <div className="space-y-2">
+                {timeRanges.map((range, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input
+                      type="time"
+                      value={range.start}
+                      onChange={(e) => updateTimeRange(index, 'start', e.target.value)}
+                      className="flex-1 h-10"
+                    />
+                    <span className="text-xs text-muted-foreground">to</span>
+                    <Input
+                      type="time"
+                      value={range.end}
+                      onChange={(e) => updateTimeRange(index, 'end', e.target.value)}
+                      className="flex-1 h-10"
+                    />
+                    {timeRanges.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeTimeRange(index)}
+                        className="h-10 w-10"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">

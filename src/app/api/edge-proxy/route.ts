@@ -112,6 +112,8 @@ export async function POST(request: Request) {
       console.log('🔗 Full URL:', url);
     }
 
+    console.log('📤 Sending to edge function:', { url, payload: enrichedPayload });
+    
     const response = await fetch(url, {
       method,
       headers: {
@@ -123,13 +125,24 @@ export async function POST(request: Request) {
       body: method === 'GET' ? undefined : JSON.stringify(enrichedPayload),
     });
 
-    const data = await response.json().catch(() => ({}));
+    console.log('📥 Edge function response:', { status: response.status, ok: response.ok });
 
-    if (!response.ok) {
-      console.error('Edge Function failed:', data);
-      return NextResponse.json(data, { status: response.status });
+    let data;
+    try {
+      const text = await response.text();
+      console.log('📄 Response text:', text.substring(0, 200));
+      data = text ? JSON.parse(text) : {};
+    } catch (parseError) {
+      console.error('Failed to parse response:', parseError);
+      data = { error: 'Invalid response from edge function' };
     }
 
+    if (!response.ok) {
+      console.error('❌ Edge Function failed:', { status: response.status, data });
+      return NextResponse.json(data || { error: 'Unknown error' }, { status: response.status });
+    }
+
+    console.log('✅ Edge function success:', data);
     return NextResponse.json(data);
   } catch (error: any) {
     console.error('Edge proxy error:', error);

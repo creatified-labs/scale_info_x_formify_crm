@@ -301,19 +301,28 @@ const CallTracker = () => {
 
     try {
       setSubmittingBooking(true);
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-booking`, {
-        method: "POST",
+      
+      // Use edge-proxy to call with service role key
+      const response = await fetch('/api/edge-proxy', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
-          apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          functionName: 'create-booking',
+          payload: payload,
+          method: 'POST',
+        })
       });
 
       if (!response.ok) {
         const detail = await response.json().catch(() => null);
+        console.error("Manual booking error:", detail);
         throw new Error(detail?.error || "Unable to create manual call");
       }
+
+      const result = await response.json();
+      console.log("Manual booking created:", result);
 
       toast({ title: "Manual call scheduled" });
       handleDetailsClose();

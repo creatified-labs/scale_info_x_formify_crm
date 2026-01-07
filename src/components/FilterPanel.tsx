@@ -9,17 +9,23 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { 
   Filter, 
   Calendar as CalendarIcon, 
   PoundSterling, 
   Search, 
   X,
-  RotateCcw
+  RotateCcw,
+  Plus,
+  Settings,
+  Edit2,
+  Trash2
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { FilterCriteria, DEFAULT_REVENUE_CATEGORIES } from "@/types/categories";
+import { FilterCriteria } from "@/types/categories";
+import { useData } from "@/contexts/DataContext";
 
 interface FilterPanelProps {
   filters: FilterCriteria;
@@ -28,6 +34,11 @@ interface FilterPanelProps {
   filteredEntries: number;
 }
 
+const PRESET_COLORS = [
+  "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#f97316",
+  "#06b6d4", "#eab308", "#ef4444", "#6b7280", "#8b5cf6",
+];
+
 export const FilterPanel = ({ 
   filters, 
   onFiltersChange, 
@@ -35,6 +46,55 @@ export const FilterPanel = ({
   filteredEntries 
 }: FilterPanelProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isManageCategoriesOpen, setIsManageCategoriesOpen] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<any>(null);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryColor, setNewCategoryColor] = useState(PRESET_COLORS[0]);
+  const [editCategoryName, setEditCategoryName] = useState("");
+  const [editCategoryColor, setEditCategoryColor] = useState("");
+  const { categories, addCategory, updateCategory, deleteCategory } = useData();
+
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    
+    await addCategory(newCategoryName.trim(), newCategoryColor);
+    setIsAddDialogOpen(false);
+    setNewCategoryName("");
+    setNewCategoryColor(PRESET_COLORS[0]);
+  };
+
+  const handleEditCategory = async () => {
+    if (!selectedCategory || !editCategoryName.trim()) return;
+    
+    await updateCategory(selectedCategory.id, editCategoryName.trim(), editCategoryColor);
+    setIsEditDialogOpen(false);
+    setSelectedCategory(null);
+    setEditCategoryName("");
+    setEditCategoryColor("");
+  };
+
+  const handleDeleteCategory = async () => {
+    if (!selectedCategory) return;
+    
+    await deleteCategory(selectedCategory.id);
+    setIsDeleteDialogOpen(false);
+    setSelectedCategory(null);
+  };
+
+  const openEditDialog = (category: any) => {
+    setSelectedCategory(category);
+    setEditCategoryName(category.name);
+    setEditCategoryColor(category.color);
+    setIsEditDialogOpen(true);
+  };
+
+  const openDeleteDialog = (category: any) => {
+    setSelectedCategory(category);
+    setIsDeleteDialogOpen(true);
+  };
 
   const handleDateRangeChange = (field: 'from' | 'to', date: Date | undefined) => {
     onFiltersChange({
@@ -93,6 +153,7 @@ export const FilterPanel = ({
     filters.searchTerm;
 
   return (
+    <>
     <Card className="card-smooth rounded-3xl">
       <CardHeader
         className={cn(
@@ -282,9 +343,75 @@ export const FilterPanel = ({
 
           {/* Categories */}
           <div className="space-y-3">
-            <Label className="text-responsive">Categories</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-responsive">Categories</Label>
+              <Dialog open={isManageCategoriesOpen} onOpenChange={setIsManageCategoriesOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Settings className="w-3 h-3 mr-1" />
+                    Edit
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Manage Categories</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-6 py-4">
+                    <div className="flex justify-end">
+                      <Button size="sm" onClick={() => setIsAddDialogOpen(true)}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Category
+                      </Button>
+                    </div>
+                    
+                    {/* Default Categories */}
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-semibold">Default Categories</h3>
+                      <div className="grid gap-2">
+                        {categories.filter(c => c.is_default).map((category) => (
+                          <div key={category.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                            <div className="flex items-center gap-3">
+                              <div className="w-4 h-4 rounded-full" style={{ backgroundColor: category.color }} />
+                              <span className="font-medium">{category.name}</span>
+                            </div>
+                            <Badge variant="secondary">Default</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {/* Custom Categories */}
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-semibold">Custom Categories</h3>
+                      {categories.filter(c => !c.is_default).length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-4">No custom categories yet</p>
+                      ) : (
+                        <div className="grid gap-2">
+                          {categories.filter(c => !c.is_default).map((category) => (
+                            <div key={category.id} className="flex items-center justify-between p-3 rounded-lg border">
+                              <div className="flex items-center gap-3">
+                                <div className="w-4 h-4 rounded-full" style={{ backgroundColor: category.color }} />
+                                <span className="font-medium">{category.name}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="sm" onClick={() => openEditDialog(category)}>
+                                  <Edit2 className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => openDeleteDialog(category)} className="text-destructive hover:text-destructive">
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {DEFAULT_REVENUE_CATEGORIES.map((category) => (
+              {categories.map((category) => (
                 <div
                   key={category.id}
                   className="flex items-center space-x-2 p-2 rounded-lg border hover:bg-muted/30 transition-colors"
@@ -314,5 +441,118 @@ export const FilterPanel = ({
         </div>
       </div>
     </Card>
+
+    {/* Add Category Dialog */}
+    <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add New Category</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="add-category-name">Category Name</Label>
+            <Input
+              id="add-category-name"
+              placeholder="e.g., Affiliate Sales"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Color</Label>
+            <div className="grid grid-cols-5 gap-2">
+              {PRESET_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  className={`w-10 h-10 rounded-lg border-2 transition-all ${
+                    newCategoryColor === color ? 'border-primary scale-110' : 'border-transparent'
+                  }`}
+                  style={{ backgroundColor: color }}
+                  onClick={() => setNewCategoryColor(color)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleAddCategory} disabled={!newCategoryName.trim()}>
+            Add Category
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Edit Category Dialog */}
+    <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Category</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="edit-category-name">Category Name</Label>
+            <Input
+              id="edit-category-name"
+              value={editCategoryName}
+              onChange={(e) => setEditCategoryName(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Color</Label>
+            <div className="grid grid-cols-5 gap-2">
+              {PRESET_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  className={`w-10 h-10 rounded-lg border-2 transition-all ${
+                    editCategoryColor === color ? 'border-primary scale-110' : 'border-transparent'
+                  }`}
+                  style={{ backgroundColor: color }}
+                  onClick={() => setEditCategoryColor(color)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleEditCategory} disabled={!editCategoryName.trim()}>
+            Save Changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Delete Category Dialog */}
+    <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete Category</DialogTitle>
+        </DialogHeader>
+        <div className="py-4">
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete the category "{selectedCategory?.name}"?
+          </p>
+          <p className="text-sm text-destructive mt-2">
+            This action cannot be undone.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={handleDeleteCategory}>
+            Delete Category
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };

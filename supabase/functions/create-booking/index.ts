@@ -120,6 +120,7 @@ serve(async (req) => {
       .insert({
         event_type_id,
         host_user_id: eventType.user_id,
+        company_id: companyId,
         invitee_name,
         invitee_email: invitee_email.toLowerCase(),
         invitee_phone,
@@ -144,35 +145,161 @@ serve(async (req) => {
       )
     }
 
-    // Add to Google Calendar (wait for Meet link)
+    // Add to Google Calendar (inline to avoid inter-function auth issues)
     let meetLink = null
+    let calendarError = null
     const autoAddToCalendar = settings?.google_calendar?.auto_add_bookings ?? true
+    const autoCreateMeet = settings?.google_calendar?.auto_create_meet_links ?? true
+    const targetCalendar = settings?.google_calendar?.add_events_to_calendar || 'primary'
+    console.log(`Calendar settings - auto_add: ${autoAddToCalendar}, auto_create_meet: ${autoCreateMeet}, company_id: ${companyId}`)
+
     if (autoAddToCalendar) {
       try {
-        const calendarResponse = await fetch(
-          `${Deno.env.get('SUPABASE_URL')}/functions/v1/add-booking-to-calendar`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ booking_id: booking.id }),
-          }
-        )
+        console.log(`Adding booking ${booking.id} to Google Calendar`)
         
-        if (calendarResponse.ok) {
-          const calendarData = await calendarResponse.json() as { meet_link?: string }
-          meetLink = calendarData.meet_link
+        // Get Google Calendar integration
+        const { data: integration, error: integrationError } = await supabaseClient
+          .from('user_integrations')
+          .select('access_token, refresh_token, expires_at')
+          .eq('user_id', eventType.user_id)
+          .eq('provider', 'google')
+          .maybeSingle()
+
+        if (integrationError || !integration?.access_token) {
+          calendarError = 'No Google Calendar connected'
+          console.error(calendarError)
+        } else {
+          // Check if token needs refresh
+          let accessToken = integration.access_token
+          const expiresAt = integration.expires_at ? new Date(integration.expires_at) : null
+          const now = new Date()
           
-          // Update booking with meet link
-          if (meetLink) {
+          if (expiresAt && expiresAt <= now && integration.refresh_token) {
+            console.log('Access token expired, refreshing...')
+            try {
+              const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                  client_id: Deno.env.get('GOOGLE_CLIENT_ID') ?? '',
+                  client_secret: Deno.env.get('GOOGLE_CLIENT_SECRET') ?? '',
+                  refresh_token: integration.refresh_token,
+                  grant_type: 'refresh_token',
+                }),
+              })
+
+              if (refreshResponse.ok) {
+                const refreshData = await refreshResponse.json() as { access_token: string; expires_in: number }
+                accessToken = refreshData.access_token
+                const newExpiresAt = new Date(Date.now() + refreshData.expires_in * 1000)
+                
+                // Update the token in database
+                await supabaseClient
+                  .from('user_integrations')
+                  .update({
+                    access_token: accessToken,
+                    expires_at: newExpiresAt.toISOString(),
+                  })
+                  .eq('user_id', eventType.user_id)
+                  .eq('provider', 'google')
+                
+                console.log('Token refreshed successfully')
+              } else {
+                const error = await refreshResponse.text()
+                console.error('Token refresh failed:', error)
+                calendarError = 'Failed to refresh Google Calendar token'
+              }
+            } catch (refreshErr) {
+              console.error('Token refresh exception:', refreshErr)
+              calendarError = 'Failed to refresh Google Calendar token'
+            }
+          }
+          
+          if (!calendarError) {
+          // Create calendar event
+          const eventData: any = {
+            summary: `${eventType.name || 'Booking'} with ${invitee_name}`,
+            description: eventType.description || '',
+            start: {
+              dateTime: start_time,
+              timeZone: invitee_timezone,
+            },
+            end: {
+              dateTime: end_time,
+              timeZone: invitee_timezone,
+            },
+            attendees: [
+              { email: invitee_email, displayName: invitee_name },
+            ],
+          }
+
+          // Add Google Meet conference if enabled
+          if (autoCreateMeet) {
+            eventData.conferenceData = {
+              createRequest: {
+                requestId: `booking-${booking.id}`,
+                conferenceSolutionKey: { type: 'hangoutsMeet' },
+              },
+            }
+          }
+
+          console.log(`Creating calendar event on calendar: ${targetCalendar}`)
+
+          const calendarResponse = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendar)}/events?conferenceDataVersion=1`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(eventData),
+            }
+          )
+
+          console.log(`Google Calendar API response status: ${calendarResponse.status}`)
+
+          if (calendarResponse.ok) {
+            const calendarEvent = await calendarResponse.json() as {
+              id: string
+              htmlLink: string
+              conferenceData?: {
+                entryPoints?: Array<{ entryPointType: string; uri: string }>
+              }
+            }
+            
+            console.log(`Calendar event created: ${calendarEvent.id}`)
+            
+            meetLink = calendarEvent.conferenceData?.entryPoints?.find(
+              (ep: any) => ep.entryPointType === 'video'
+            )?.uri
+            
+            console.log(`Meet link extracted: ${meetLink}`)
+
+            // Update booking with calendar event ID and meet link
             await supabaseClient
               .from('bookings')
-              .update({ video_join_url: meetLink })
+              .update({
+                calendar_event_id: calendarEvent.id,
+                video_join_url: meetLink || booking.video_join_url,
+                calendar_synced_at: new Date().toISOString(),
+              })
               .eq('id', booking.id)
+            
+            console.log(`Updated booking with calendar data`)
+          } else {
+            const error = await calendarResponse.text()
+            calendarError = `Google Calendar API error (${calendarResponse.status}): ${error}`
+            console.error(calendarError)
+          }
           }
         }
       } catch (err) {
+        calendarError = `Calendar sync exception: ${err.message}`
         console.error('Calendar add error:', err)
       }
+    } else {
+      console.log('Auto-add to calendar is disabled in settings')
     }
 
     // Schedule email reminders if enabled
@@ -246,6 +373,12 @@ serve(async (req) => {
           video_join_url: meetLink || booking.video_join_url,
         },
         meet_link: meetLink,
+        calendar_sync_error: calendarError,
+        debug: {
+          auto_add_to_calendar: autoAddToCalendar,
+          auto_create_meet: settings?.google_calendar?.auto_create_meet_links ?? true,
+          company_id: companyId,
+        },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )

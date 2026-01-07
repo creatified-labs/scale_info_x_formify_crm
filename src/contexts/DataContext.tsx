@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { RevenueEntry, Goal } from "@/types/revenue";
 import { Call } from "@/types/calls";
+import { Category } from "@/types/categories";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getCompanyId } from "@/lib/company";
@@ -20,6 +21,9 @@ type DbRevenueRow = {
   category_color?: string | null;
   created_at: string;
   metadata?: Record<string, unknown> | null;
+  goal_id?: string | null;
+  event_type_id?: string | null;
+  event_type_name?: string | null;
 };
 
 type DbGoalRow = {
@@ -35,6 +39,8 @@ type DbGoalRow = {
   category_color?: string | null;
   category_type?: Goal["categoryType"] | null;
   created_at: string;
+  rules?: any | null;
+  auto_link?: boolean | null;
 };
 
 type DbCallRow = {
@@ -65,8 +71,9 @@ interface DataContextType {
   revenueEntries: RevenueEntry[];
   goals: Goal[];
   calls: Call[];
+  categories: Category[];
   loading: boolean;
-  addRevenueEntry: (entry: Omit<RevenueEntry, 'id' | 'createdAt'>) => Promise<void>;
+  addRevenueEntry: (entry: Omit<RevenueEntry, 'id' | 'createdAt'>, goalId?: string) => Promise<void>;
   updateRevenueEntry: (entry: RevenueEntry) => Promise<void>;
   deleteRevenueEntry: (entryId: string) => Promise<void>;
   addGoal: (goal: Omit<Goal, 'id' | 'createdAt'>) => Promise<void>;
@@ -74,6 +81,10 @@ interface DataContextType {
   addCall: (call: Omit<Call, 'id' | 'createdAt'>) => Promise<void>;
   updateCall: (call: Call) => Promise<void>;
   deleteCall: (callId: string) => Promise<void>;
+  fetchCategories: (companyId?: string) => Promise<void>;
+  addCategory: (name: string, color: string) => Promise<void>;
+  updateCategory: (id: string, name: string, color: string) => Promise<void>;
+  deleteCategory: (id: string) => Promise<void>;
   refetch: () => Promise<void>;
 }
 
@@ -83,6 +94,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [revenueEntries, setRevenueEntries] = useState<RevenueEntry[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [calls, setCalls] = useState<Call[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [hydrated, setHydrated] = useState(false);
   const sb = supabase as any;
@@ -217,6 +229,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     categoryColor: row.category_color || undefined,
     createdAt: new Date(row.created_at),
     metadata: row.metadata || undefined,
+    goalId: row.goal_id || undefined,
+    eventTypeId: row.event_type_id || undefined,
+    eventTypeName: row.event_type_name || undefined,
   });
 
   const mapGoalFromDb = (row: DbGoalRow): Goal => ({
@@ -232,6 +247,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     categoryColor: row.category_color || undefined,
     categoryType: row.category_type || undefined,
     createdAt: new Date(row.created_at),
+    rules: row.rules || undefined,
+    autoLink: row.auto_link ?? undefined,
   });
 
   const mapCallFromDb = (row: DbCallRow): Call => ({
@@ -252,7 +269,75 @@ export function DataProvider({ children }: { children: ReactNode }) {
     bookingId: row.booking_id || undefined,
   });
 
+  const fetchCategories = useCallback(async (existingCompanyId?: string) => {
+    try {
+      const companyId = existingCompanyId ?? (await getCompanyId({ allowFallback: false }));
+      if (!companyId) return;
+
+      const response = await fetch('/api/edge-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          functionName: 'manage-categories',
+          payload: { action: 'list', company_id: companyId },
+          method: 'POST',
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch categories');
+      const data = await response.json();
+      setCategories(data.categories || []);
+    } catch (error: any) {
+      console.error('Error fetching categories:', error);
+    }
+  }, []);
+
   // Fetch all data via RLS tables
+  const cleanupOrphanedCallLogs = useCallback(async (callRows: DbCallRow[]) => {
+    const bookingIds = Array.from(
+      new Set(callRows.map((row) => row.booking_id).filter((id): id is string => Boolean(id)))
+    );
+    if (!bookingIds.length) {
+      return callRows;
+    }
+
+    try {
+      const { data: existingBookings, error: bookingsError } = await sb
+        .from('bookings')
+        .select('id')
+        .in('id', bookingIds);
+
+      if (bookingsError) {
+        console.warn('Failed to load bookings while cleaning call logs:', bookingsError);
+        return callRows;
+      }
+
+      const existingIds = new Set((existingBookings ?? []).map((booking: { id: string }) => booking.id));
+      const orphanedCallIds = callRows
+        .filter((row) => row.booking_id && !existingIds.has(row.booking_id))
+        .map((row) => row.id);
+
+      if (!orphanedCallIds.length) {
+        return callRows;
+      }
+
+      const { error: deleteError } = await sb
+        .from('call_logs')
+        .delete()
+        .in('id', orphanedCallIds);
+
+      if (deleteError) {
+        console.error('Failed to delete orphaned call logs:', deleteError);
+        return callRows;
+      }
+
+      return callRows.filter((row) => !orphanedCallIds.includes(row.id));
+    } catch (err) {
+      console.error('Unexpected error during orphaned call log cleanup:', err);
+      return callRows;
+    }
+  }, [sb]);
+
   const fetchData = useCallback(async () => {
     const background = hydrated;
     try {
@@ -302,6 +387,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
           .order("created_at", { ascending: false }),
       ]);
 
+      await fetchCategories(companyId);
+
       if (revenueRes.error) {
         console.warn('Revenue query error (non-critical):', revenueRes.error);
       }
@@ -312,9 +399,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
         console.warn('Calls query error (non-critical):', callsRes.error);
       }
 
-      setRevenueEntries((revenueRes.data ?? []).map((row: any) => mapRevenueFromDb(row as DbRevenueRow)));
-      setGoals((goalsRes.data ?? []).map((row: any) => mapGoalFromDb(row as DbGoalRow)));
-      setCalls((callsRes.data ?? []).map((row: any) => mapCallFromDb(row as DbCallRow)));
+      const mappedRevenue = (revenueRes.data ?? []).map((row: any) => mapRevenueFromDb(row as DbRevenueRow));
+      const mappedGoals = (goalsRes.data ?? []).map((row: any) => mapGoalFromDb(row as DbGoalRow));
+      const rawCalls = (callsRes.data ?? []) as DbCallRow[];
+      const sanitizedCalls = await cleanupOrphanedCallLogs(rawCalls);
+
+      setRevenueEntries(mappedRevenue);
+      setGoals(mappedGoals);
+      setCalls(sanitizedCalls.map((row) => mapCallFromDb(row)));
     } catch (error: any) {
       console.warn('Error loading data (non-critical):', error?.message || error);
       setRevenueEntries([]);
@@ -328,7 +420,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setHydrated(true);
       }
     }
-  }, [hydrated, sb]);
+  }, [hydrated, sb, fetchCategories]);
 
   const syncBookingToCalls = useCallback(async () => {
     await fetchData();
@@ -403,6 +495,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         category_name: entry.categoryName ?? null,
         category_color: entry.categoryColor ?? null,
         metadata: entry.metadata ?? null,
+        goal_id: entry.goalId ?? null,
+        event_type_id: entry.eventTypeId ?? null,
+        event_type_name: entry.eventTypeName ?? null,
       };
 
       const { data, error } = await sb
@@ -429,6 +524,60 @@ export function DataProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      const companyId = await getCompanyId({ allowFallback: true });
+      if (!companyId) {
+        toast.error("No company selected", {
+          description: "Join or create a company first.",
+        });
+        return;
+      }
+
+      // Check if this is a booking-derived entry (not a real revenue entry)
+      // If so, upsert a real revenue entry that mirrors the booking entry ID
+      if (entry.id.startsWith('booking-')) {
+        const insertPayload = {
+          id: entry.id,
+          company_id: companyId,
+          entry_date: entry.date,
+          amount: entry.amount,
+          description: entry.description ?? null,
+          category: entry.category ?? null,
+          category_name: entry.categoryName ?? null,
+          category_color: entry.categoryColor ?? null,
+          metadata: entry.metadata ? { ...entry.metadata, originalBookingId: entry.id } : { originalBookingId: entry.id },
+          goal_id: entry.goalId ?? null,
+          event_type_id: entry.eventTypeId ?? null,
+          event_type_name: entry.eventTypeName ?? null,
+        };
+
+        const { data, error } = await sb
+          .from('revenue_entries')
+          .upsert(insertPayload, { onConflict: 'id' })
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Database error:', error);
+          throw error;
+        }
+
+        if (data) {
+          const updatedEntry = mapRevenueFromDb(data);
+          setRevenueEntries((prev) => {
+            const existingIndex = prev.findIndex((e) => e.id === updatedEntry.id);
+            if (existingIndex >= 0) {
+              const next = [...prev];
+              next[existingIndex] = updatedEntry;
+              return next;
+            }
+            return [updatedEntry, ...prev];
+          });
+        }
+
+        toast.success('Booking revenue entry updated');
+        return;
+      }
+
       const updatePayload = {
         entry_date: entry.date,
         amount: entry.amount,
@@ -437,19 +586,31 @@ export function DataProvider({ children }: { children: ReactNode }) {
         category_name: entry.categoryName ?? null,
         category_color: entry.categoryColor ?? null,
         metadata: entry.metadata ?? null,
+        goal_id: entry.goalId ?? null,
+        event_type_id: entry.eventTypeId ?? null,
+        event_type_name: entry.eventTypeName ?? null,
       };
 
-      const { error } = await sb
+      console.log('Updating revenue entry:', { id: entry.id, payload: updatePayload });
+
+      const { data, error } = await sb
         .from('revenue_entries')
         .update(updatePayload)
-        .eq('id', entry.id);
-      if (error) throw error;
+        .eq('id', entry.id)
+        .select();
+
+      if (error) {
+        console.error('Database error:', error);
+        throw error;
+      }
+
+      console.log('Update successful:', data);
 
       setRevenueEntries(revenueEntries.map((e) => (e.id === entry.id ? entry : e)));
       toast.success('Revenue entry updated');
     } catch (error: any) {
       console.error('Error updating revenue entry:', error);
-      toast.error(error.message || 'Failed to update revenue entry');
+      toast.error(error.message || error.toString() || 'Failed to update revenue entry');
     }
   };
 
@@ -503,6 +664,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
           category_name: goal.categoryName ?? null,
           category_color: goal.categoryColor ?? null,
           category_type: goal.categoryType ?? null,
+          rules: goal.rules ?? null,
+          auto_link: goal.autoLink ?? false,
         }
       };
       const created = await callFunction('goals-write', 'POST', payload);
@@ -734,10 +897,88 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const addCategory = async (name: string, color: string) => {
+    try {
+      const companyId = await getCompanyId({ allowFallback: false });
+      if (!companyId) {
+        toast.error('Company ID not found');
+        return;
+      }
+
+      const response = await fetch('/api/edge-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          functionName: 'manage-categories',
+          payload: { action: 'create', company_id: companyId, name, color },
+          method: 'POST',
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to create category');
+      const data = await response.json();
+      setCategories([...categories, data.category]);
+      toast.success('Category created');
+    } catch (error: any) {
+      console.error('Error creating category:', error);
+      toast.error(error.message || 'Failed to create category');
+    }
+  };
+
+  const updateCategory = async (id: string, name: string, color: string) => {
+    try {
+      const response = await fetch('/api/edge-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          functionName: 'manage-categories',
+          payload: { action: 'update', category_id: id, name, color },
+          method: 'POST',
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to update category');
+      const data = await response.json();
+      setCategories(categories.map(c => c.id === id ? data.category : c));
+      toast.success('Category updated');
+    } catch (error: any) {
+      console.error('Error updating category:', error);
+      toast.error(error.message || 'Failed to update category');
+    }
+  };
+
+  const deleteCategory = async (id: string) => {
+    try {
+      const response = await fetch('/api/edge-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          functionName: 'manage-categories',
+          payload: { action: 'delete', category_id: id },
+          method: 'POST',
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to delete category');
+      setCategories(categories.filter(c => c.id !== id));
+      toast.success('Category deleted');
+    } catch (error: any) {
+      console.error('Error deleting category:', error);
+      toast.error(error.message || 'Failed to delete category');
+    }
+  };
+
+  useEffect(() => {
+    if (hydrated) {
+      fetchCategories();
+    }
+  }, [hydrated, fetchCategories]);
+
   const value = {
     revenueEntries,
     goals,
     calls,
+    categories,
     loading,
     addRevenueEntry,
     updateRevenueEntry,
@@ -747,6 +988,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     addCall,
     updateCall,
     deleteCall,
+    fetchCategories,
+    addCategory,
+    updateCategory,
+    deleteCategory,
     refetch: fetchData,
   };
 

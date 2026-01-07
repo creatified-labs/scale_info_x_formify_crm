@@ -17,6 +17,7 @@ import { CalendarIcon, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isLocalMode } from "@/lib/localMode";
 import { readLocal, writeLocal } from "@/lib/localStore";
+import { AvailabilitySchedulesManager } from "./AvailabilitySchedulesManager";
 
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -26,6 +27,7 @@ export const AvailabilityEditor = () => {
   const [loading, setLoading] = useState(true);
   const [blockedDates, setBlockedDates] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>();
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
   const { toast } = useToast();
   const localMode = isLocalMode();
 
@@ -72,11 +74,16 @@ export const AvailabilityEditor = () => {
       return;
     }
 
-    const userId = await getEffectiveUserId();
+    if (!selectedScheduleId) {
+      setRules([]);
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("availability_rules")
       .select("*")
-      .eq("user_id", userId)
+      .eq("schedule_id", selectedScheduleId)
       .order("weekday");
 
     if (error) {
@@ -97,13 +104,16 @@ export const AvailabilityEditor = () => {
       return;
     }
 
-    const userId = await getEffectiveUserId();
+    if (!selectedScheduleId) {
+      setBlockedDates([]);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("availability_overrides")
       .select("*")
-      .eq("user_id", userId)
-      .eq("is_available", false)
-      .is("event_type_id", null);
+      .eq("schedule_id", selectedScheduleId)
+      .eq("is_available", false);
 
     if (!error && data) {
       setBlockedDates(data);
@@ -114,12 +124,13 @@ export const AvailabilityEditor = () => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadRules();
     loadBlockedDates();
-  }, []);
+  }, [selectedScheduleId]);
   const addRule = async (weekday: number) => {
     if (localMode) {
       const localRules = loadLocalRules();
       const newRule: AvailabilityRule = {
         id: crypto.randomUUID(),
+        schedule_id: "local",
         user_id: "local",
         weekday,
         start_time: "09:00",
@@ -134,11 +145,14 @@ export const AvailabilityEditor = () => {
       return;
     }
 
+    if (!selectedScheduleId) return;
+
     const userId = await getEffectiveUserId();
 
     const { error } = await supabase
       .from("availability_rules")
       .insert({
+        schedule_id: selectedScheduleId,
         user_id: userId,
         weekday,
         start_time: "09:00",
@@ -154,7 +168,19 @@ export const AvailabilityEditor = () => {
       });
     } else {
       toast({ title: "Availability added", description: `${WEEKDAYS[weekday]} hours created` });
-      loadRules();
+      // Optimistically add the new rule to state instead of reloading
+      const { data: newRule } = await supabase
+        .from("availability_rules")
+        .select("*")
+        .eq("schedule_id", selectedScheduleId)
+        .eq("weekday", weekday)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (newRule) {
+        setRules(prev => [...prev, newRule as AvailabilityRule]);
+      }
     }
   };
 
@@ -179,11 +205,12 @@ export const AvailabilityEditor = () => {
         variant: "destructive",
       });
     } else {
-      loadRules();
+      // Optimistically remove from state instead of reloading
+      setRules(prev => prev.filter(rule => rule.id !== id));
     }
   };
 
-  const handleLocalRuleChange = (id: string, field: "start_time" | "end_time", value: string) => {
+  const handleLocalRuleChange = (id: string, field: string, value: string) => {
     setRules((prev) => prev.map((rule) => (rule.id === id ? { ...rule, [field]: value } : rule)));
   };
 
@@ -218,15 +245,15 @@ export const AvailabilityEditor = () => {
 
   const blockDate = async () => {
     if (!selectedDate) return;
-    
+
     if (localMode) {
       const overrides = loadLocalOverrides();
       const newOverride = {
         id: crypto.randomUUID(),
+        schedule_id: "local",
         user_id: "local",
         date: format(selectedDate, "yyyy-MM-dd"),
         is_available: false,
-        event_type_id: null,
       };
       const updated = [...overrides, newOverride];
       persistLocalOverrides(updated);
@@ -236,10 +263,13 @@ export const AvailabilityEditor = () => {
       return;
     }
 
+    if (!selectedScheduleId) return;
+
     const userId = await getEffectiveUserId();
     const { error } = await supabase
       .from("availability_overrides")
       .insert({
+        schedule_id: selectedScheduleId,
         user_id: userId,
         date: format(selectedDate, "yyyy-MM-dd"),
         is_available: false,
@@ -294,140 +324,88 @@ export const AvailabilityEditor = () => {
 
   return (
     <div className="space-y-8">
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-xl font-semibold">Availability</h2>
-          <p className="text-sm text-muted-foreground">
-            Set your default weekly hours (applies to all events unless overridden)
-          </p>
-        </div>
+      {!localMode ? (
+        <AvailabilitySchedulesManager
+          onSelectSchedule={setSelectedScheduleId}
+          selectedScheduleId={selectedScheduleId || undefined}
+          rules={rules}
+          onAddRule={addRule}
+          onUpdateRule={updateRule}
+          onDeleteRule={deleteRule}
+          onRuleChange={handleLocalRuleChange}
+        />
+      ) : (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-xl font-semibold">Availability Rules</h2>
+            <p className="text-sm text-muted-foreground">
+              Set weekly hours for your schedule
+            </p>
+          </div>
 
-      <div className="space-y-3">
-        {WEEKDAYS.map((day, idx) => {
-          const dayRules = rules.filter(r => r.weekday === idx);
-          
-          return (
-            <Card key={idx} className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold">{day}</h3>
-                {dayRules.length === 0 ? (
-                  <Badge variant="secondary">Unavailable</Badge>
-                ) : (
-                  <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-medium gap-1 flex items-center">
-                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
-                    Hours active
-                  </Badge>
-                )}
-              </div>
+          <div className="space-y-3">
+            {WEEKDAYS.map((day, idx) => {
+              const dayRules = rules.filter(r => r.weekday === idx);
+              
+              return (
+                <Card key={idx} className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold">{day}</h3>
+                    {dayRules.length === 0 ? (
+                      <Badge variant="secondary">Unavailable</Badge>
+                    ) : (
+                      <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-medium gap-1 flex items-center">
+                        <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
+                        Hours active
+                      </Badge>
+                    )}
+                  </div>
 
-              {dayRules.length === 0 ? (
-                <Button
-                  variant="ghost"
-                  className="w-full"
-                  onClick={() => addRule(idx)}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Set Available Hours
-                </Button>
-              ) : (
-                <div className="space-y-2">
-                  {dayRules.map((rule) => (
-                    <div key={rule.id} className="flex items-center gap-3">
-                      <Input
-                        type="time"
-                        value={rule.start_time}
-                        onChange={(e) => handleLocalRuleChange(rule.id, 'start_time', e.target.value)}
-                        onBlur={() => updateRule(rule.id)}
-                        className="w-32"
-                      />
-                      <span className="text-muted-foreground">to</span>
-                      <Input
-                        type="time"
-                        value={rule.end_time}
-                        onChange={(e) => handleLocalRuleChange(rule.id, 'end_time', e.target.value)}
-                        onBlur={() => updateRule(rule.id)}
-                        className="w-32"
-                      />
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => deleteRule(rule.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                  {dayRules.length === 0 ? (
+                    <Button
+                      variant="ghost"
+                      className="w-full"
+                      onClick={() => addRule(idx)}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Set Available Hours
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      {dayRules.map((rule) => (
+                        <div key={rule.id} className="flex items-center gap-3">
+                          <Input
+                            type="time"
+                            value={rule.start_time}
+                            onChange={(e) => handleLocalRuleChange(rule.id, 'start_time', e.target.value)}
+                            onBlur={() => updateRule(rule.id)}
+                            className="w-32"
+                          />
+                          <span className="text-muted-foreground">to</span>
+                          <Input
+                            type="time"
+                            value={rule.end_time}
+                            onChange={(e) => handleLocalRuleChange(rule.id, 'end_time', e.target.value)}
+                            onBlur={() => updateRule(rule.id)}
+                            className="w-32"
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => deleteRule(rule.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-          );
-        })}
-      </div>
-      </div>
-
-      <Separator />
-
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-xl font-semibold">Block Specific Dates</h2>
-          <p className="text-sm text-muted-foreground">
-            Mark dates when you're unavailable (applies to all event types)
-          </p>
-        </div>
-
-        <div className="flex gap-3 items-end">
-          <div className="flex-1">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !selectedDate && "text-muted-foreground"
                   )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {selectedDate ? format(selectedDate, "PPP") : "Pick a date to block"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={setSelectedDate}
-                  disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                  initialFocus
-                  className="p-3 pointer-events-auto"
-                />
-              </PopoverContent>
-            </Popover>
+                </Card>
+              );
+            })}
           </div>
-          <Button onClick={blockDate} disabled={!selectedDate}>
-            Block Date
-          </Button>
         </div>
-
-        {blockedDates.length > 0 && (
-          <div className="space-y-2">
-            <h3 className="font-medium">Blocked Dates</h3>
-            <div className="flex flex-wrap gap-2">
-              {blockedDates.map((blocked) => (
-                <Badge key={blocked.id} variant="secondary" className="gap-2">
-                  {format(new Date(blocked.date), "MMM d, yyyy")}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-4 w-4 p-0"
-                    onClick={() => unblockDate(blocked.id)}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 };

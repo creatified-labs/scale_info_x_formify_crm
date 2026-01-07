@@ -17,7 +17,7 @@ const Goals = () => {
     const fetchBookings = async () => {
       const { data } = await supabase
         .from('bookings')
-        .select('*')
+        .select('*, event_types(id, name)')
         .eq('status', 'scheduled');
       
       if (data) {
@@ -28,7 +28,7 @@ const Goals = () => {
     const fetchConversions = async () => {
       const { data } = await supabase
         .from('bookings')
-        .select('*')
+        .select('*, event_types(id, name)')
         .eq('is_converted', true)
         .not('conversion_amount', 'is', null);
       
@@ -43,14 +43,28 @@ const Goals = () => {
 
   // Combine revenue entries with booking conversions
   const allRevenueData = useMemo(() => {
-    const bookingRevenue = bookingConversions.map(booking => ({
-      id: booking.id,
-      date: booking.start_time.split('T')[0],
-      amount: Number(booking.conversion_amount),
-      description: `Booking: ${booking.invitee_name}`,
-      category: 'general',
-      createdAt: new Date(booking.converted_at || booking.start_time)
-    }));
+    const bookingRevenue = bookingConversions.map(booking => {
+      const metadata: Record<string, unknown> = {
+        source: "booking",
+        bookingId: booking.id,
+      };
+      
+      const eventTypeName = booking.event_types?.name || booking.event_type_name;
+      const eventTypeId = booking.event_type_id;
+      
+      return {
+        id: booking.id,
+        date: booking.start_time.split('T')[0],
+        amount: Number(booking.conversion_amount),
+        description: `Booking: ${booking.invitee_name}`,
+        category: 'general',
+        createdAt: new Date(booking.converted_at || booking.start_time),
+        metadata,
+        eventTypeId: eventTypeId || undefined,
+        eventTypeName: eventTypeName || undefined,
+        goalId: undefined, // Booking conversions don't have explicit goal links
+      };
+    });
     
     return [...revenueEntries, ...bookingRevenue];
   }, [revenueEntries, bookingConversions]);
@@ -103,6 +117,7 @@ const Goals = () => {
         // Handle revenue/client goals - include booking conversions
         let relevantEntries = allRevenueData;
 
+        // Apply time-based filtering first
         if (goal.type === 'deadline' && goal.deadline) {
           const deadlineDate = new Date(goal.deadline);
           const createdDate = new Date(goal.createdAt);
@@ -127,6 +142,43 @@ const Goals = () => {
           relevantEntries = allRevenueData.filter(entry => entry.date.startsWith(goal.period || ''));
         } else if (goal.type === 'yearly' && goal.period) {
           relevantEntries = allRevenueData.filter(entry => entry.date.startsWith(goal.period || ''));
+        }
+
+        // Apply rule-based filtering if goal has rules and auto-link enabled
+        if (goal.autoLink && goal.rules && goal.rules.length > 0) {
+          relevantEntries = relevantEntries.filter(entry => {
+            // Entry must match ALL rules (AND logic)
+            return goal.rules!.every(rule => {
+              switch (rule.type) {
+                case 'event_type':
+                  return entry.eventTypeId === rule.value;
+                case 'category':
+                  return entry.category === rule.value;
+                case 'source': {
+                  const entrySource = (entry.metadata as { source?: string } | undefined)?.source;
+                  return entrySource === rule.value;
+                }
+                case 'amount_range': {
+                  const range = rule.value as { min?: number; max?: number };
+                  if (range.min !== undefined && entry.amount < range.min) return false;
+                  if (range.max !== undefined && entry.amount > range.max) return false;
+                  return true;
+                }
+                case 'date_range': {
+                  const dateRange = rule.value as { start?: string; end?: string };
+                  const entryDate = new Date(entry.date);
+                  if (dateRange.start && entryDate < new Date(dateRange.start)) return false;
+                  if (dateRange.end && entryDate > new Date(dateRange.end)) return false;
+                  return true;
+                }
+                default:
+                  return true;
+              }
+            });
+          });
+        } else {
+          // Manual mode: only include explicitly linked entries
+          relevantEntries = relevantEntries.filter(entry => entry.goalId === goal.id);
         }
 
         currentAmount = relevantEntries.reduce((sum, entry) => sum + entry.amount, 0);

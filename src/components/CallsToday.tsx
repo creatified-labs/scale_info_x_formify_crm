@@ -127,7 +127,13 @@ export const CallsToday = () => {
   const upcomingCalls = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     return calls
-      .filter(call => call.date > today && (call.status === 'scheduled' || call.status === "hasn't paid yet"))
+      .filter(call => {
+        // Only show future calls with active statuses (scheduled or hasn't paid yet)
+        // This automatically excludes cancelled, completed, and no-show calls
+        const isFuture = call.date > today;
+        const isActiveStatus = call.status === 'scheduled' || call.status === "hasn't paid yet";
+        return isFuture && isActiveStatus;
+      })
       .sort((a, b) => {
         const dateCompare = a.date.localeCompare(b.date);
         if (dateCompare !== 0) return dateCompare;
