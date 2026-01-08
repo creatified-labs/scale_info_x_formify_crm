@@ -381,7 +381,7 @@ export const Layout = ({
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("branding:updated", {
-            detail: { branding_name: name || null },
+            detail: { branding_display_name: name || null },
           }),
         );
       }
@@ -464,11 +464,11 @@ export const Layout = ({
         if (!companyId) return;
         const { data: company } = await (supabase as any)
           .from('companies')
-          .select('branding_name, branding_hide_badge, booking_slug_prefix, name, primary_contact_email')
+          .select('branding_display_name, branding_name, branding_hide_badge, booking_slug_prefix, name, primary_contact_email')
           .eq('id', companyId)
           .maybeSingle();
 
-        const rawBrandingName = typeof company?.branding_name === "string" ? company.branding_name : "";
+        const rawBrandingName = typeof company?.branding_display_name === "string" ? company.branding_display_name : (typeof company?.branding_name === "string" ? company.branding_name : "");
         const rawOrgName = typeof company?.name === "string" ? company.name : "";
         const normalizedBranding = rawBrandingName.trim();
         const normalizedOrg = rawOrgName.trim();
@@ -503,9 +503,9 @@ export const Layout = ({
     if (typeof window === "undefined") return;
 
     const handleBrandingUpdated = (event: Event) => {
-      const detail = (event as CustomEvent<{ branding_name?: string | null }>).detail;
-      const nextName = detail?.branding_name?.trim() ?? "";
-      setBrandName(nextName);
+      const detail = (event as CustomEvent<{ branding_display_name?: string | null }>).detail;
+      const nextName = detail?.branding_display_name?.trim() ?? "";
+      setBrandName(nextName || "Scale Info");
     };
 
     window.addEventListener("branding:updated", handleBrandingUpdated as EventListener);

@@ -72,8 +72,9 @@ export async function bootstrapWhopUser(): Promise<{
     // Establish session with tokens
     if (data.access_token && data.refresh_token) {
       console.log('Setting session with tokens from bootstrap...');
+      console.log('Access token (first 30 chars):', data.access_token.substring(0, 30));
       try {
-        const { error: setSessionError } = await supabase.auth.setSession({
+        const { data: sessionData, error: setSessionError } = await supabase.auth.setSession({
           access_token: data.access_token,
           refresh_token: data.refresh_token,
         });
@@ -86,12 +87,38 @@ export async function bootstrapWhopUser(): Promise<{
           };
         }
         
-        console.log('Session established successfully');
+        console.log('Session established successfully:', {
+          hasSession: !!sessionData.session,
+          hasUser: !!sessionData.user,
+          userId: sessionData.user?.id,
+        });
+
+        // Verify session was actually stored
+        const { data: { session: verifySession } } = await supabase.auth.getSession();
+        console.log('Verified session after setSession:', {
+          hasSession: !!verifySession,
+          userId: verifySession?.user?.id,
+          companyId: verifySession?.user?.user_metadata?.company_id,
+        });
+
+        if (!verifySession) {
+          console.error('Session was not stored properly!');
+          return {
+            success: false,
+            error: 'Session was not stored properly',
+          };
+        }
 
         // Refresh the session so we pick up the latest user metadata (company_id, etc.)
-        await supabase.auth.refreshSession();
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+          console.warn('Failed to refresh session:', refreshError);
+        } else {
+          console.log('Session refreshed successfully');
+        }
+        
         const { data: userData } = await supabase.auth.getUser();
-        console.log('Refreshed user metadata after bootstrap:', {
+        console.log('User metadata after bootstrap:', {
           userId: userData.user?.id,
           companyId: userData.user?.user_metadata?.company_id,
         });
@@ -102,6 +129,12 @@ export async function bootstrapWhopUser(): Promise<{
           error: `Failed to establish session: ${e instanceof Error ? e.message : 'Unknown error'}`,
         };
       }
+    } else {
+      console.error('No tokens received from whop-session API');
+      return {
+        success: false,
+        error: 'No tokens received from server',
+      };
     }
     
     return {

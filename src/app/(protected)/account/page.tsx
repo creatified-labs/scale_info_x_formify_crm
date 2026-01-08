@@ -47,6 +47,11 @@ export default function AccountSettingsPage() {
   // Watermark Settings
   const [brandingHideBadge, setBrandingHideBadge] = useState(false);
 
+  // Notification Emails
+  const [notificationEmails, setNotificationEmails] = useState<string[]>([]);
+  const [newEmail, setNewEmail] = useState("");
+  const [emailsSaving, setEmailsSaving] = useState(false);
+
   // Google Calendar Integration Settings
   const [autoAddToCalendar, setAutoAddToCalendar] = useState(true);
   const [checkCalendarConflicts, setCheckCalendarConflicts] = useState(true);
@@ -161,7 +166,7 @@ export default function AccountSettingsPage() {
 
       const { data: company } = await supabase
         .from("companies")
-        .select("branding_name, branding_hide_badge, booking_slug_prefix")
+        .select("branding_name, branding_hide_badge, booking_slug_prefix, notification_emails")
         .eq("id", companyId)
         .maybeSingle();
 
@@ -178,6 +183,7 @@ export default function AccountSettingsPage() {
         setBrandingNameInput(finalBrandName);
         setBookingPrefix(finalBookingSlug);
         setBrandingHideBadge(Boolean(company.branding_hide_badge));
+        setNotificationEmails(company.notification_emails || []);
       }
     } catch (error) {
       console.error("Error loading branding settings:", error);
@@ -362,6 +368,29 @@ export default function AccountSettingsPage() {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
       setBrandingSaving(false);
+    }
+  };
+
+  const handleSaveNotificationEmails = async () => {
+    setEmailsSaving(true);
+    try {
+      const companyId = await getCompanyId({ allowFallback: true });
+      if (!companyId) {
+        toast({ title: "Error", description: "No company found", variant: "destructive" });
+        return;
+      }
+
+      const { error } = await supabase
+        .from("companies")
+        .update({ notification_emails: notificationEmails })
+        .eq("id", companyId);
+
+      if (error) throw error;
+      toast({ title: "Notification emails updated" });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setEmailsSaving(false);
     }
   };
 
@@ -589,6 +618,70 @@ export default function AccountSettingsPage() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Notification Emails Section */}
+          <div className="space-y-2 border rounded-lg p-3 bg-muted/30">
+            <div className="font-medium text-sm">Booking notification emails</div>
+            <p className="text-xs text-muted-foreground">
+              Add email addresses to receive notifications when bookings are made
+            </p>
+            
+            <div className="space-y-2">
+              {notificationEmails.map((email, index) => (
+                <div key={index} className="flex gap-2 items-center">
+                  <Input value={email} disabled className="flex-1 text-sm" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const updated = notificationEmails.filter((_, i) => i !== index);
+                      setNotificationEmails(updated);
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+              
+              <div className="flex gap-2">
+                <Input
+                  placeholder="email@example.com"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newEmail.includes('@')) {
+                      setNotificationEmails([...notificationEmails, newEmail]);
+                      setNewEmail("");
+                    }
+                  }}
+                  className="text-sm"
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    if (newEmail.includes('@')) {
+                      setNotificationEmails([...notificationEmails, newEmail]);
+                      setNewEmail("");
+                    }
+                  }}
+                  className="whitespace-nowrap"
+                >
+                  Add
+                </Button>
+              </div>
+              
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleSaveNotificationEmails}
+                disabled={emailsSaving}
+                className="w-full"
+              >
+                {emailsSaving ? "Saving..." : "Save Notification Emails"}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

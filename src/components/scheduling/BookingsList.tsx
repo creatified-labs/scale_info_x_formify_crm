@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Calendar, Clock, Mail, Phone, Video, MapPin, Link as LinkIcon, FileText, Search, Check, X, UserX, RefreshCw, PoundSterling, Undo2, Trash2, Edit, Send, Loader2 } from "lucide-react";
+import { Calendar, Clock, Mail, Phone, Video, MapPin, Link as LinkIcon, FileText, Search, Check, X, UserX, RefreshCw, PoundSterling, Undo2, Trash2, Edit, Send, Loader2, Copy } from "lucide-react";
 import { Booking } from "@/types/scheduling";
 import { supabase } from "@/integrations/supabase/client";
 import { getCompanyId } from "@/lib/company";
@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import {
   Dialog,
@@ -24,7 +25,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { normalizeBookingStatus, formatBookingStatus, statusTextColorClass } from "@/lib/status";
 
@@ -66,8 +66,8 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [sendCancellationEmail, setSendCancellationEmail] = useState(false);
   const [sendUpdateEmail, setSendUpdateEmail] = useState(false);
+  const [notesEditMode, setNotesEditMode] = useState(false);
   const isLocalhost = typeof window !== "undefined" &&
     (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
@@ -610,7 +610,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
           functionName: 'delete-booking',
           payload: { 
             booking_id: bookingToDelete.id,
-            send_email: sendCancellationEmail 
+            send_email: false 
           },
           method: 'POST',
         })
@@ -633,10 +633,8 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
 
       setBookings(bookings.filter(b => b.id !== bookingToDelete.id));
       toast({
-        title: "Booking deleted",
-        description: sendCancellationEmail 
-          ? "Calendar event removed and cancellation email sent to invitee"
-          : "Calendar event removed",
+        title: "Removed from call tracker",
+        description: "Calendar event removed and booking cleared from your dashboard.",
       });
 
       // Await call log cleanup so downstream dashboards re-compute correctly
@@ -648,7 +646,6 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
       signalCallTrackerRefresh();
       setDeleteDialogOpen(false);
       setBookingToDelete(null);
-      setSendCancellationEmail(false);
     } catch (error: any) {
       console.error('Error deleting booking:', error);
       toast({
@@ -870,7 +867,6 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
                     <TableHead>Event</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Conversion</TableHead>
-                    <TableHead>Notes</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -983,30 +979,22 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
                           </Button>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedBooking(booking);
-                            const responses = formatInviteeResponses(booking);
-                            const existingNotes = (booking as any).notes || "";
-                            
-                            // If notes don't already contain responses, prepend them
-                            if (responses && !existingNotes.includes("=== INVITEE RESPONSES ===")) {
-                              setEditableNotes(responses + existingNotes);
-                            } else {
-                              setEditableNotes(existingNotes);
-                            }
-                            setNotesEditDialogOpen(true);
-                          }}
-                        >
-                          <FileText className="w-4 h-4 mr-1" />
-                          {(booking as any).notes ? "View Notes" : "Add Notes"}
-                        </Button>
-                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(booking.id);
+                              toast({
+                                title: "Booking ID Copied",
+                                description: "Paste this into your Whop invoice description to link the payment.",
+                              });
+                            }}
+                            title="Copy booking ID for invoice"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1048,155 +1036,274 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
           }
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Booking</DialogTitle>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="flex flex-row items-center justify-between">
+            <div>
+              <DialogTitle className="text-2xl">{(selectedBooking as any)?.event_types?.name || 'Sales CRM'}</DialogTitle>
+              <p className="text-sm text-muted-foreground mt-1">{editForm.invitee_name}</p>
+            </div>
+            <Badge variant="secondary" className="capitalize">
+              {formatBookingStatus(normalizeBookingStatus(editForm.status))}
+            </Badge>
           </DialogHeader>
-          <form onSubmit={submitEditBooking} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="booking-invitee-name">Client Name *</Label>
-                <Input
-                  id="booking-invitee-name"
-                  value={editForm.invitee_name}
-                  onChange={(e) => handleEditField('invitee_name', e.target.value)}
-                  required
-                />
+          <form onSubmit={submitEditBooking} className="grid grid-cols-1 lg:grid-cols-[1fr,400px] gap-6">
+            {/* Left Column - Booking Details */}
+            <div className="space-y-4">
+              {/* Call Type Badge */}
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Video className="w-4 h-4" />
+                <span className="text-sm capitalize">{editForm.chosen_call_type.replace('_', ' ')}</span>
               </div>
-              <div>
-                <Label htmlFor="booking-invitee-email">Email *</Label>
+
+              {/* Date & Time Section */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    Date
+                  </Label>
+                  <Input
+                    type="date"
+                    value={editForm.date}
+                    onChange={(e) => handleEditField('date', e.target.value)}
+                    required
+                    className="bg-background"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    Time
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="time"
+                      value={editForm.time}
+                      onChange={(e) => handleEditField('time', e.target.value)}
+                      required
+                      className="bg-background"
+                    />
+                    <span className="text-sm text-muted-foreground whitespace-nowrap">({editForm.duration_minutes} min)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact Section */}
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground uppercase flex items-center gap-1">
+                  <Mail className="w-3 h-3" />
+                  Contact
+                </Label>
                 <Input
-                  id="booking-invitee-email"
-                  type="email"
                   value={editForm.invitee_email}
                   onChange={(e) => handleEditField('invitee_email', e.target.value)}
                   required
+                  className="bg-background"
                 />
               </div>
-              <div>
-                <Label htmlFor="booking-invitee-phone">Phone</Label>
-                <Input
-                  id="booking-invitee-phone"
-                  value={editForm.invitee_phone}
-                  onChange={(e) => handleEditField('invitee_phone', e.target.value)}
-                  placeholder="+44 123 456 7890"
-                />
+
+              {/* Meeting Link Section */}
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground uppercase flex items-center gap-1">
+                  <LinkIcon className="w-3 h-3" />
+                  Meeting Link
+                </Label>
+                <div className="space-y-2">
+                  <Input
+                    value={editForm.video_join_url}
+                    onChange={(e) => handleEditField('video_join_url', e.target.value)}
+                    placeholder="Meeting link will be sent by host"
+                    className="bg-background"
+                  />
+                  {editForm.video_join_url && editForm.video_join_url !== meetingLinkPlaceholder && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="default"
+                      onClick={() => window.open(editForm.video_join_url, '_blank')}
+                      className="w-full"
+                    >
+                      Join Meeting
+                    </Button>
+                  )}
+                </div>
               </div>
-              <div>
-                <Label htmlFor="booking-call-type">Call Type</Label>
-                <Select
-                  value={editForm.chosen_call_type}
-                  onValueChange={(value: string) => handleEditField('chosen_call_type', value)}
+
+              {/* Converted Status */}
+              {(selectedBooking as any)?.is_converted && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase flex items-center gap-1">
+                    <PoundSterling className="w-3 h-3" />
+                    Converted
+                  </Label>
+                  <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
+                    <span className="text-lg font-semibold text-green-700 dark:text-green-300">
+                      {(selectedBooking as any).conversion_amount ? `£${((selectedBooking as any).conversion_amount).toFixed(2)}` : 'Paid'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Invitee Responses */}
+              {selectedBooking?.answers && Object.keys(selectedBooking.answers).length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase flex items-center gap-1">
+                    <FileText className="w-3 h-3" />
+                    Invitee Responses
+                  </Label>
+                  <div className="p-3 bg-muted rounded-md space-y-2">
+                    {Object.entries(selectedBooking.answers).map(([questionId, answer]) => {
+                      const schema = (selectedBooking as any).event_types?.invitee_form_schema;
+                      let label = questionId;
+                      
+                      if (schema && Array.isArray(schema)) {
+                        const question = schema.find((q: any) => q.id === questionId);
+                        label = question?.label || questionId;
+                      }
+                      
+                      return (
+                        <div key={questionId} className="text-sm">
+                          <div className="text-xs text-muted-foreground">{label}</div>
+                          <div>{Array.isArray(answer) ? answer.join(', ') : String(answer)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right Column - Notes Section */}
+            <div className="space-y-2 lg:border-l lg:pl-6">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground uppercase flex items-center gap-1">
+                  <FileText className="w-3 h-3" />
+                  Notes
+                </Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setNotesEditMode(!notesEditMode)}
+                  className="h-7 text-xs"
                 >
-                  <SelectTrigger id="booking-call-type">
-                    <SelectValue placeholder="Select call type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="meeting">Meeting</SelectItem>
-                    <SelectItem value="phone">Phone</SelectItem>
-                    <SelectItem value="zoom">Zoom</SelectItem>
-                    <SelectItem value="google_meet">Google Meet</SelectItem>
-                    <SelectItem value="in_person">In Person</SelectItem>
-                    <SelectItem value="custom">Custom Link</SelectItem>
-                  </SelectContent>
-                </Select>
+                  {notesEditMode ? 'Done' : 'Edit'}
+                </Button>
               </div>
-              <div>
-                <Label htmlFor="booking-date">Date *</Label>
-                <Input
-                  id="booking-date"
-                  type="date"
-                  value={editForm.date}
-                  onChange={(e) => handleEditField('date', e.target.value)}
-                  required
+              {notesEditMode ? (
+                <Textarea
+                  value={editForm.notes}
+                  onChange={(e) => handleEditField('notes', e.target.value)}
+                  rows={12}
+                  placeholder="No notes added. Click Edit to add notes."
+                  className="bg-background resize-none"
                 />
-              </div>
-              <div>
-                <Label htmlFor="booking-time">Time *</Label>
-                <Input
-                  id="booking-time"
-                  type="time"
-                  value={editForm.time}
-                  onChange={(e) => handleEditField('time', e.target.value)}
-                  required
+              ) : (
+                <div className="p-3 bg-muted rounded-md min-h-[300px]">
+                  <p className="text-sm whitespace-pre-wrap text-muted-foreground">
+                    {editForm.notes || 'No notes added. Click Edit to add notes.'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Additional Fields (Collapsed) - Spans both columns */}
+            <div className="lg:col-span-2">
+              <details className="space-y-2">
+                <summary className="cursor-pointer text-sm font-medium">Advanced Options</summary>
+                <div className="grid grid-cols-2 gap-4 pt-2">
+                  <div>
+                    <Label htmlFor="booking-invitee-name">Client Name</Label>
+                    <Input
+                      id="booking-invitee-name"
+                      value={editForm.invitee_name}
+                      onChange={(e) => handleEditField('invitee_name', e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="booking-invitee-phone">Phone</Label>
+                    <Input
+                      id="booking-invitee-phone"
+                      value={editForm.invitee_phone}
+                      onChange={(e) => handleEditField('invitee_phone', e.target.value)}
+                      placeholder="+44 123 456 7890"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="booking-call-type">Call Type</Label>
+                    <Select
+                      value={editForm.chosen_call_type}
+                      onValueChange={(value: string) => handleEditField('chosen_call_type', value)}
+                    >
+                      <SelectTrigger id="booking-call-type">
+                        <SelectValue placeholder="Select call type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="meeting">Meeting</SelectItem>
+                        <SelectItem value="phone">Phone</SelectItem>
+                        <SelectItem value="zoom">Zoom</SelectItem>
+                        <SelectItem value="google_meet">Google Meet</SelectItem>
+                        <SelectItem value="in_person">In Person</SelectItem>
+                        <SelectItem value="custom">Custom Link</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="booking-duration">Duration (minutes)</Label>
+                    <Input
+                      id="booking-duration"
+                      type="number"
+                      min="1"
+                      value={editForm.duration_minutes}
+                      onChange={(e) => handleEditField('duration_minutes', Number(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="booking-status">Status</Label>
+                    <Select
+                      value={editForm.status}
+                      onValueChange={(value: Booking["status"]) => handleEditField('status', value)}
+                    >
+                      <SelectTrigger id="booking-status">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="scheduled">Scheduled</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="canceled">Cancelled</SelectItem>
+                        <SelectItem value="no_show">No Show</SelectItem>
+                        <SelectItem value="hasnt_paid_yet">Hasn't Paid Yet</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </details>
+            </div>
+
+            {/* Footer - Spans both columns */}
+            <div className="lg:col-span-2 space-y-4 pt-4 border-t">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="send-update-email"
+                  checked={sendUpdateEmail}
+                  onCheckedChange={(checked) => setSendUpdateEmail(checked as boolean)}
                 />
-              </div>
-              <div>
-                <Label htmlFor="booking-duration">Duration (minutes)</Label>
-                <Input
-                  id="booking-duration"
-                  type="number"
-                  min="1"
-                  value={editForm.duration_minutes}
-                  onChange={(e) => handleEditField('duration_minutes', Number(e.target.value) || 0)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="booking-status">Status</Label>
-                <Select
-                  value={editForm.status}
-                  onValueChange={(value: Booking["status"]) => handleEditField('status', value)}
+                <Label
+                  htmlFor="send-update-email"
+                  className="text-sm font-normal cursor-pointer"
                 >
-                  <SelectTrigger id="booking-status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="scheduled">Scheduled</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="canceled">Cancelled</SelectItem>
-                    <SelectItem value="no_show">No Show</SelectItem>
-                    <SelectItem value="hasnt_paid_yet">Hasn't Paid Yet</SelectItem>
-                  </SelectContent>
-                </Select>
+                  Send update notification to invitee
+                </Label>
               </div>
-            </div>
 
-            <div>
-              <Label htmlFor="booking-meeting-link">Meeting Link</Label>
-              <Input
-                id="booking-meeting-link"
-                value={editForm.video_join_url}
-                onChange={(e) => handleEditField('video_join_url', e.target.value)}
-                placeholder="Paste meeting URL or leave blank to send manually"
-              />
-              {editForm.chosen_call_type === 'google_meet' || editForm.chosen_call_type === 'zoom' ? (
-                <p className="text-xs text-muted-foreground mt-1">
-                  If an integration is connected, the link will be generated automatically; otherwise paste it here.
-                </p>
-              ) : null}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => { setEditDialogOpen(false); setSelectedBooking(null); setSendUpdateEmail(false); setNotesEditMode(false); }}>
+                  Cancel
+                </Button>
+                <Button type="submit">Update Booking</Button>
+              </DialogFooter>
             </div>
-
-            <div>
-              <Label htmlFor="booking-notes">Notes</Label>
-              <Textarea
-                id="booking-notes"
-                value={editForm.notes}
-                onChange={(e) => handleEditField('notes', e.target.value)}
-                rows={4}
-                placeholder="Agenda, preparation, follow-up tasks..."
-              />
-            </div>
-
-            <div className="flex items-center space-x-2 pt-2">
-              <Checkbox
-                id="send-update-email"
-                checked={sendUpdateEmail}
-                onCheckedChange={(checked) => setSendUpdateEmail(checked as boolean)}
-              />
-              <Label
-                htmlFor="send-update-email"
-                className="text-sm font-normal cursor-pointer"
-              >
-                Send update notification to invitee
-              </Label>
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => { setEditDialogOpen(false); setSelectedBooking(null); setSendUpdateEmail(false); }}>
-                Cancel
-              </Button>
-              <Button type="submit">Update Booking</Button>
-            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
@@ -1404,19 +1511,14 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
       )}
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
-        setDeleteDialogOpen(open);
-        if (!open) {
-          setSendCancellationEmail(false);
-        }
-      }}>
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Booking?</DialogTitle>
+            <DialogTitle>Remove from Call Tracker?</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Are you sure you want to delete this booking? This action will:
+              Are you sure you want to remove this booking from your call tracker? This action will:
             </p>
             <ul className="text-sm space-y-2 list-disc list-inside text-muted-foreground">
               <li>Remove the booking from your calendar</li>
@@ -1432,21 +1534,6 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
                 </p>
               </div>
             )}
-            <div className="flex items-center space-x-2 p-3 rounded-lg border bg-muted/30">
-              <input
-                type="checkbox"
-                id="send-cancellation-email"
-                checked={sendCancellationEmail}
-                onChange={(e) => setSendCancellationEmail(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300"
-              />
-              <label
-                htmlFor="send-cancellation-email"
-                className="text-sm font-medium leading-none cursor-pointer"
-              >
-                Send cancellation email to invitee
-              </label>
-            </div>
             <p className="text-sm font-medium text-destructive">
               This action cannot be undone.
             </p>
@@ -1457,7 +1544,6 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
               onClick={() => {
                 setDeleteDialogOpen(false);
                 setBookingToDelete(null);
-                setSendCancellationEmail(false);
               }}
               disabled={deleting}
             >

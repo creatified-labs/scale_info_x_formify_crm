@@ -83,51 +83,72 @@ serve(async (req) => {
     }
 
     // Verify ownership
-    const { data: existingEvent } = await supabaseClient
+    const { data: existingEvent, error: fetchError } = await supabaseClient
       .from('event_types')
       .select('user_id')
       .eq('id', id)
       .single()
 
+    console.log('🔍 Ownership check:', {
+      eventId: id,
+      requestUserId: userId,
+      existingEventUserId: existingEvent?.user_id,
+      fetchError: fetchError?.message,
+      match: existingEvent?.user_id === userId
+    })
+
     if (!existingEvent || existingEvent.user_id !== userId) {
+      console.error('❌ Authorization failed:', {
+        eventExists: !!existingEvent,
+        userIdMatch: existingEvent?.user_id === userId,
+        expectedUserId: userId,
+        actualUserId: existingEvent?.user_id
+      })
       return new Response(
         JSON.stringify({ error: 'Event type not found or unauthorized' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
       )
     }
 
-    // Get user's company
-    const { data: profile } = await supabaseClient
-      .from('profiles')
-      .select('company_id')
-      .eq('id', userId)
-      .single()
+    // Get user's company from their metadata first
+    const { data: { user: authUser } } = await supabaseClient.auth.admin.getUserById(userId)
+    let companyId = authUser?.user_metadata?.company_id
 
-    let companyId = profile?.company_id
+    console.log('👤 User company lookup:', {
+      userId,
+      companyIdFromMetadata: companyId
+    })
 
-    // If no company exists, create one
+    // If not in metadata, try profiles table
     if (!companyId) {
-      const { data: newCompany, error: companyError } = await supabaseClient
-        .from('companies')
-        .insert({ name: 'My Company' })
-        .select()
+      const { data: profile } = await supabaseClient
+        .from('profiles')
+        .select('company_id')
+        .eq('id', userId)
         .single()
 
-      if (companyError || !newCompany) {
-        console.error('Failed to create company:', companyError)
-        return new Response(
-          JSON.stringify({ error: 'Failed to create company for user' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-        )
-      }
+      companyId = profile?.company_id
+      console.log('📋 Company from profiles:', companyId)
+    }
 
-      companyId = newCompany.id
-
-      // Update profile with company_id
-      await supabaseClient
-        .from('profiles')
-        .update({ company_id: companyId })
+    // If still no company, try to get from users table
+    if (!companyId) {
+      const { data: userRecord } = await supabaseClient
+        .from('users')
+        .select('company_id')
         .eq('id', userId)
+        .single()
+
+      companyId = userRecord?.company_id
+      console.log('👥 Company from users table:', companyId)
+    }
+
+    if (!companyId) {
+      console.error('❌ No company found for user:', userId)
+      return new Response(
+        JSON.stringify({ error: 'User must be associated with a company' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
     }
 
     if (permanentDelete) {
@@ -196,7 +217,10 @@ serve(async (req) => {
     // Update event type
     const { data: eventType, error: updateError } = await supabaseClient
       .from('event_types')
-      .update(updateFields)
+      .update({
+        ...updateFields,
+        company_id: companyId,
+      })
       .eq('id', id)
       .select()
       .single()

@@ -41,11 +41,12 @@ serve(async (req) => {
       .select(
         `
         *,
-        companies!inner(
+        companies(
           id,
           name,
           whop_company_id,
-          booking_slug_prefix
+          booking_slug_prefix,
+          branding_hide_badge
         )
       `,
         { head: false, count: null }
@@ -53,32 +54,45 @@ serve(async (req) => {
       .eq('slug', slug)
       .eq('is_active', true)
 
-    // If product is provided, filter by Whop org (biz_) or booking slug prefix
-    if (product) {
-      if (product.startsWith('biz_')) {
-        query = query.eq('companies.whop_company_id', product)
-      } else {
-        query = query.eq('companies.booking_slug_prefix', product)
-      }
-    }
-
-    const { data: eventType, error } = await query.single()
+    const { data: eventTypes, error } = await query
 
     if (error) {
       console.error('Event type query error:', error)
-
-      // Return 404 if not found
-      if (error.code === 'PGRST116') {
-        return new Response(
-          JSON.stringify({ error: 'Event type not found' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-        )
-      }
-
       return new Response(
         JSON.stringify({ error: error.message }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       )
+    }
+
+    if (!eventTypes || eventTypes.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'Event type not found' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      )
+    }
+
+    // If product is provided, filter by Whop org (biz_) or booking slug prefix
+    let eventType = eventTypes[0]
+    if (product && eventTypes.length > 0) {
+      const filtered = eventTypes.filter((et: any) => {
+        if (!et.companies) return false
+        if (product.startsWith('biz_')) {
+          return et.companies.whop_company_id === product
+        } else {
+          return et.companies.booking_slug_prefix === product
+        }
+      })
+      if (filtered.length > 0) {
+        eventType = filtered[0]
+      } else if (eventTypes.length === 1) {
+        // If only one event type matches the slug, use it even if product doesn't match
+        eventType = eventTypes[0]
+      } else {
+        return new Response(
+          JSON.stringify({ error: 'Event type not found for this product' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+        )
+      }
     }
 
     if (!eventType) {

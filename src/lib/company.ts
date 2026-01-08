@@ -135,16 +135,25 @@ export async function getCompanyId(options?: GetCompanyIdOptions): Promise<strin
 
   const envCompanyId = getEnvCompanyId();
   if (envCompanyId) {
+    console.log('[getCompanyId] Using env company ID:', envCompanyId);
     return envCompanyId;
   }
 
   // PRIORITY 1: Check user metadata first (most reliable source)
   const { data: { user } } = await supabase.auth.getUser();
+  console.log('[getCompanyId] User metadata:', {
+    hasUser: !!user,
+    userId: user?.id,
+    companyId: (user?.user_metadata as any)?.company_id,
+    metadata: user?.user_metadata,
+  });
+  
   if (user) {
     const cid = (user.user_metadata as any)?.company_id as string | undefined;
     if (cid) {
       // Cache it for future use
       cacheLocalCompanyId(cid);
+      console.log('[getCompanyId] Found company ID in user metadata:', cid);
       return cid;
     }
   }
@@ -174,12 +183,15 @@ export async function getCompanyId(options?: GetCompanyIdOptions): Promise<strin
   }
 
   if (allowFallback) {
+    console.log('[getCompanyId] No company ID found, generating fallback');
     const generated = ensureLocalDevCompanyId();
     if (generated) {
       cacheLocalCompanyId(generated);
+      console.log('[getCompanyId] Generated fallback company ID:', generated);
       return generated;
     }
   }
 
+  console.error('[getCompanyId] ❌ No company ID found and no fallback available');
   return null;
 }

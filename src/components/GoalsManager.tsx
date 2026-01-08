@@ -25,7 +25,6 @@ interface GoalsManagerProps {
 export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: GoalsManagerProps) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [goalType, setGoalType] = useState<'daily' | 'weekly' | 'monthly' | 'yearly' | 'deadline'>('monthly');
-  const [goalCategory, setGoalCategory] = useState<'revenue' | 'clients' | 'calls'>('revenue');
   const [targetAmount, setTargetAmount] = useState("");
   const [description, setDescription] = useState("");
   const [deadline, setDeadline] = useState("");
@@ -70,14 +69,13 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
           : { period: getCurrentPeriod(goalType) }
         ),
         description: description.trim() || undefined,
-        goalType: goalCategory,
+        goalType: 'revenue',
       });
 
       // Reset form
       setTargetAmount("");
       setDescription("");
       setDeadline("");
-      setGoalCategory('revenue');
       setShowAddForm(false);
     } finally {
       setIsSubmitting(false);
@@ -134,21 +132,7 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="goalCategory">Goal Type</Label>
-                  <Select value={goalCategory} onValueChange={(value: any) => setGoalCategory(value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="revenue">Revenue Goal</SelectItem>
-                      <SelectItem value="clients">Client Goal</SelectItem>
-                      <SelectItem value="calls">Calls Booked</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="goalType">Goal Period</Label>
                   <Select value={goalType} onValueChange={(value: any) => setGoalType(value)}>
@@ -166,15 +150,13 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="targetAmount">
-                    Target {goalCategory === 'revenue' ? 'Amount (£)' : goalCategory === 'calls' ? 'Calls' : 'Number of Clients'}
-                  </Label>
+                  <Label htmlFor="targetAmount">Target Amount (£)</Label>
                   <Input
                     id="targetAmount"
                     type="number"
-                    step={goalCategory === 'revenue' ? "0.01" : "1"}
+                    step="0.01"
                     min="0"
-                    placeholder={goalCategory === 'revenue' ? "0.00" : "0"}
+                    placeholder="0.00"
                     value={targetAmount}
                     onChange={(e) => setTargetAmount(e.target.value)}
                     required
@@ -230,7 +212,7 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg capitalize flex items-center gap-2 text-responsive">
                   {progress.isCompleted && <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />}
-                  <span className="truncate">{progress.goal.type} {progress.goal.goalType} Goal</span>
+                  <span className="truncate">{progress.goal.type} Revenue Goal</span>
                 </CardTitle>
                 <div className="flex items-center gap-1">
                   <TooltipProvider>
@@ -249,8 +231,8 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
                           <div>
                             <p className="font-semibold text-sm mb-1">Goal Details</p>
                             <div className="space-y-1 text-xs">
-                              <p><span className="text-muted-foreground">Type:</span> {progress.goal.type} {progress.goal.goalType}</p>
-                              <p><span className="text-muted-foreground">Target:</span> {progress.goal.goalType === 'revenue' ? '£' : ''}{progress.goal.targetAmount.toLocaleString()}{progress.goal.goalType === 'clients' ? ' clients' : progress.goal.goalType === 'calls' ? ' calls' : ''}</p>
+                              <p><span className="text-muted-foreground">Type:</span> {progress.goal.type} Revenue Goal</p>
+                              <p><span className="text-muted-foreground">Target:</span> £{progress.goal.targetAmount.toLocaleString()}</p>
                               <p><span className="text-muted-foreground">Period:</span> {formatPeriod(progress.goal)}</p>
                               {progress.goal.description && (
                                 <p><span className="text-muted-foreground">Description:</span> {progress.goal.description}</p>
@@ -285,10 +267,10 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
                 <span className="text-muted-foreground">Progress</span>
                 <div className="text-right">
                   <div className="number-display text-primary text-lg">
-                    {progress.goal.goalType === 'revenue' ? '£' : ''}{progress.currentAmount.toLocaleString()}{progress.goal.goalType === 'clients' ? ' clients' : progress.goal.goalType === 'calls' ? ' calls' : ''}
+                    £{progress.currentAmount.toLocaleString()}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    / {progress.goal.goalType === 'revenue' ? '£' : ''}{progress.goal.targetAmount.toLocaleString()}{progress.goal.goalType === 'clients' ? ' clients' : progress.goal.goalType === 'calls' ? ' calls' : ''}
+                    / £{progress.goal.targetAmount.toLocaleString()}
                   </div>
                 </div>
               </div>

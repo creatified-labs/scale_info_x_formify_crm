@@ -51,7 +51,7 @@ serve(async (req) => {
     // Get event type and company info
     const { data: eventType, error: eventTypeError } = await supabaseClient
       .from('event_types')
-      .select('*, companies!inner(id, settings)')
+      .select('*, companies!inner(id, settings, branding_display_name, branding_name, primary_contact_email, notification_emails)')
       .eq('id', event_type_id)
       .single()
 
@@ -157,10 +157,10 @@ serve(async (req) => {
       try {
         console.log(`Adding booking ${booking.id} to Google Calendar`)
         
-        // Get Google Calendar integration
+        // Get Google Calendar integration (including email for organizer)
         const { data: integration, error: integrationError } = await supabaseClient
           .from('user_integrations')
-          .select('access_token, refresh_token, expires_at')
+          .select('access_token, refresh_token, expires_at, email')
           .eq('user_id', eventType.user_id)
           .eq('provider', 'google')
           .maybeSingle()
@@ -217,9 +217,14 @@ serve(async (req) => {
           
           if (!calendarError) {
           // Create calendar event
+          const brandName = eventType.companies?.branding_display_name || eventType.companies?.branding_name || 'Scale Info'
+          
+          // Get organizer email - use Google Calendar integrated email or primary contact
+          const organizerEmail = integration?.email || eventType.companies?.primary_contact_email || targetCalendar
+          
           const eventData: any = {
-            summary: `${eventType.name || 'Booking'} with ${invitee_name}`,
-            description: eventType.description || '',
+            summary: `${eventType.name || 'Booking'} with ${brandName}`,
+            description: eventType.description || `Meeting with ${invitee_name}`,
             start: {
               dateTime: start_time,
               timeZone: invitee_timezone,
@@ -227,6 +232,10 @@ serve(async (req) => {
             end: {
               dateTime: end_time,
               timeZone: invitee_timezone,
+            },
+            organizer: {
+              email: organizerEmail,
+              displayName: brandName,
             },
             attendees: [
               { email: invitee_email, displayName: invitee_name },
@@ -246,7 +255,7 @@ serve(async (req) => {
           console.log(`Creating calendar event on calendar: ${targetCalendar}`)
 
           const calendarResponse = await fetch(
-            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendar)}/events?conferenceDataVersion=1`,
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendar)}/events?conferenceDataVersion=1&sendUpdates=all`,
             {
               method: 'POST',
               headers: {
@@ -335,34 +344,238 @@ serve(async (req) => {
       }
     }
 
-    // Send confirmation email (async, don't wait)
-    fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-booking-email`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        booking_id: booking.id,
-        template_type: 'booking_confirmation',
-        recipient: invitee_email,
-      }),
-    }).catch(err => console.error('Email send error:', err))
+    // Send confirmation email using template system
+    const resendApiKey = Deno.env.get('RESEND_API_KEY')
+    const fromEmail = Deno.env.get('FROM_EMAIL') || 'no-reply@formifycrm.com'
+    // Use dynamic brand name from company settings
+    const brandName = eventType.companies?.branding_display_name || eventType.companies?.branding_name || 'Scale Info'
+    const formattedFrom = fromEmail.includes('<') ? fromEmail : `${brandName} <${fromEmail}>`
 
-    // Send host notification email (async, don't wait)
-    const { data: hostProfile } = await supabaseClient
-      .from('profiles')
-      .select('email')
-      .eq('id', eventType.user_id)
-      .single()
+    if (resendApiKey) {
+      // Get email template for confirmation
+      const { data: template } = await supabaseClient
+        .from('email_templates')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('name', 'booking_confirmation')
+        .maybeSingle()
 
-    if (hostProfile?.email) {
-      fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-booking-email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          booking_id: booking.id,
-          template_type: 'booking_notification',
-          recipient: hostProfile.email,
+      // Default template if none found
+      const defaultTemplate = {
+        subject: 'Booking Confirmed: {{event_name}}',
+        body: `Hi {{invitee_name}},\n\nYour booking for {{event_name}} has been confirmed!\n\nDate: {{call_date}}\nTime: {{call_time}}\nLocation: {{location}}\n\nLooking forward to speaking with you!\n\nBest regards,\n${brandName}`
+      }
+
+      const emailTemplate = template || defaultTemplate
+
+      // Replace template variables
+      const startTime = new Date(start_time)
+      const variables: Record<string, string> = {
+        '{{invitee_name}}': invitee_name,
+        '{{event_name}}': eventType.name || 'Meeting',
+        '{{call_date}}': startTime.toLocaleDateString('en-US', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric',
+          timeZone: invitee_timezone 
         }),
-      }).catch(err => console.error('Host notification error:', err))
+        '{{call_time}}': startTime.toLocaleTimeString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit',
+          timeZone: invitee_timezone 
+        }),
+        '{{location}}': meetLink || location_text || 'TBD',
+      }
+
+      let subject = emailTemplate.subject
+      let body = emailTemplate.body
+
+      for (const [key, value] of Object.entries(variables)) {
+        subject = subject.replace(new RegExp(key, 'g'), value)
+        body = body.replace(new RegExp(key, 'g'), value)
+      }
+
+      console.log('Sending confirmation email to:', invitee_email)
+      try {
+        const emailRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: formattedFrom,
+            to: [invitee_email],
+            subject,
+            html: body.replace(/\n/g, '<br>'),
+            text: body,
+          }),
+        })
+        
+        const emailData = await emailRes.json() as any
+        console.log('Confirmation email sent:', emailData)
+        
+        // Log email
+        await supabaseClient.from('email_logs').insert({
+          booking_id: booking.id,
+          template_id: template?.id || null,
+          recipient_email: invitee_email,
+          subject,
+          sent_at: new Date().toISOString(),
+          status: emailRes.ok ? 'sent' : 'failed',
+          message_id: emailData.id || null,
+          error_message: emailRes.ok ? null : JSON.stringify(emailData),
+          company_id: companyId,
+        })
+      } catch (err) {
+        console.error('Email send error:', err)
+      }
+
+      // Send host notification email
+      console.log('Looking up host email for user_id:', eventType.user_id)
+      
+      const { data: hostUser, error: hostUserError } = await supabaseClient
+        .from('users')
+        .select('email, id')
+        .eq('id', eventType.user_id)
+        .maybeSingle()
+
+      console.log('Host user lookup result:', { hostUser, hostUserError })
+
+      // Get host's Google Calendar integrated email
+      const { data: googleIntegration } = await supabaseClient
+        .from('user_integrations')
+        .select('email')
+        .eq('user_id', eventType.user_id)
+        .eq('provider', 'google')
+        .maybeSingle()
+
+      console.log('Host Google integration email:', googleIntegration?.email)
+
+      // Collect all notification emails
+      const notificationEmails: string[] = []
+      
+      // Add host email if valid
+      let hostEmail = hostUser?.email
+      if (hostEmail && !hostEmail.includes('@whop.placeholder')) {
+        notificationEmails.push(hostEmail)
+      }
+      
+      // Add Google Calendar integrated email if available
+      if (googleIntegration?.email && !notificationEmails.includes(googleIntegration.email)) {
+        notificationEmails.push(googleIntegration.email)
+      }
+      
+      // Add primary contact email if set
+      if (eventType.companies?.primary_contact_email) {
+        if (!notificationEmails.includes(eventType.companies.primary_contact_email)) {
+          notificationEmails.push(eventType.companies.primary_contact_email)
+        }
+      }
+      
+      // Add all notification_emails from company settings
+      const companyNotificationEmails = eventType.companies?.notification_emails || []
+      for (const email of companyNotificationEmails) {
+        if (email && !notificationEmails.includes(email)) {
+          notificationEmails.push(email)
+        }
+      }
+
+      console.log('Sending host notifications to:', notificationEmails)
+
+      if (notificationEmails.length > 0) {
+        try {
+          const hostSubject = `New Booking: ${eventType.name} with ${invitee_name}`
+          const hostBody = `You have a new booking!\n\nClient: ${invitee_name}\nEmail: ${invitee_email}\nEvent: ${eventType.name}\nDate: ${startTime.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: invitee_timezone })}\nTime: ${startTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: invitee_timezone })}\nDuration: ${eventType.duration_minutes} minutes\n\n${meetLink ? `Join URL: ${meetLink}\n\n` : ''}Check your calendar for details.`
+          
+          const hostEmailRes = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${resendApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              from: formattedFrom,
+              to: notificationEmails,
+              subject: hostSubject,
+              html: hostBody.replace(/\n/g, '<br>'),
+              text: hostBody,
+            }),
+          })
+          
+          const hostEmailData = await hostEmailRes.json() as any
+          console.log('Host notification sent:', hostEmailData)
+          
+          // Log email for each recipient
+          for (const email of notificationEmails) {
+            await supabaseClient.from('email_logs').insert({
+              booking_id: booking.id,
+              recipient_email: email,
+              subject: hostSubject,
+              sent_at: new Date().toISOString(),
+              status: hostEmailRes.ok ? 'sent' : 'failed',
+              message_id: hostEmailData.id || null,
+              error_message: hostEmailRes.ok ? null : JSON.stringify(hostEmailData),
+              company_id: companyId,
+            })
+          }
+        } catch (err) {
+          console.error('Host notification error:', err)
+        }
+      }
+
+      // Send Whop push notification to host
+      const whopApiKey = Deno.env.get('WHOP_API_KEY')
+      if (whopApiKey && hostUser?.email) {
+        try {
+          // Get host's Whop user ID from users table
+          const { data: hostWhopData } = await supabaseClient
+            .from('users')
+            .select('whop_user_id')
+            .eq('id', eventType.user_id)
+            .single()
+
+          if (hostWhopData?.whop_user_id) {
+            console.log('Sending Whop push notification to:', hostWhopData.whop_user_id)
+            
+            const notificationResponse = await fetch('https://api.whop.com/api/v5/notifications/push', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${whopApiKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                userIds: [hostWhopData.whop_user_id],
+                title: '📅 New Booking',
+                content: `${invitee_name} booked ${eventType.name}`,
+                subtitle: startTime.toLocaleDateString('en-US', { 
+                  weekday: 'short', 
+                  month: 'short', 
+                  day: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  timeZone: invitee_timezone 
+                }),
+                restPath: '/calendar',
+              }),
+            })
+
+            if (notificationResponse.ok) {
+              console.log('Whop push notification sent successfully')
+            } else {
+              const errorText = await notificationResponse.text().catch(() => '')
+              console.error('Failed to send Whop notification:', notificationResponse.status, errorText)
+            }
+          } else {
+            console.log('Host has no Whop user ID - skipping push notification')
+          }
+        } catch (err) {
+          console.error('Whop notification error:', err)
+        }
+      }
+    } else {
+      console.log('RESEND_API_KEY not configured - skipping email notifications')
     }
 
     return new Response(

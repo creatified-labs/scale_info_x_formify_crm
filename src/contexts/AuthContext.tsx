@@ -36,6 +36,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // THEN check for existing session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      console.log('[Auth] Initial session check:', { hasSession: !!session, userId: session?.user?.id });
+      
       if (session) {
         // In development (localhost), check if user metadata has company_id
         // If not, force re-authentication to pick up the latest metadata
@@ -115,7 +117,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               console.error('Dev auth failed:', await response.text());
             }
           } else {
-            console.log('[Auth] No existing session – bootstrapping via Whop');
+            // In production (Whop), always run bootstrap
+            console.log('[Auth] Production environment – running Whop bootstrap');
             const { bootstrapWhopUser } = await import('@/lib/whop-bootstrap');
             try {
               const result = await bootstrapWhopUser();
@@ -123,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               console.log('[Auth] bootstrapWhopUser result:', result);
 
               if (result.success) {
-                console.log('[Auth] Whop user bootstrapped, refreshing session...');
+                console.log('[Auth] Whop user bootstrapped successfully');
                 // Refresh session after bootstrap
                 const { data: { session: newSession } } = await supabase.auth.getSession();
                 console.log('[Auth] Session after bootstrap:', {
@@ -134,10 +137,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setSession(newSession);
                 setUser(newSession?.user ?? null);
               } else {
-                console.error('[Auth] bootstrapWhopUser reported failure:', result.error);
+                console.error('[Auth] ❌ bootstrapWhopUser failed:', result.error);
               }
             } catch (error) {
-              console.error('[Auth] bootstrapWhopUser threw error:', error);
+              console.error('[Auth] ❌ bootstrapWhopUser threw error:', error);
             }
           }
         } catch (error) {

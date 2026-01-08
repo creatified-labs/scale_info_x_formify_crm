@@ -336,6 +336,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setLoading(true);
       }
 
+      // Check if session exists first to avoid "No session found" errors during bootstrap
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.log('[DataContext] No session yet, skipping data fetch');
+        setRevenueEntries([]);
+        setGoals([]);
+        setCalls([]);
+        if (!background) {
+          setLoading(false);
+        }
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setRevenueEntries([]);
@@ -523,82 +536,35 @@ export function DataProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Check if this is a booking-derived entry (not a real revenue entry)
-      // If so, upsert a real revenue entry that mirrors the booking entry ID
-      if (entry.id.startsWith('booking-')) {
-        const insertPayload = {
+      // Use edge proxy to bypass RLS authentication issues
+      const result = await callFunction('manage-revenue', 'POST', {
+        action: 'update',
+        company_id: companyId,
+        user_id: user.id,
+        entry: {
           id: entry.id,
-          company_id: companyId,
-          entry_date: entry.date,
+          date: entry.date,
           amount: entry.amount,
-          description: entry.description ?? null,
-          category: entry.category ?? null,
-          category_name: entry.categoryName ?? null,
-          category_color: entry.categoryColor ?? null,
-          metadata: entry.metadata ? { ...entry.metadata, originalBookingId: entry.id } : { originalBookingId: entry.id },
-          goal_id: entry.goalId ?? null,
-          event_type_id: entry.eventTypeId ?? null,
-          event_type_name: entry.eventTypeName ?? null,
-        };
+          description: entry.description,
+          metadata: entry.metadata,
+          eventTypeId: entry.eventTypeId,
+          eventTypeName: entry.eventTypeName,
+        },
+      });
 
-        const { data, error } = await sb
-          .from('revenue_entries')
-          .upsert(insertPayload, { onConflict: 'id' })
-          .select()
-          .single();
-
-        if (error) {
-          console.error('Database error:', error);
-          throw error;
-        }
-
-        if (data) {
-          const updatedEntry = mapRevenueFromDb(data);
-          setRevenueEntries((prev) => {
-            const existingIndex = prev.findIndex((e) => e.id === updatedEntry.id);
-            if (existingIndex >= 0) {
-              const next = [...prev];
-              next[existingIndex] = updatedEntry;
-              return next;
-            }
-            return [updatedEntry, ...prev];
-          });
-        }
-
-        toast.success('Booking revenue entry updated');
-        return;
+      if (result.entry) {
+        const updatedEntry = mapRevenueFromDb(result.entry);
+        setRevenueEntries((prev) => {
+          const existingIndex = prev.findIndex((e) => e.id === updatedEntry.id);
+          if (existingIndex >= 0) {
+            const next = [...prev];
+            next[existingIndex] = updatedEntry;
+            return next;
+          }
+          return [updatedEntry, ...prev];
+        });
+        toast.success('Revenue entry updated');
       }
-
-      const updatePayload = {
-        entry_date: entry.date,
-        amount: entry.amount,
-        description: entry.description ?? null,
-        category: entry.category ?? null,
-        category_name: entry.categoryName ?? null,
-        category_color: entry.categoryColor ?? null,
-        metadata: entry.metadata ?? null,
-        goal_id: entry.goalId ?? null,
-        event_type_id: entry.eventTypeId ?? null,
-        event_type_name: entry.eventTypeName ?? null,
-      };
-
-      console.log('Updating revenue entry:', { id: entry.id, payload: updatePayload });
-
-      const { data, error } = await sb
-        .from('revenue_entries')
-        .update(updatePayload)
-        .eq('id', entry.id)
-        .select();
-
-      if (error) {
-        console.error('Database error:', error);
-        throw error;
-      }
-
-      console.log('Update successful:', data);
-
-      setRevenueEntries(revenueEntries.map((e) => (e.id === entry.id ? entry : e)));
-      toast.success('Revenue entry updated');
     } catch (error: any) {
       console.error('Error updating revenue entry:', error);
       toast.error(error.message || error.toString() || 'Failed to update revenue entry');

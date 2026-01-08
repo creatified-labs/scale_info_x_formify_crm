@@ -115,6 +115,10 @@ serve(async (req) => {
           continue
         }
 
+        // Format from email with sender name (required by Resend)
+        const fromName = Deno.env.get('FROM_NAME') || 'Scale Info'
+        const formattedFrom = fromEmail.includes('<') ? fromEmail : `${fromName} <${fromEmail}>`
+        
         const emailResponse = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -122,9 +126,10 @@ serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: fromEmail,
+            from: formattedFrom,
             to: [booking.invitee_email],
             subject,
+            html: body.replace(/\n/g, '<br>'),
             text: body,
           }),
         })

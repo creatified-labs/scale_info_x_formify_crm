@@ -1,5 +1,21 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { createClient } from 'npm:@supabase/supabase-js@2.39.3'
+
+interface DeleteBookingRequest {
+  booking_id?: string
+  send_email?: boolean
+}
+
+interface GoogleIntegration {
+  access_token?: string
+  refresh_token?: string
+  expires_at?: string | null
+}
+
+interface GoogleRefreshResponse {
+  access_token: string
+  expires_in: number
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,7 +39,7 @@ serve(async (req) => {
       }
     )
 
-    const { booking_id, send_email = false } = await req.json()
+    const { booking_id, send_email = false } = await req.json() as DeleteBookingRequest
 
     if (!booking_id) {
       return new Response(
@@ -55,12 +71,14 @@ serve(async (req) => {
     if (booking.calendar_event_id) {
       console.log('Deleting from Google Calendar:', booking.calendar_event_id)
       
-      const { data: integration } = await supabaseClient
+      const { data: integrationData } = await supabaseClient
         .from('user_integrations')
         .select('access_token, refresh_token, expires_at')
         .eq('user_id', booking.host_user_id)
         .eq('provider', 'google')
         .maybeSingle()
+
+      const integration = integrationData as GoogleIntegration | null
 
       if (integration?.access_token) {
         let accessToken = integration.access_token
@@ -83,7 +101,7 @@ serve(async (req) => {
             })
 
             if (refreshResponse.ok) {
-              const refreshData = await refreshResponse.json()
+              const refreshData = await refreshResponse.json() as GoogleRefreshResponse
               accessToken = refreshData.access_token
               const newExpiresAt = new Date(Date.now() + refreshData.expires_in * 1000)
 
@@ -131,30 +149,16 @@ serve(async (req) => {
     if (send_email) {
       console.log('Sending cancellation email to:', booking.invitee_email)
       try {
-        const emailResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-email`, {
+        const emailResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-booking-email`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-            'apikey': Deno.env.get('SUPABASE_ANON_KEY') ?? '',
           },
           body: JSON.stringify({
-            to: booking.invitee_email,
-            subject: `Booking Cancelled: ${booking.event_types?.name || 'Your Meeting'}`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #dc2626;">Booking Cancelled</h2>
-                <p>Hello ${booking.invitee_name},</p>
-                <p>Your booking has been cancelled:</p>
-                <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
-                  <p style="margin: 8px 0;"><strong>Event:</strong> ${booking.event_types?.name || 'Meeting'}</p>
-                  <p style="margin: 8px 0;"><strong>Date:</strong> ${new Date(booking.start_time).toLocaleDateString()}</p>
-                  <p style="margin: 8px 0;"><strong>Time:</strong> ${new Date(booking.start_time).toLocaleTimeString()}</p>
-                </div>
-                <p>If you have any questions, please contact us.</p>
-                <p>Best regards</p>
-              </div>
-            `,
+            booking_id: booking.id,
+            template_type: 'booking_cancelled',
+            recipient: booking.invitee_email,
           }),
         })
 

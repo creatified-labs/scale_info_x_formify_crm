@@ -181,6 +181,41 @@ class WhopSDK {
     }
     return res.json().catch(() => ({}))
   }
+
+  /**
+   * Send a push notification to Whop users
+   * @param params - Notification parameters
+   */
+  async sendPushNotification(params: {
+    userIds: string[]
+    title: string
+    content: string
+    subtitle?: string
+    restPath?: string
+    link?: string
+  }) {
+    try {
+      const response = await fetch(`${this.baseUrl}/notifications/push`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(params),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '')
+        console.error('[WhopSDK] Failed to send push notification:', response.status, errorText)
+        return false
+      }
+
+      return true
+    } catch (error) {
+      console.error('[WhopSDK] Error sending push notification:', error)
+      return false
+    }
+  }
 }
 
 // Export singleton instance

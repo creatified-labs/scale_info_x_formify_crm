@@ -873,7 +873,6 @@ const Index = () => {
           <TabsContent value="history" className="space-y-6">
             <EntriesList
               entries={historyEntries}
-              onUpdateEntry={updateRevenueEntry}
               onDeleteEntry={deleteRevenueEntry}
             />
           </TabsContent>

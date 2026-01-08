@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
 
     // If we have a Whop user token, validate it and get user info
     if (userToken) {
+      console.log('[whop-session] Fetching Whop user info with token');
       try {
         const whopResponse = await fetch('https://api.whop.com/api/v5/me/user', {
           headers: {
@@ -56,16 +57,20 @@ export async function GET(request: NextRequest) {
 
         if (whopResponse.ok) {
           const whopUser = await whopResponse.json();
+          console.log('[whop-session] Whop API response:', JSON.stringify(whopUser, null, 2));
           whopUserId = whopUser.id;
           whopEmail = whopUser.email;
           whopName = whopUser.name || whopUser.username;
-          console.log('[whop-session] Whop user validated:', { whopUserId, whopEmail });
+          console.log('[whop-session] Whop user validated:', { whopUserId, whopEmail, whopName });
         } else {
-          console.warn('[whop-session] Failed to validate Whop token:', whopResponse.status);
+          const errorText = await whopResponse.text();
+          console.warn('[whop-session] Failed to validate Whop token:', whopResponse.status, errorText);
         }
       } catch (error) {
         console.error('[whop-session] Error validating Whop token:', error);
       }
+    } else {
+      console.warn('[whop-session] No Whop user token provided in headers');
     }
 
     if (!whopOrgId) {
@@ -91,21 +96,79 @@ export async function GET(request: NextRequest) {
     if (!companyUuid) {
       // Create the company
       const newCompanyId = randomUUID();
+      
+      // Generate booking slug from company name
+      // Default to "Scale Info" if no name is available
+      const companyName = whopName || 'Scale Info';
+      const bookingSlug = companyName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '')
+        .replace(/^-+|-+$/g, '')
+        .substring(0, 50);
+      
+      console.log('[whop-session] Creating new company:', {
+        id: newCompanyId,
+        name: companyName,
+        whop_company_id: whopOrgId,
+        booking_slug_prefix: bookingSlug,
+      });
+      
       const { data: newCompany, error: companyError } = await supabaseAdmin
         .from('companies')
         .insert({
           id: newCompanyId,
-          name: whopName || whopOrgId,
+          name: companyName,
           whop_company_id: whopOrgId,
+          branding_display_name: companyName,
+          branding_name: companyName,
+          booking_slug_prefix: bookingSlug,
         })
         .select('id, whop_company_id')
         .single();
 
-      if (companyError && !companyError.message.includes('duplicate')) {
+      if (companyError) {
         console.error('[whop-session] Failed to create company:', companyError);
+        if (!companyError.message.includes('duplicate')) {
+          return NextResponse.json(
+            { error: 'Failed to create company', details: companyError.message },
+            { status: 500 }
+          );
+        }
       } else {
+        console.log('[whop-session] Company created successfully:', newCompany);
         company = newCompany;
         companyUuid = newCompany?.id ?? null;
+        
+        // Create default event type for new company
+        if (companyUuid) {
+          console.log('[whop-session] Creating default event type for new company');
+          const defaultEventTypeId = randomUUID();
+          await supabaseAdmin
+            .from('event_types')
+            .insert({
+              id: defaultEventTypeId,
+              company_id: companyUuid,
+              user_id: null, // Will be set when first user is created
+              name: '30 Minute Meeting',
+              slug: '30min',
+              duration_minutes: 30,
+              description: 'A 30 minute meeting to discuss your needs',
+              is_active: true,
+              buffer_time_minutes: 0,
+              max_bookings_per_day: null,
+              require_confirmation: false,
+              allow_guests: false,
+              price: null,
+              currency: 'GBP',
+            })
+            .then(res => {
+              if (res.error && !res.error.message.includes('duplicate')) {
+                console.error('[whop-session] Failed to create default event type:', res.error);
+              } else {
+                console.log('[whop-session] Default event type created successfully');
+              }
+            });
+        }
       }
     }
 
@@ -197,25 +260,60 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Ensure user record exists in users table
+    // Ensure user record exists in users table with correct email
     const { data: existingUser } = await supabaseAdmin
       .from('users')
-      .select('id')
+      .select('id, email')
       .eq('id', authUser.id)
       .maybeSingle();
 
     if (!existingUser) {
-      await supabaseAdmin.from('users').insert({
+      // Create new user record
+      const userData = {
         id: authUser.id,
         email: userEmail,
         name: whopName || 'Whop User',
         company_id: companyUuid,
         whop_user_id: whopUserId,
-      }).then(res => {
+      };
+      console.log('[whop-session] Creating user record with data:', userData);
+      
+      await supabaseAdmin.from('users').insert(userData).then(res => {
         if (res.error && !res.error.message.includes('duplicate')) {
           console.error('[whop-session] Failed to create user record:', res.error);
+        } else {
+          console.log('[whop-session] User record created successfully');
         }
       });
+      
+      // Update default event type with user_id if it exists without one
+      await supabaseAdmin
+        .from('event_types')
+        .update({ user_id: authUser.id })
+        .eq('company_id', companyUuid)
+        .is('user_id', null)
+        .then(res => {
+          if (res.error) {
+            console.error('[whop-session] Failed to update event type user_id:', res.error);
+          } else {
+            console.log('[whop-session] Updated default event type with user_id');
+          }
+        });
+    } else if (existingUser.email !== userEmail) {
+      // Update existing user with correct email
+      await supabaseAdmin.from('users')
+        .update({
+          email: userEmail,
+          name: whopName || 'Whop User',
+          company_id: companyUuid,
+          whop_user_id: whopUserId,
+        })
+        .eq('id', authUser.id)
+        .then(res => {
+          if (res.error) {
+            console.error('[whop-session] Failed to update user record:', res.error);
+          }
+        });
     }
 
     // Ensure profile row exists and has the correct company association for RLS policies
