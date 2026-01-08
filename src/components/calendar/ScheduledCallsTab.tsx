@@ -23,9 +23,9 @@ export const ScheduledCallsTab = () => {
 
   const loadData = async () => {
     setLoading(true);
-    
+
     const [bookingsRes, eventTypesRes] = await Promise.all([
-      supabase.from("bookings").select("*").order("start_time", { ascending: false }),
+      supabase.from("bookings").select("*").neq('status', 'canceled').order("start_time", { ascending: false }),
       supabase.from("event_types").select("*")
     ]);
 

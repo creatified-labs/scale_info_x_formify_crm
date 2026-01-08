@@ -39,8 +39,8 @@ type DbGoalRow = {
   category_color?: string | null;
   category_type?: Goal["categoryType"] | null;
   created_at: string;
-  rules?: any | null;
-  auto_link?: boolean | null;
+  event_type_id?: string | null;
+  event_type_name?: string | null;
 };
 
 type DbCallRow = {
@@ -144,17 +144,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Edge function helper
   const callFunction = async (name: string, method: 'POST' | 'GET', payload?: any, query?: Record<string, string>) => {
-    const isLocalhost = typeof window !== 'undefined' &&
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
     // Whop embeds can't rely on user JWTs, so always use the proxy (service role key).
     const useProxy = true;
-
-    console.log('🔑 Calling Edge Function:', {
-      function: name,
-      isLocalhost,
-      viaProxy: useProxy,
-    });
 
     // Use the backend proxy when developing locally or when we want to bypass JWT validation in production.
     if (useProxy) {
@@ -234,22 +225,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
     eventTypeName: row.event_type_name || undefined,
   });
 
-  const mapGoalFromDb = (row: DbGoalRow): Goal => ({
-    id: row.id,
-    goalType: row.goal_type,
-    type: row.period_type,
-    targetAmount: Number(row.target_amount),
-    period: row.period_key || undefined,
-    deadline: row.deadline || undefined,
-    description: row.description || undefined,
-    category: row.category || undefined,
-    categoryName: row.category_name || undefined,
-    categoryColor: row.category_color || undefined,
-    categoryType: row.category_type || undefined,
-    createdAt: new Date(row.created_at),
-    rules: row.rules || undefined,
-    autoLink: row.auto_link ?? undefined,
-  });
+  const mapGoalFromDb = (row: any): Goal => {
+    return {
+      id: row.id,
+      goalType: row.goal_type,
+      type: row.period_type,
+      targetAmount: Number(row.target_amount),
+      period: row.period_key || undefined,
+      deadline: row.deadline || undefined,
+      description: row.description || undefined,
+      category: row.category || undefined,
+      categoryName: row.category_name || undefined,
+      categoryColor: row.category_color || undefined,
+      categoryType: row.category_type || undefined,
+      createdAt: new Date(row.created_at),
+    };
+  };
 
   const mapCallFromDb = (row: DbCallRow): Call => ({
     id: row.id,
@@ -638,13 +629,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const addGoal = async (goal: Omit<Goal, 'id' | 'createdAt'>) => {
     try {
-      console.log('🎯 Adding goal:', goal);
       const companyId = await getCompanyId({ allowFallback: false });
-      console.log('🏢 Company ID for goal:', companyId);
       if (!companyId) {
         console.error('❌ No company ID found - cannot add goal');
         showAuthRequiredToast(
-          "We couldn’t find your company",
+          "We couldn't find your company",
           "Sign back in so we can refresh your workspace access.",
           { id: "missing-company" }
         );
@@ -664,10 +653,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
           category_name: goal.categoryName ?? null,
           category_color: goal.categoryColor ?? null,
           category_type: goal.categoryType ?? null,
-          rules: goal.rules ?? null,
-          auto_link: goal.autoLink ?? false,
         }
       };
+
       const created = await callFunction('goals-write', 'POST', payload);
       setGoals([mapGoalFromDb(created as DbGoalRow), ...goals]);
       toast.success('Goal created');

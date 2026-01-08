@@ -518,9 +518,9 @@ export const BookingCalendar = ({
                 </div>
               ) : timeSlots.length > 0 ? (
                 <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                  {timeSlots.map((slot) => (
+                  {timeSlots.map((slot, index) => (
                     <button
-                      key={slot.displayTime}
+                      key={`${slot.start.toISOString()}-${index}`}
                       type="button"
                       role="option"
                       aria-selected={selectedTime === slot.displayTime}
@@ -655,9 +655,9 @@ export const BookingCalendar = ({
                 </div>
               ) : timeSlots.length > 0 ? (
                 <div className="flex-1 p-6 space-y-2">
-                  {timeSlots.map((slot) => (
+                  {timeSlots.map((slot, index) => (
                     <button
-                      key={slot.displayTime}
+                      key={`${slot.start.toISOString()}-${index}`}
                       type="button"
                       role="option"
                       aria-selected={selectedTime === slot.displayTime}

@@ -9,10 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Target, Plus, Edit, Trash2, CheckCircle, Calendar, Info } from "lucide-react";
-import { Goal, GoalProgress, GoalRule } from "@/types/revenue";
+import { Goal, GoalProgress } from "@/types/revenue";
 import { format } from "date-fns";
-import { GoalRulesEditor } from "@/components/GoalRulesEditor";
-import { useEffect, useState as useReactState } from "react";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -31,25 +30,6 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
   const [description, setDescription] = useState("");
   const [deadline, setDeadline] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [goalRules, setGoalRules] = useState<GoalRule[]>([]);
-  const [autoLink, setAutoLink] = useState(false);
-  const [eventTypes, setEventTypes] = useState<Array<{ id: string; name: string }>>([]);
-
-  // Fetch event types for rule configuration
-  useEffect(() => {
-    const fetchEventTypes = async () => {
-      const { data } = await supabase
-        .from('event_types')
-        .select('id, name')
-        .eq('is_archived', false)
-        .order('name');
-      
-      if (data) {
-        setEventTypes(data);
-      }
-    };
-    fetchEventTypes();
-  }, []);
 
   const getCurrentPeriod = (type: Goal['type']): string => {
     const now = new Date();
@@ -85,71 +65,25 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
       await onAddGoal({
         type: goalType,
         targetAmount: parseFloat(targetAmount),
-        ...(goalType === 'deadline' 
-          ? { deadline } 
+        ...(goalType === 'deadline'
+          ? { deadline }
           : { period: getCurrentPeriod(goalType) }
         ),
         description: description.trim() || undefined,
         goalType: goalCategory,
-        rules: goalRules.length > 0 ? goalRules : undefined,
-        autoLink: autoLink,
       });
-      
+
       // Reset form
       setTargetAmount("");
       setDescription("");
       setDeadline("");
       setGoalCategory('revenue');
-      setGoalRules([]);
-      setAutoLink(false);
       setShowAddForm(false);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const formatRuleDescription = (rule: GoalRule): string => {
-    switch (rule.type) {
-      case 'event_type': {
-        const eventType = eventTypes.find(et => et.id === rule.value);
-        return `Event Type: ${eventType?.name || 'Unknown'}`;
-      }
-      case 'category':
-        return `Category: ${rule.value}`;
-      case 'source': {
-        const sourceLabels: Record<string, string> = {
-          booking: 'Booking Conversion',
-          manual: 'Manual Entry',
-          call: 'Call Tracker'
-        };
-        return `Source: ${sourceLabels[rule.value as string] || rule.value}`;
-      }
-      case 'amount_range': {
-        const range = rule.value as { min?: number; max?: number };
-        if (range.min !== undefined && range.max !== undefined) {
-          return `Amount: £${range.min} - £${range.max}`;
-        } else if (range.min !== undefined) {
-          return `Amount: £${range.min}+`;
-        } else if (range.max !== undefined) {
-          return `Amount: up to £${range.max}`;
-        }
-        return 'Amount range set';
-      }
-      case 'date_range': {
-        const dateRange = rule.value as { start?: string; end?: string };
-        if (dateRange.start && dateRange.end) {
-          return `Date: ${format(new Date(dateRange.start), 'MMM d')} - ${format(new Date(dateRange.end), 'MMM d, yyyy')}`;
-        } else if (dateRange.start) {
-          return `Date: from ${format(new Date(dateRange.start), 'MMM d, yyyy')}`;
-        } else if (dateRange.end) {
-          return `Date: until ${format(new Date(dateRange.end), 'MMM d, yyyy')}`;
-        }
-        return 'Date range set';
-      }
-      default:
-        return 'Rule configured';
-    }
-  };
 
   const formatPeriod = (goal: Goal): string => {
     if (goal.type === 'deadline' && goal.deadline) {
@@ -275,16 +209,6 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
                   rows={2}
                 />
               </div>
-
-              {goalCategory === 'revenue' && (
-                <GoalRulesEditor
-                  rules={goalRules}
-                  autoLink={autoLink}
-                  onRulesChange={setGoalRules}
-                  onAutoLinkChange={setAutoLink}
-                  eventTypes={eventTypes}
-                />
-              )}
               
               <div className="flex gap-2">
                 <Button type="submit" className="button-smooth" disabled={isSubmitting}>
@@ -333,27 +257,6 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
                               )}
                             </div>
                           </div>
-                          
-                          {progress.goal.autoLink && progress.goal.rules && progress.goal.rules.length > 0 ? (
-                            <div className="pt-2 border-t">
-                              <p className="font-semibold text-sm mb-1 text-blue-600 dark:text-blue-400">Auto-Matching Rules</p>
-                              <p className="text-xs text-muted-foreground mb-2">All rules must match:</p>
-                              <ul className="space-y-1 text-xs">
-                                {progress.goal.rules.map((rule, idx) => (
-                                  <li key={idx} className="flex items-start gap-1">
-                                    <span className="text-blue-400">•</span>
-                                    <span>{formatRuleDescription(rule)}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          ) : (
-                            <div className="pt-2 border-t">
-                              <p className="text-xs text-muted-foreground">
-                                <span className="font-semibold">Manual Linking:</span> Only revenue entries you manually link will count toward this goal.
-                              </p>
-                            </div>
-                          )}
                         </div>
                       </TooltipContent>
                     </Tooltip>
@@ -375,35 +278,6 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
                 <p className="text-sm text-muted-foreground italic text-responsive mt-1">
                   {progress.goal.description}
                 </p>
-              )}
-              {progress.goal.autoLink && progress.goal.rules && progress.goal.rules.length > 0 && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="mt-2 flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 cursor-help">
-                        <CheckCircle className="w-3 h-3" />
-                        <span>Auto-matching enabled ({progress.goal.rules.length} rule{progress.goal.rules.length > 1 ? 's' : ''})</span>
-                        <Info className="w-3 h-3" />
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" className="max-w-xs">
-                      <div className="space-y-2">
-                        <p className="font-semibold text-sm">Active Rules (all must match):</p>
-                        <ul className="space-y-1 text-xs">
-                          {progress.goal.rules.map((rule, idx) => (
-                            <li key={idx} className="flex items-start gap-1">
-                              <span className="text-blue-400">•</span>
-                              <span>{formatRuleDescription(rule)}</span>
-                            </li>
-                          ))}
-                        </ul>
-                        <p className="text-xs text-muted-foreground mt-2 pt-2 border-t">
-                          Revenue entries matching all rules will automatically count toward this goal.
-                        </p>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
               )}
             </CardHeader>
             <CardContent className="space-y-4">

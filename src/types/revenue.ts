@@ -13,11 +13,6 @@ export interface RevenueEntry {
   eventTypeName?: string; // Event type name for display
 }
 
-export interface GoalRule {
-  type: 'date_range' | 'event_type' | 'category' | 'amount_range' | 'source';
-  value: string | number | { min?: number; max?: number } | { start?: string; end?: string };
-}
-
 export interface Goal {
   id: string;
   type: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'deadline';
@@ -31,8 +26,6 @@ export interface Goal {
   categoryType?: 'revenue' | 'sales' | 'profit' | 'clients' | 'custom';
   goalType: 'revenue' | 'clients' | 'calls'; // What we're measuring: revenue amount, client count, or calls booked
   createdAt: Date;
-  rules?: GoalRule[]; // Automated matching rules
-  autoLink?: boolean; // Whether to automatically link matching entries
 }
 
 export interface GoalProgress {

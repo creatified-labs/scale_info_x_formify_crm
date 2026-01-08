@@ -42,6 +42,7 @@ const Analytics = () => {
         .from('bookings')
         .select('*')
         .eq('company_id', companyId)
+        .neq('status', 'canceled') // Exclude deleted/cancelled bookings
         .eq('is_converted', true)
         .not('conversion_amount', 'is', null);
       
@@ -66,6 +67,7 @@ const Analytics = () => {
         .from('bookings')
         .select('id', { count: 'exact', head: true })
         .eq('company_id', companyId)
+        .neq('status', 'canceled') // Exclude deleted/cancelled bookings
         .gte('start_time', sevenDaysAgo.toISOString());
       setPreviewBookings7(count || 0);
     })();

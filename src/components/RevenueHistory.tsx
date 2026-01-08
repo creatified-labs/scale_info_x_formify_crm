@@ -7,14 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Edit, Calendar, PoundSterling } from "lucide-react";
+import { Edit, Calendar, PoundSterling } from "lucide-react";
 import { RevenueEntry } from "@/types/revenue";
 import { useData } from "@/contexts/DataContext";
 
 interface EntriesListProps {
   entries: RevenueEntry[];
   onUpdateEntry: (entry: RevenueEntry) => void;
-  onDeleteEntry: (entryId: string) => void;
+  onDeleteEntry?: (entryId: string) => void;
 }
 
 const SOURCE_BADGES = {
@@ -243,14 +243,6 @@ export const EntriesList = ({ entries, onUpdateEntry, onDeleteEntry }: EntriesLi
                       className="text-primary hover:text-primary button-smooth"
                     >
                       <Edit className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => onDeleteEntry(entry.id)}
-                      className="text-destructive hover:text-destructive button-smooth"
-                    >
-                      <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>

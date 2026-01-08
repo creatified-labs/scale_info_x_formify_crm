@@ -14,7 +14,8 @@ export async function getUsageCurrentCompany(): Promise<Usage> {
   const { count: bookingsTotal } = await supabase
     .from('bookings')
     .select('id', { count: 'exact', head: true })
-    .eq('company_id', companyId);
+    .eq('company_id', companyId)
+    .neq('status', 'canceled'); // Exclude deleted/cancelled bookings from count
 
   const { count: activeEvents } = await supabase
     .from('event_types')

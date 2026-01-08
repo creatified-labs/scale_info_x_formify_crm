@@ -24,8 +24,9 @@ export const CallsToday = () => {
       const { data } = await supabase
         .from('bookings')
         .select('*')
+        .neq('status', 'canceled') // Exclude deleted/cancelled bookings
         .order('start_time', { ascending: true });
-      
+
       if (data) {
         setBookings(data);
       }

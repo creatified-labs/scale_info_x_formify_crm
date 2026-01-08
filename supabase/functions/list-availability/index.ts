@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -197,16 +197,17 @@ serve(async (req) => {
       console.log(`After booking conflicts filter: ${filteredSlots.length} slots`)
     }
 
-    // Get time blocks (manual blocks and synced Google Calendar events)
+    // Get time blocks (manual blocks) - time_blocks uses date + minutes format
     const { data: timeBlocks } = await supabaseClient
       .from('time_blocks')
-      .select('start_time, end_time, scope, event_type_id')
-      .eq('user_id', eventType.user_id)
-      .gte('start_time', fromDate.toISOString())
-      .lte('end_time', toDate.toISOString())
+      .select('date, start_minutes, end_minutes, scope, event_type_id')
+      .eq('owner_user_id', eventType.user_id)
+      .eq('date', dateStr)
 
     // Filter out slots that conflict with time blocks
     if (timeBlocks && timeBlocks.length > 0) {
+      console.log(`Found ${timeBlocks.length} time blocks for ${dateStr}`)
+
       filteredSlots = filteredSlots.filter(slot => {
         const slotStart = new Date(slot.start_time)
         const slotEnd = new Date(slot.end_time)
@@ -217,11 +218,21 @@ serve(async (req) => {
             return false
           }
 
-          const blockStart = new Date(block.start_time)
-          const blockEnd = new Date(block.end_time)
+          // Convert minutes to actual times for this date
+          const blockStart = new Date(fromDate)
+          blockStart.setHours(0, 0, 0, 0)
+          blockStart.setMinutes(block.start_minutes)
+
+          const blockEnd = new Date(fromDate)
+          blockEnd.setHours(0, 0, 0, 0)
+          blockEnd.setMinutes(block.end_minutes)
 
           // Slots conflict if they overlap
-          return slotStart < blockEnd && slotEnd > blockStart
+          const conflicts = slotStart < blockEnd && slotEnd > blockStart
+          if (conflicts) {
+            console.log(`Slot ${slotStart.toISOString()} blocked by time block ${block.start_minutes}-${block.end_minutes}`)
+          }
+          return conflicts
         })
       })
       console.log(`After time blocks filter: ${filteredSlots.length} slots`)

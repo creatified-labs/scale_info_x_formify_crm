@@ -116,6 +116,7 @@ const Index = () => {
       const { data } = await supabase
         .from('bookings')
         .select('*, event_types(id, name)')
+        .neq('status', 'canceled') // Exclude deleted/cancelled bookings
         .order('start_time', { ascending: true });
 
       if (data) {
@@ -152,7 +153,7 @@ const Index = () => {
         
         // Extract event type information if available
         const eventTypeName = booking.event_types?.name || booking.event_type_name;
-        const eventTypeId = booking.event_type_id;
+        const eventTypeId = booking.event_types?.id || booking.event_type_id;
         
         return {
           id: `booking-${booking.id}`,
@@ -236,22 +237,27 @@ const Index = () => {
     }
 
     return goals.map((goal) => {
-      let relevantEntries = filteredRevenueEntries;
+      // Combine filtered revenue entries with booking revenue entries
+      const allEntries = [...filteredRevenueEntries, ...filteredBookingRevenueEntries];
+
+      let relevantEntries = allEntries;
+
+      // Apply time-based filtering
       if (goal.type === 'daily') {
-        relevantEntries = filteredRevenueEntries.filter((entry) => entry.date === goal.period);
+        relevantEntries = allEntries.filter((entry) => entry.date === goal.period);
       } else if (goal.type === 'weekly') {
         const [year, week] = (goal.period || '').split('-W');
         const weekStart = new Date(parseInt(year), 0, 1 + (parseInt(week) - 1) * 7);
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekEnd.getDate() + 6);
-        relevantEntries = filteredRevenueEntries.filter((entry) => {
+        relevantEntries = allEntries.filter((entry) => {
           const entryDate = new Date(entry.date);
           return entryDate >= weekStart && entryDate <= weekEnd;
         });
       } else if (goal.type === 'monthly') {
-        relevantEntries = filteredRevenueEntries.filter((entry) => entry.date.startsWith(goal.period || ''));
+        relevantEntries = allEntries.filter((entry) => entry.date.startsWith(goal.period || ''));
       } else if (goal.type === 'yearly') {
-        relevantEntries = filteredRevenueEntries.filter((entry) => entry.date.startsWith(goal.period || ''));
+        relevantEntries = allEntries.filter((entry) => entry.date.startsWith(goal.period || ''));
       }
 
       const currentAmount = relevantEntries.reduce((sum, entry) => sum + entry.amount, 0);
@@ -263,7 +269,7 @@ const Index = () => {
         daysRemaining: 0,
       };
     });
-  }, [loading, goals, filteredRevenueEntries]);
+  }, [loading, goals, filteredRevenueEntries, filteredBookingRevenueEntries]);
 
   const summaryStats = useMemo(() => {
     if (loading) {
@@ -288,7 +294,7 @@ const Index = () => {
     const lastMonthKey = `${lastMonthDate.getFullYear()}-${(lastMonthDate.getMonth() + 1).toString().padStart(2, '0')}`;
 
     const totalRevenueManual = filteredRevenueEntries.reduce((sum, entry) => sum + entry.amount, 0);
-    const totalEntries = filteredRevenueEntries.length;
+    const totalEntries = filteredRevenueEntries.length + filteredBookingRevenueEntries.length;
 
     const callRevenueForRange = (predicate: (date: Date) => boolean) =>
       calls.reduce((sum, call) => {
@@ -297,11 +303,26 @@ const Index = () => {
         return predicate(callDate) ? sum + Number(call.conversionAmount || 0) : sum;
       }, 0);
 
-    const bookingsConversionTotal = callRevenueForRange(() => true);
-    const bookingsConversionThisMonth = callRevenueForRange((date) =>
+    // Include booking conversions revenue
+    const bookingRevenueForRange = (predicate: (date: Date) => boolean) =>
+      filteredBookingRevenueEntries.reduce((sum, entry) => {
+        const entryDate = new Date(entry.date);
+        return predicate(entryDate) ? sum + entry.amount : sum;
+      }, 0);
+
+    const callsConversionTotal = callRevenueForRange(() => true);
+    const callsConversionThisMonth = callRevenueForRange((date) =>
       date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
     );
-    const bookingsConversionLastMonth = callRevenueForRange((date) =>
+    const callsConversionLastMonth = callRevenueForRange((date) =>
+      date.getFullYear() === lastMonthDate.getFullYear() && date.getMonth() === lastMonthDate.getMonth()
+    );
+
+    const bookingsConversionTotal = bookingRevenueForRange(() => true);
+    const bookingsConversionThisMonth = bookingRevenueForRange((date) =>
+      date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
+    );
+    const bookingsConversionLastMonth = bookingRevenueForRange((date) =>
       date.getFullYear() === lastMonthDate.getFullYear() && date.getMonth() === lastMonthDate.getMonth()
     );
 
@@ -312,9 +333,9 @@ const Index = () => {
       .filter((entry) => entry.date.startsWith(lastMonthKey))
       .reduce((sum, entry) => sum + entry.amount, 0);
 
-    const totalRevenue = totalRevenueManual + bookingsConversionTotal;
-    const thisMonthRevenue = thisMonthRevenueManual + bookingsConversionThisMonth;
-    const lastMonthRevenue = lastMonthRevenueManual + bookingsConversionLastMonth;
+    const totalRevenue = totalRevenueManual + callsConversionTotal + bookingsConversionTotal;
+    const thisMonthRevenue = thisMonthRevenueManual + callsConversionThisMonth + bookingsConversionThisMonth;
+    const lastMonthRevenue = lastMonthRevenueManual + callsConversionLastMonth + bookingsConversionLastMonth;
 
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
@@ -332,11 +353,14 @@ const Index = () => {
       })
       .reduce((sum, entry) => sum + entry.amount, 0);
 
-    const thisWeekRevenueBookings = callRevenueForRange((date) => date >= startOfWeek);
-    const lastWeekRevenueBookings = callRevenueForRange((date) => date >= startOfLastWeek && date < startOfWeek);
+    const thisWeekRevenueCalls = callRevenueForRange((date) => date >= startOfWeek);
+    const lastWeekRevenueCalls = callRevenueForRange((date) => date >= startOfLastWeek && date < startOfWeek);
 
-    const thisWeekRevenue = thisWeekRevenueManual + thisWeekRevenueBookings;
-    const lastWeekRevenue = lastWeekRevenueManual + lastWeekRevenueBookings;
+    const thisWeekRevenueBookings = bookingRevenueForRange((date) => date >= startOfWeek);
+    const lastWeekRevenueBookings = bookingRevenueForRange((date) => date >= startOfLastWeek && date < startOfWeek);
+
+    const thisWeekRevenue = thisWeekRevenueManual + thisWeekRevenueCalls + thisWeekRevenueBookings;
+    const lastWeekRevenue = lastWeekRevenueManual + lastWeekRevenueCalls + lastWeekRevenueBookings;
 
     const currentMonthCalls = calls.filter((call) => call.date.startsWith(currentMonthKey));
     const lastMonthCalls = calls.filter((call) => call.date.startsWith(lastMonthKey));

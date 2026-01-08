@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -131,18 +131,61 @@ serve(async (req) => {
     }
 
     if (permanentDelete) {
+      console.log(`🗑️ Permanently deleting event type ${id}...`)
+
+      // Delete related data in order (to avoid foreign key constraints)
+
+      // 1. Delete time blocks for this event type
+      const { error: timeBlocksError } = await supabaseClient
+        .from('time_blocks')
+        .delete()
+        .eq('event_type_id', id)
+
+      if (timeBlocksError) {
+        console.warn('Failed to delete time blocks:', timeBlocksError)
+      } else {
+        console.log('✅ Deleted time blocks')
+      }
+
+      // 2. Delete bookings for this event type
+      const { error: bookingsError } = await supabaseClient
+        .from('bookings')
+        .delete()
+        .eq('event_type_id', id)
+
+      if (bookingsError) {
+        console.warn('Failed to delete bookings:', bookingsError)
+      } else {
+        console.log('✅ Deleted bookings')
+      }
+
+      // 3. Delete analytics for this event type
+      const { error: analyticsError } = await supabaseClient
+        .from('event_type_analytics')
+        .delete()
+        .eq('event_type_id', id)
+
+      if (analyticsError) {
+        console.warn('Failed to delete analytics:', analyticsError)
+      } else {
+        console.log('✅ Deleted analytics')
+      }
+
+      // 4. Finally, delete the event type itself
       const { error: deleteError } = await supabaseClient
         .from('event_types')
         .delete()
         .eq('id', id)
 
       if (deleteError) {
-        console.error('Event type delete error:', deleteError)
+        console.error('❌ Event type delete error:', deleteError)
         return new Response(
           JSON.stringify({ error: deleteError.message, detail: deleteError.details }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
         )
       }
+
+      console.log('✅ Event type permanently deleted')
 
       return new Response(
         JSON.stringify({ deleted: true }),

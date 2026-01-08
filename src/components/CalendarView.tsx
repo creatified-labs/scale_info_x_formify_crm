@@ -78,6 +78,7 @@ const CalendarView = () => {
       .from('bookings')
       .select('*, event_types(*)')
       .eq('company_id', companyId)
+      .neq('status', 'canceled') // Exclude deleted/cancelled bookings
       .order('start_time', { ascending: false });
 
     if (!error && data) {

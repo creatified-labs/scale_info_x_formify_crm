@@ -50,7 +50,7 @@ const Goals = () => {
       };
       
       const eventTypeName = booking.event_types?.name || booking.event_type_name;
-      const eventTypeId = booking.event_type_id;
+      const eventTypeId = booking.event_types?.id || booking.event_type_id;
       
       return {
         id: booking.id,
@@ -142,43 +142,6 @@ const Goals = () => {
           relevantEntries = allRevenueData.filter(entry => entry.date.startsWith(goal.period || ''));
         } else if (goal.type === 'yearly' && goal.period) {
           relevantEntries = allRevenueData.filter(entry => entry.date.startsWith(goal.period || ''));
-        }
-
-        // Apply rule-based filtering if goal has rules and auto-link enabled
-        if (goal.autoLink && goal.rules && goal.rules.length > 0) {
-          relevantEntries = relevantEntries.filter(entry => {
-            // Entry must match ALL rules (AND logic)
-            return goal.rules!.every(rule => {
-              switch (rule.type) {
-                case 'event_type':
-                  return entry.eventTypeId === rule.value;
-                case 'category':
-                  return entry.category === rule.value;
-                case 'source': {
-                  const entrySource = (entry.metadata as { source?: string } | undefined)?.source;
-                  return entrySource === rule.value;
-                }
-                case 'amount_range': {
-                  const range = rule.value as { min?: number; max?: number };
-                  if (range.min !== undefined && entry.amount < range.min) return false;
-                  if (range.max !== undefined && entry.amount > range.max) return false;
-                  return true;
-                }
-                case 'date_range': {
-                  const dateRange = rule.value as { start?: string; end?: string };
-                  const entryDate = new Date(entry.date);
-                  if (dateRange.start && entryDate < new Date(dateRange.start)) return false;
-                  if (dateRange.end && entryDate > new Date(dateRange.end)) return false;
-                  return true;
-                }
-                default:
-                  return true;
-              }
-            });
-          });
-        } else {
-          // Manual mode: only include explicitly linked entries
-          relevantEntries = relevantEntries.filter(entry => entry.goalId === goal.id);
         }
 
         currentAmount = relevantEntries.reduce((sum, entry) => sum + entry.amount, 0);

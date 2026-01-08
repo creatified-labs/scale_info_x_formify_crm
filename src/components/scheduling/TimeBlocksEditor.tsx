@@ -1,31 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DateSelector } from "@/components/ui/date-selector";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { addMinutes, format } from "date-fns";
-import { CalendarIcon, Plus, Trash2, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { Plus, Trash2, X, Clock } from "lucide-react";
 import { track } from "@/lib/track";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
-import { differenceInMinutes, isBefore, isSameDay, startOfDay } from "date-fns";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Info } from "lucide-react";
-import { Loader2 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 interface TimeBlock {
   id: string;
@@ -55,7 +42,8 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
   const { toast } = useToast();
   const [blocks, setBlocks] = useState<TimeBlock[]>([]);
   const [loading, setLoading] = useState(true);
-  
+  const [saving, setSaving] = useState(false);
+
   // Form state
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [timeRanges, setTimeRanges] = useState<TimeRange[]>([{ start: "09:00", end: "17:00" }]);
@@ -124,7 +112,7 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
     for (const range of timeRanges) {
       const start = timeToMinutes(range.start);
       const end = timeToMinutes(range.end);
-      
+
       if (start >= end) {
         toast({
           title: "Invalid time range",
@@ -160,6 +148,7 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
       return;
     }
 
+    setSaving(true);
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -183,6 +172,7 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
             scope,
             event_type_id: scope === 'event_only' ? eventTypeId ?? null : null,
             blocks: blocksPayload,
+            user_id: userId,
           },
           method: 'POST',
         })
@@ -211,6 +201,8 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
         description: error.message,
         variant: "destructive",
       });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -219,14 +211,24 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
       if (scope === 'event_only' && eventTypeId) {
         // Rebuild blocks minus the deleted one and upsert
         const remaining = blocks.filter(b => b.id !== id)
-          .map(b => ({ date: format(new Date(b.date), 'yyyy-MM-dd'), start_time: minutesToTime(b.start_minutes), end_time: minutesToTime(b.end_minutes), reason: b.note }))
-        
+          .map(b => ({
+            date: format(new Date(b.date), 'yyyy-MM-dd'),
+            start_time: minutesToTime(b.start_minutes),
+            end_time: minutesToTime(b.end_minutes),
+            reason: b.note
+          }));
+
         const res = await fetch('/api/edge-proxy', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             functionName: 'upsert-time-blocks',
-            payload: { event_type_id: eventTypeId, blocks: remaining },
+            payload: {
+              scope,
+              event_type_id: eventTypeId,
+              blocks: remaining,
+              user_id: userId,
+            },
             method: 'POST',
           })
         });
@@ -243,7 +245,10 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             functionName: 'delete-time-block',
-            payload: { id },
+            payload: {
+              id,
+              user_id: userId,
+            },
             method: 'POST',
           })
         });
@@ -269,77 +274,73 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
   };
 
   if (loading) {
-    return <div className="text-center py-8">Loading time blocks...</div>;
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading time blocks...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Add Time Block</CardTitle>
+      {/* Add Time Block Card */}
+      <Card className="border-muted">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-xl flex items-center gap-2">
+            <Clock className="w-5 h-5" />
+            Add Time Block
+          </CardTitle>
           <CardDescription>
             Block specific time ranges on a date. These times will not be available for booking.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2 md:items-start">
+          <div className="grid gap-6">
+            {/* Date Picker */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal h-10",
-                      !selectedDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {selectedDate ? format(selectedDate, "PPP") : "Select a date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={setSelectedDate}
-                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <DateSelector
+                selected={selectedDate}
+                onSelect={setSelectedDate}
+                disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                placeholder="Select a date"
+              />
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between h-5">
+            {/* Time Ranges */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium">Time Ranges</Label>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={addTimeRange}
-                  className="h-7"
+                  className="h-8"
                 >
-                  <Plus className="h-3 w-3 mr-1" />
+                  <Plus className="h-4 w-4 mr-1" />
                   Add Range
                 </Button>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {timeRanges.map((range, index) => (
-                  <div key={index} className="flex items-center gap-2">
+                  <div key={index} className="flex items-center gap-3">
                     <Input
                       type="time"
                       value={range.start}
                       onChange={(e) => updateTimeRange(index, 'start', e.target.value)}
-                      className="flex-1 h-10"
+                      className="flex-1 h-11"
                     />
-                    <span className="text-xs text-muted-foreground">to</span>
+                    <span className="text-sm text-muted-foreground font-medium">to</span>
                     <Input
                       type="time"
                       value={range.end}
                       onChange={(e) => updateTimeRange(index, 'end', e.target.value)}
-                      className="flex-1 h-10"
+                      className="flex-1 h-11"
                     />
                     {timeRanges.length > 1 && (
                       <Button
@@ -347,7 +348,7 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
                         variant="ghost"
                         size="icon"
                         onClick={() => removeTimeRange(index)}
-                        className="h-10 w-10"
+                        className="h-11 w-11 flex-shrink-0"
                       >
                         <X className="h-4 w-4" />
                       </Button>
@@ -356,72 +357,101 @@ export const TimeBlocksEditor = ({ userId, scope, eventTypeId }: TimeBlocksEdito
                 ))}
               </div>
             </div>
+
+            {/* Note */}
+            <div className="space-y-2">
+              <Label htmlFor="note" className="text-sm font-medium">
+                Note <span className="text-muted-foreground font-normal">(Optional)</span>
+              </Label>
+              <Textarea
+                id="note"
+                placeholder="Reason for blocking this time..."
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={3}
+                className="resize-none"
+              />
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="note">Note (Optional)</Label>
-            <Textarea
-              id="note"
-              placeholder="Reason for blocking this time..."
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={2}
-            />
-          </div>
-
-          <Button onClick={saveTimeBlocks} className="w-full">
-            Save Time Block{timeRanges.length > 1 ? 's' : ''}
+          <Button
+            onClick={saveTimeBlocks}
+            className="w-full h-11"
+            disabled={saving}
+          >
+            {saving ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Saving...
+              </>
+            ) : (
+              <>Save Time Block{timeRanges.length > 1 ? 's' : ''}</>
+            )}
           </Button>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Existing Time Blocks</CardTitle>
+      {/* Existing Time Blocks Card */}
+      <Card className="border-muted">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-xl">Existing Time Blocks</CardTitle>
           <CardDescription>
-            {scope === 'global_for_host' 
+            {scope === 'global_for_host'
               ? 'These blocks apply to all your event types'
               : 'These blocks only apply to this event type'}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {blocks.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">
-              No time blocks configured
-            </p>
+            <div className="text-center py-12 border border-dashed rounded-lg">
+              <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+              <p className="text-muted-foreground font-medium">No time blocks configured</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Add a time block above to block out availability
+              </p>
+            </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Time Range</TableHead>
-                  <TableHead>Note</TableHead>
-                  <TableHead className="w-[80px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {blocks.map((block) => (
-                  <TableRow key={block.id}>
-                    <TableCell>{format(new Date(block.date), 'PPP')}</TableCell>
-                    <TableCell>
-                      {minutesToTime(block.start_minutes)} - {minutesToTime(block.end_minutes)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {block.note || '-'}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => deleteBlock(block.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="font-semibold">Date</TableHead>
+                    <TableHead className="font-semibold">Time Range</TableHead>
+                    <TableHead className="font-semibold">Note</TableHead>
+                    <TableHead className="w-[100px] text-center font-semibold">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {blocks.map((block) => (
+                    <TableRow key={block.id} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">
+                        {format(new Date(block.date), 'PPP')}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="font-medium">{minutesToTime(block.start_minutes)}</span>
+                          <span className="text-muted-foreground">-</span>
+                          <span className="font-medium">{minutesToTime(block.end_minutes)}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm max-w-[300px] truncate">
+                        {block.note || '-'}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteBlock(block.id)}
+                          className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
