@@ -28,9 +28,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
 
         // Show feature announcement on sign-in
-        if (event === 'SIGNED_IN' && session?.user) {
-          showFeatureAnnouncement();
-        }
+        // if (event === 'SIGNED_IN' && session?.user) {
+        //   showFeatureAnnouncement();
+        // }
       }
     );
 
