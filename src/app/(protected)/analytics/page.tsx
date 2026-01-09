@@ -18,7 +18,7 @@ import { PlanGate } from "@/components/PlanGate";
 import { useFeature } from "@/lib/entitlements/useFeature";
 import { LockTile } from "@/components/entitlements/LockTile";
 import { useData } from "@/contexts/DataContext";
-import { getCurrencySymbol } from "@/lib/currency";
+import { useCurrency } from "@/hooks/useCurrency";
 
 const Analytics = () => {
   const { revenueEntries, goals } = useData();
@@ -26,33 +26,12 @@ const Analytics = () => {
   const hasAdvancedAnalytics = entitlements.analytics_revenue === "advanced";
   const [bookingConversions, setBookingConversions] = useState<any[]>([]);
   const { csvExport, plan } = useFeature();
-  const [userCurrency, setUserCurrency] = useState<string>('GBP');
   const isPreview = plan === 'preview';
   const [previewBookings7, setPreviewBookings7] = useState<number | null>(null);
   const [exportingCsv, setExportingCsv] = useState(false);
 
-  // Load user's default currency
-  useEffect(() => {
-    const loadCurrency = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('default_currency')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        if (!error && data?.default_currency) {
-          setUserCurrency(data.default_currency);
-        }
-      } catch (error) {
-        console.error('Error loading currency:', error);
-      }
-    };
-    loadCurrency();
-  }, []);
+  // Use the centralized currency hook for real-time sync across the app
+  const { formatAmount } = useCurrency();
 
   // Fetch converted bookings
   useEffect(() => {
@@ -108,17 +87,10 @@ const Analytics = () => {
       category: 'general',
       createdAt: new Date(booking.converted_at || booking.start_time)
     }));
-    
+
     return [...revenueEntries, ...bookingRevenue];
   }, [revenueEntries, bookingConversions]);
 
-  const formatCurrency = useMemo(() => {
-    return (value: number = 0) => {
-      const symbol = getCurrencySymbol(userCurrency);
-      const amount = Number.isFinite(value) ? value : 0;
-      return `${symbol}${amount.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    };
-  }, [userCurrency]);
   const lastUpdatedLabel = useMemo(() => format(new Date(), "MMM d, yyyy 'at' HH:mm"), []);
 
   const summaryStats = useMemo(() => {
@@ -396,10 +368,10 @@ const Analytics = () => {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-semibold text-foreground number-display">
-                {formatCurrency(summaryStats.totalRevenue)}
+                {formatAmount(summaryStats.totalRevenue)}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Manual entries: {formatCurrency(summaryStats.manualRevenueTotal)}
+                Manual entries: {formatAmount(summaryStats.manualRevenueTotal)}
               </p>
             </CardContent>
           </Card>
@@ -410,7 +382,7 @@ const Analytics = () => {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-semibold text-foreground number-display">
-                {formatCurrency(summaryStats.bookingRevenueTotal)}
+                {formatAmount(summaryStats.bookingRevenueTotal)}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 {summaryStats.conversionShare.toFixed(1)}% of total revenue
@@ -462,7 +434,7 @@ const Analytics = () => {
                 {analytics.weeklyGrowth.toFixed(1)}%
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                vs last week ({formatCurrency(analytics.lastWeekTotal)})
+                vs last week ({formatAmount(analytics.lastWeekTotal)})
               </p>
             </CardContent>
           </Card>
@@ -484,7 +456,7 @@ const Analytics = () => {
                 {analytics.monthlyGrowth.toFixed(1)}%
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                vs last month ({formatCurrency(analytics.lastMonthTotal)})
+                vs last month ({formatAmount(analytics.lastMonthTotal)})
               </p>
             </CardContent>
           </Card>
@@ -498,7 +470,7 @@ const Analytics = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl lg:text-3xl number-display text-primary">
-                {formatCurrency(analytics.averagePerEntry)}
+                {formatAmount(analytics.averagePerEntry)}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 Across {allRevenueData.length} entries
@@ -518,7 +490,7 @@ const Analytics = () => {
                 {analytics.bestDay?.day ?? "—"}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                {analytics.bestDay ? `${formatCurrency(analytics.bestDay.average)} average` : "No data yet"}
+                {analytics.bestDay ? `${formatAmount(analytics.bestDay.average)} average` : "No data yet"}
               </p>
             </CardContent>
           </Card>
@@ -589,7 +561,7 @@ const Analytics = () => {
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(value) => formatCurrency(Number(value))}
+                      formatter={(value) => formatAmount(Number(value))}
                       contentStyle={tooltipStyle}
                       labelStyle={tooltipLabelStyle}
                     />
@@ -653,7 +625,7 @@ const Analytics = () => {
                     <p className="text-sm font-medium">Most Productive Category</p>
                     <p className="text-xs text-muted-foreground">
                       {analytics.mostUsedCategory
-                        ? `${analytics.mostUsedCategory.name} accounts for ${analytics.mostUsedCategory.count} entries (${formatCurrency(analytics.mostUsedCategory.total)})`
+                        ? `${analytics.mostUsedCategory.name} accounts for ${analytics.mostUsedCategory.count} entries (${formatAmount(analytics.mostUsedCategory.total)})`
                         : "Categorize revenue entries to unlock this insight."}
                     </p>
                   </div>
@@ -665,7 +637,7 @@ const Analytics = () => {
                     <p className="text-sm font-medium">Best Performance Day</p>
                     <p className="text-xs text-muted-foreground">
                       {analytics.bestDay
-                        ? `${analytics.bestDay.day}s generate ${formatCurrency(analytics.bestDay.average)} on average`
+                        ? `${analytics.bestDay.day}s generate ${formatAmount(analytics.bestDay.average)} on average`
                         : "Log entries across the week to uncover peak days."}
                     </p>
                   </div>
@@ -715,7 +687,7 @@ const Analytics = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium number-display">{formatCurrency(category.total)}</p>
+                    <p className="font-medium number-display">{formatAmount(category.total)}</p>
                     <p className="text-sm text-muted-foreground">
                       {category.percentage.toFixed(1)}%
                     </p>

@@ -26,7 +26,8 @@ import { GoalProgress, RevenueEntry } from "@/types/revenue";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { detectWhopContext, readWhopIdentity } from "@/lib/embed";
-import { getCurrencySymbol } from "@/lib/currency";
+import { useCurrency } from "@/hooks/useCurrency";
+
 const Index = () => {
   const {
     revenueEntries,
@@ -50,30 +51,9 @@ const Index = () => {
   const { entitlements } = useEntitlements();
   const [usage, setUsage] = useState<{ bookingsTotal: number } | null>(null);
   const [bookings, setBookings] = useState<any[]>([]);
-  const [userCurrency, setUserCurrency] = useState<string>('GBP');
 
-  // Load user's default currency
-  useEffect(() => {
-    const loadCurrency = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('default_currency')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        if (!error && data?.default_currency) {
-          setUserCurrency(data.default_currency);
-        }
-      } catch (error) {
-        console.error('Error loading currency:', error);
-      }
-    };
-    loadCurrency();
-  }, []);
+  // Use the centralized currency hook for real-time sync across the app
+  const { symbol: currencySymbol } = useCurrency();
 
   // Resolve organization metadata from Whop embed globals or internal API
   useEffect(() => {
@@ -556,7 +536,7 @@ const Index = () => {
             </CardHeader>
             <CardContent className="pb-4">
               <div className="text-2xl lg:text-3xl number-display text-primary">
-                {getCurrencySymbol(userCurrency)}{summaryStats.totalRevenue.toLocaleString()}
+                {currencySymbol}{summaryStats.totalRevenue.toLocaleString()}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 From {summaryStats.totalEntries} entries
@@ -571,7 +551,7 @@ const Index = () => {
             </CardHeader>
             <CardContent className="pb-4">
               <div className="text-2xl lg:text-3xl number-display text-primary">
-                {getCurrencySymbol(userCurrency)}{summaryStats.thisMonthRevenue.toLocaleString()}
+                {currencySymbol}{summaryStats.thisMonthRevenue.toLocaleString()}
               </div>
               <div className="flex items-center justify-between mt-1">
                 <p className="text-xs text-muted-foreground">
@@ -589,7 +569,7 @@ const Index = () => {
             </CardHeader>
             <CardContent className="pb-4">
               <div className="text-2xl lg:text-3xl number-display text-primary">
-                {getCurrencySymbol(userCurrency)}{summaryStats.thisWeekRevenue.toLocaleString()}
+                {currencySymbol}{summaryStats.thisWeekRevenue.toLocaleString()}
               </div>
               <div className="flex items-center justify-between mt-1">
                 <p className="text-xs text-muted-foreground">
@@ -732,7 +712,7 @@ const Index = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {getCurrencySymbol(userCurrency)}{summaryStats.thisMonthRevenue.toLocaleString()}
+                    {currencySymbol}{summaryStats.thisMonthRevenue.toLocaleString()}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     Total revenue this month
@@ -789,7 +769,7 @@ const Index = () => {
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-muted-foreground">Revenue</p>
                     <p className="text-2xl font-bold text-primary">
-                      {getCurrencySymbol(userCurrency)}{analyticsCallMetrics.revenue.toLocaleString()}
+                      {currencySymbol}{analyticsCallMetrics.revenue.toLocaleString()}
                     </p>
                   </div>
                 </div>
