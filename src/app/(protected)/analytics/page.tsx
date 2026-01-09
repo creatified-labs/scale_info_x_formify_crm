@@ -18,6 +18,7 @@ import { PlanGate } from "@/components/PlanGate";
 import { useFeature } from "@/lib/entitlements/useFeature";
 import { LockTile } from "@/components/entitlements/LockTile";
 import { useData } from "@/contexts/DataContext";
+import { getCurrencySymbol } from "@/lib/currency";
 
 const Analytics = () => {
   const { revenueEntries, goals } = useData();
@@ -25,9 +26,33 @@ const Analytics = () => {
   const hasAdvancedAnalytics = entitlements.analytics_revenue === "advanced";
   const [bookingConversions, setBookingConversions] = useState<any[]>([]);
   const { csvExport, plan } = useFeature();
+  const [userCurrency, setUserCurrency] = useState<string>('GBP');
   const isPreview = plan === 'preview';
   const [previewBookings7, setPreviewBookings7] = useState<number | null>(null);
   const [exportingCsv, setExportingCsv] = useState(false);
+
+  // Load user's default currency
+  useEffect(() => {
+    const loadCurrency = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('default_currency')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (!error && data?.default_currency) {
+          setUserCurrency(data.default_currency);
+        }
+      } catch (error) {
+        console.error('Error loading currency:', error);
+      }
+    };
+    loadCurrency();
+  }, []);
 
   // Fetch converted bookings
   useEffect(() => {
@@ -87,8 +112,13 @@ const Analytics = () => {
     return [...revenueEntries, ...bookingRevenue];
   }, [revenueEntries, bookingConversions]);
 
-  const currencyFormatter = useMemo(() => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }), []);
-  const formatCurrency = (value: number = 0) => currencyFormatter.format(Number.isFinite(value) ? value : 0);
+  const formatCurrency = useMemo(() => {
+    return (value: number = 0) => {
+      const symbol = getCurrencySymbol(userCurrency);
+      const amount = Number.isFinite(value) ? value : 0;
+      return `${symbol}${amount.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+  }, [userCurrency]);
   const lastUpdatedLabel = useMemo(() => format(new Date(), "MMM d, yyyy 'at' HH:mm"), []);
 
   const summaryStats = useMemo(() => {

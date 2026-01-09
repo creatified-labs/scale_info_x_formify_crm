@@ -36,6 +36,37 @@ Deno.serve(async (req) => {
     }
 
     switch (action) {
+      case 'bulk_insert': {
+        const { entries } = await req.json();
+        
+        if (!entries || !Array.isArray(entries)) {
+          return new Response(
+            JSON.stringify({ error: 'Entries array required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log('[manage-revenue] Bulk inserting', entries.length, 'entries');
+
+        const { data, error } = await supabase
+          .from('revenue_entries')
+          .insert(entries)
+          .select();
+
+        if (error) {
+          console.error('[manage-revenue] Bulk insert error:', error);
+          return new Response(
+            JSON.stringify({ error: error.message }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({ entries: data, count: data.length }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       case 'update': {
         if (!entry || !entry.id) {
           return new Response(

@@ -128,6 +128,8 @@ export type FilterCriteria = {
     to?: Date;
   };
   categories: string[];
+  eventTypeIds: string[];
+  bookingIds: string[];
   amountRange: {
     min?: number;
     max?: number;

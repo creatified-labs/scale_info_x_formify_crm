@@ -9,6 +9,7 @@ export interface RevenueEntry {
   createdAt: Date;
   metadata?: Record<string, unknown>;
   goalId?: string; // Linked goal ID
+  bookingId?: string; // Linked booking ID
   eventTypeId?: string; // Event type that generated this revenue
   eventTypeName?: string; // Event type name for display
 }

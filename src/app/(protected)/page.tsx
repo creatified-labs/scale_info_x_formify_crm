@@ -130,6 +130,8 @@ const Index = () => {
   const [filters, setFilters] = useState<FilterCriteria>({
     dateRange: {},
     categories: [],
+    eventTypeIds: [],
+    bookingIds: [],
     amountRange: {},
     searchTerm: undefined
   });

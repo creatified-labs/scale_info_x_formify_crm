@@ -18,18 +18,28 @@ export async function GET(request: NextRequest) {
   try {
     // Get the Whop user token from headers
     const userToken = request.headers.get('x-whop-user-token');
-    
+
     // Get company ID from URL path or query
     const url = new URL(request.url);
     const companyIdFromQuery = url.searchParams.get('companyId');
     const pathMatch = request.nextUrl.pathname.match(/biz_[a-zA-Z0-9]+/);
-    const whopOrgId = companyIdFromQuery || (pathMatch ? pathMatch[0] : null) || 
-      process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
 
-    console.log('[whop-session] Request:', {
+    // In production, only use env fallback if explicitly running as single-tenant
+    // In development, allow fallback for local testing
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    const envFallback = isDevelopment ? process.env.NEXT_PUBLIC_WHOP_COMPANY_ID : null;
+
+    const whopOrgId = companyIdFromQuery || (pathMatch ? pathMatch[0] : null) || envFallback;
+
+    console.log('[whop-session] Bootstrap request:', {
+      environment: process.env.NODE_ENV,
       hasUserToken: !!userToken,
+      companyIdFromQuery,
+      pathMatch: pathMatch?.[0],
+      usingEnvFallback: !companyIdFromQuery && !pathMatch?.[0] && !!envFallback,
       whopOrgId,
       pathname: request.nextUrl.pathname,
+      host: request.headers.get('host'),
     });
 
     // Create Supabase admin client
@@ -74,8 +84,13 @@ export async function GET(request: NextRequest) {
     }
 
     if (!whopOrgId) {
+      console.error('[whop-session] ❌ No company ID provided');
+      const errorMessage = isDevelopment
+        ? 'No company ID available. Ensure NEXT_PUBLIC_WHOP_COMPANY_ID is set in .env.local or access via Whop context.'
+        : 'No company ID available. This app must be accessed through Whop.';
+
       return NextResponse.json(
-        { error: 'No company ID available' },
+        { error: errorMessage },
         { status: 400 }
       );
     }
@@ -126,18 +141,55 @@ export async function GET(request: NextRequest) {
         .select('id, whop_company_id')
         .single();
 
+      console.log('[whop-session] Company creation result:', {
+        success: !companyError,
+        error: companyError,
+        data: newCompany,
+      });
+
       if (companyError) {
-        console.error('[whop-session] Failed to create company:', companyError);
+        console.error('[whop-session] Failed to create company:', {
+          message: companyError.message,
+          code: companyError.code,
+          details: companyError.details,
+          hint: companyError.hint,
+        });
+        
         if (!companyError.message.includes('duplicate')) {
           return NextResponse.json(
-            { error: 'Failed to create company', details: companyError.message },
+            { 
+              error: 'Failed to create company', 
+              details: companyError.message,
+              code: companyError.code,
+              hint: companyError.hint,
+              fullError: companyError
+            },
             { status: 500 }
           );
+        }
+        
+        // If duplicate error, retry fetching the existing company
+        console.log('[whop-session] Duplicate company detected, retrying lookup');
+        const { data: existingCompany } = await supabaseAdmin
+          .from('companies')
+          .select('id, whop_company_id')
+          .eq('whop_company_id', whopOrgId)
+          .maybeSingle();
+        
+        console.log('[whop-session] Existing company lookup result:', existingCompany);
+        
+        if (existingCompany) {
+          company = existingCompany;
+          companyUuid = existingCompany.id;
+          console.log('[whop-session] Found existing company after duplicate:', companyUuid);
+        } else {
+          console.error('[whop-session] ❌ Duplicate error but could not find existing company');
         }
       } else {
         console.log('[whop-session] Company created successfully:', newCompany);
         company = newCompany;
         companyUuid = newCompany?.id ?? null;
+        console.log('[whop-session] Set companyUuid to:', companyUuid);
         
         // Create default event type for new company
         if (companyUuid) {
@@ -173,37 +225,60 @@ export async function GET(request: NextRequest) {
     }
 
     if (!companyUuid) {
-      console.error('[whop-session] Missing company UUID after create/find');
+      console.error('[whop-session] ❌ Missing company UUID after create/find');
+      console.error('[whop-session] Debug info:', {
+        whopOrgId,
+        companyData: company,
+        message: 'Company creation or lookup failed - check logs above for details'
+      });
       return NextResponse.json(
-        { error: 'Failed to resolve company' },
+        { 
+          error: 'Failed to resolve company',
+          debug: {
+            whopOrgId,
+            message: 'Check server logs for detailed error information'
+          }
+        },
         { status: 500 }
       );
     }
 
     // Determine the email to use for the user
-    const userEmail = whopEmail || `${whopOrgId.toLowerCase()}@whop.placeholder`;
+    // For fresh installs without user token, create a unique placeholder email
+    const userEmail = whopEmail || `${whopOrgId.toLowerCase().replace('biz_', '')}@whop-install.placeholder`;
+
+    console.log('[whop-session] Looking for user with email:', userEmail);
 
     // Find existing auth user by email
     const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers();
     let authUser = authUsers?.users?.find(u => u.email === userEmail);
 
+    console.log('[whop-session] Existing user found:', !!authUser);
+
     if (!authUser) {
       // Create new auth user
+      console.log('[whop-session] Creating new auth user with email:', userEmail);
       const { data: newAuthUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: userEmail,
         email_confirm: true,
         user_metadata: {
           company_id: companyUuid,
           whop_org_id: whopOrgId,
-          whop_user_id: whopUserId,
-          name: whopName || 'Whop User',
+          whop_user_id: whopUserId || null,
+          name: whopName || `User ${whopOrgId}`,
         },
+      });
+
+      console.log('[whop-session] User creation result:', {
+        success: !createError,
+        error: createError,
+        userId: newAuthUser?.user?.id,
       });
 
       if (createError && !createError.message.includes('already been registered')) {
         console.error('[whop-session] Failed to create auth user:', createError);
         return NextResponse.json(
-          { error: 'Failed to create user' },
+          { error: 'Failed to create user', details: createError.message },
           { status: 500 }
         );
       }
@@ -345,62 +420,42 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Generate magic link and use the hashed_token directly
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'magiclink',
-      email: userEmail,
-    });
-
-    if (linkError || !linkData) {
-      console.error('[whop-session] Failed to generate link:', linkError);
-      return NextResponse.json(
-        { error: 'Failed to generate session' },
-        { status: 500 }
-      );
-    }
-
-    // Use the hashed_token directly from the response (more reliable than parsing URL)
-    let tokenHash: string | undefined = linkData.properties.hashed_token;
+    // Create session directly using admin API - no email verification needed
+    console.log('[whop-session] Creating instant session for user:', authUser.id);
     
-    console.log('[whop-session] Generated link for:', userEmail, 'tokenHash from properties:', !!tokenHash);
-
-    if (!tokenHash) {
-      // Fallback: try to extract from URL
-      const actionLink = linkData.properties.action_link;
-      console.log('[whop-session] action_link:', actionLink);
-      const linkUrl = new URL(actionLink);
-      tokenHash = linkUrl.searchParams.get('token_hash') || linkUrl.searchParams.get('token') || undefined;
-      
-      if (!tokenHash) {
-        console.error('[whop-session] No token found in link properties or URL');
-        return NextResponse.json(
-          { error: 'Failed to extract token' },
-          { status: 500 }
-        );
-      }
-      console.log('[whop-session] Using token from URL');
-    }
-
-    // Verify the OTP to get actual session tokens
-    const { data: sessionData, error: verifyError } = await supabaseAdmin.auth.verifyOtp({
-      token_hash: tokenHash,
-      type: 'magiclink',
+    // Use signInWithPassword with a temporary password, or update user to set password
+    // First, ensure user has a password set (for instant sign-in)
+    const tempPassword = randomUUID(); // Generate a secure temporary password
+    
+    // Update user with password (this allows instant sign-in)
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(authUser.id, {
+      password: tempPassword,
     });
 
-    if (verifyError || !sessionData.session) {
-      console.error('[whop-session] Failed to verify OTP:', verifyError);
+    if (updateError) {
+      console.error('[whop-session] Failed to set user password:', updateError);
+    }
+
+    // Sign in with the password to get session tokens
+    const { data: signInData, error: signInError } = await supabaseAdmin.auth.signInWithPassword({
+      email: userEmail,
+      password: tempPassword,
+    });
+
+    if (signInError || !signInData?.session) {
+      console.error('[whop-session] Failed to sign in:', signInError);
       return NextResponse.json(
-        { error: 'Failed to create session', details: verifyError?.message },
+        { error: 'Failed to create session', details: signInError?.message },
         { status: 500 }
       );
     }
 
-    console.log('[whop-session] Session created for user:', authUser.id);
+    console.log('[whop-session] ✅ Session created successfully for user:', authUser.id);
 
     return NextResponse.json({
       success: true,
-      access_token: sessionData.session.access_token,
-      refresh_token: sessionData.session.refresh_token,
+      access_token: signInData.session.access_token,
+      refresh_token: signInData.session.refresh_token,
       user_id: authUser.id,
       company_id: companyUuid,
       whop_org_id: whopOrgId,

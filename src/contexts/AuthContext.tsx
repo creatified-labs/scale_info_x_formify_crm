@@ -81,6 +81,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSession(session);
           setUser(session.user);
           setLoading(false);
+
+          // Note: Mock data seeding removed for production readiness
+          // To seed data in development, manually call seedMockData() from console
         }
       } else {
         // No session - try to bootstrap
@@ -126,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               console.log('[Auth] bootstrapWhopUser result:', result);
 
               if (result.success) {
-                console.log('[Auth] Whop user bootstrapped successfully');
+                console.log('[Auth] ✅ Whop user bootstrapped successfully');
                 // Refresh session after bootstrap
                 const { data: { session: newSession } } = await supabase.auth.getSession();
                 console.log('[Auth] Session after bootstrap:', {
@@ -137,10 +140,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setSession(newSession);
                 setUser(newSession?.user ?? null);
               } else {
-                console.error('[Auth] ❌ bootstrapWhopUser failed:', result.error);
+                console.error('[Auth] ❌ Bootstrap failed:', result.error);
+                // Show user-friendly error message
+                toast({
+                  title: "Setup Failed",
+                  description: result.error || "Failed to initialize app. Please contact support.",
+                  variant: "destructive",
+                  duration: 10000,
+                });
               }
             } catch (error) {
-              console.error('[Auth] ❌ bootstrapWhopUser threw error:', error);
+              console.error('[Auth] ❌ Bootstrap error:', error);
+              toast({
+                title: "Setup Error",
+                description: "An unexpected error occurred during setup. Please contact support.",
+                variant: "destructive",
+                duration: 10000,
+              });
             }
           }
         } catch (error) {

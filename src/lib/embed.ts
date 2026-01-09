@@ -46,6 +46,15 @@ export function readWhopIdentity(): WhopIdentity {
   const w = window as any;
   const pathname = typeof window.location?.pathname === "string" ? window.location.pathname : "";
 
+  // Debug logging to see what's available
+  console.log('[readWhopIdentity] Window variables:', {
+    WHOP_ORG_ID: w.WHOP_ORG_ID,
+    wapOrgId: w.wapOrgId,
+    biz_id: w.biz_id,
+    pathname,
+    allWhopVars: Object.keys(w).filter(k => k.toLowerCase().includes('whop') || k.toLowerCase().includes('wap') || k.toLowerCase().includes('biz'))
+  });
+
   const pathCompanyMatch = pathname.match(/\/dashboard\/([^/]+)/);
 
   const orgId =
@@ -53,6 +62,8 @@ export function readWhopIdentity(): WhopIdentity {
     (typeof w.wapOrgId === "string" && w.wapOrgId) ||
     (typeof w.biz_id === "string" && w.biz_id) ||
     (pathCompanyMatch ? pathCompanyMatch[1] : null);
+
+  console.log('[readWhopIdentity] Resolved orgId:', orgId, 'from pathMatch:', pathCompanyMatch?.[1]);
 
   const email =
     (typeof w.WHOP_EMAIL === "string" && w.WHOP_EMAIL) ||
@@ -79,7 +90,7 @@ export function readWhopIdentity(): WhopIdentity {
     (typeof w.wapUserId === "string" && w.wapUserId) ||
     null;
 
-  return {
+  const identity = {
     orgId,
     email,
     name,
@@ -87,6 +98,9 @@ export function readWhopIdentity(): WhopIdentity {
     profilePicture,
     userId,
   };
+
+  console.log('[readWhopIdentity] Final identity:', identity);
+  return identity;
 }
 
 export function getCurrentWhopAppUrl(): string | null {

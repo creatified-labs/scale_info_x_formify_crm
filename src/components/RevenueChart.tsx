@@ -6,12 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart as LineChartIcon, BarChart3, TrendingUp } from "lucide-react";
 import { RevenueEntry } from "@/types/revenue";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface RevenueChartProps {
   entries: RevenueEntry[];
 }
 
 export const RevenueChart = ({ entries }: RevenueChartProps) => {
+  const { symbol } = useCurrency();
   const chartData = useMemo(() => {
     if (entries.length === 0) return { daily: [], weekly: [], monthly: [] };
 
@@ -100,11 +102,11 @@ export const RevenueChart = ({ entries }: RevenueChartProps) => {
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-6 text-sm text-muted-foreground">
           <div className="flex items-center gap-1">
             <span>Total Revenue:</span>
-            <span className="number-display text-foreground text-lg">£{totalRevenue.toLocaleString()}</span>
+            <span className="number-display text-foreground text-lg">{symbol}{totalRevenue.toLocaleString()}</span>
           </div>
           <div className="flex items-center gap-1">
             <span>Daily Average:</span>
-            <span className="number-display text-foreground text-lg">£{averageDaily.toLocaleString()}</span>
+            <span className="number-display text-foreground text-lg">{symbol}{averageDaily.toLocaleString()}</span>
           </div>
         </div>
       </CardHeader>
@@ -142,12 +144,12 @@ export const RevenueChart = ({ entries }: RevenueChartProps) => {
                   />
                   <YAxis 
                     tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                    tickFormatter={(value) => `£${value}`}
+                    tickFormatter={(value) => `${symbol}${value}`}
                     axisLine={false}
                     tickLine={false}
                   />
                   <Tooltip 
-                    formatter={(value) => [`£${value}`, 'Revenue']}
+                    formatter={(value) => [`${symbol}${value}`, 'Revenue']}
                     labelFormatter={(label, payload) => {
                       if (payload && payload[0]) {
                         return new Date(payload[0].payload.date).toLocaleDateString();
@@ -209,12 +211,12 @@ export const RevenueChart = ({ entries }: RevenueChartProps) => {
                   />
                   <YAxis 
                     tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                    tickFormatter={(value) => `£${value}`}
+                    tickFormatter={(value) => `${symbol}${value}`}
                     axisLine={false}
                     tickLine={false}
                   />
                   <Tooltip 
-                    formatter={(value) => [`£${value}`, 'Revenue']}
+                    formatter={(value) => [`${symbol}${value}`, 'Revenue']}
                     contentStyle={{
                       backgroundColor: 'hsl(var(--popover))',
                       border: '1px solid hsl(var(--border))',
@@ -257,12 +259,12 @@ export const RevenueChart = ({ entries }: RevenueChartProps) => {
                   />
                   <YAxis 
                     tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                    tickFormatter={(value) => `£${value}`}
+                    tickFormatter={(value) => `${symbol}${value}`}
                     axisLine={false}
                     tickLine={false}
                   />
                   <Tooltip 
-                    formatter={(value) => [`£${value}`, 'Revenue']}
+                    formatter={(value) => [`${symbol}${value}`, 'Revenue']}
                     contentStyle={{
                       backgroundColor: 'hsl(var(--popover))',
                       border: '1px solid hsl(var(--border))',

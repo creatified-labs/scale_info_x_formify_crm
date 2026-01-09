@@ -15,30 +15,45 @@ export async function bootstrapWhopUser(): Promise<{
   error?: string;
 }> {
   try {
+    // Get Whop identity from URL/window for company ID first
+    const whopIdentity = readWhopIdentity();
+    // Fallback to env variable if Whop context isn't detected (for direct access)
+    const companyId = whopIdentity.orgId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+
     // Check if user already has a session
     const { data: sessionData } = await supabase.auth.getSession();
     if (sessionData?.session) {
-      console.log('User already has active session');
-      return {
-        success: true,
-        userId: sessionData.session.user.id,
-        companyId: sessionData.session.user.user_metadata?.company_id,
-      };
+      const currentWhopOrgId = sessionData.session.user.user_metadata?.whop_org_id;
+      
+      // If the session's company matches the URL's company, we're good
+      if (currentWhopOrgId === companyId) {
+        console.log('[bootstrapWhopUser] User already has active session for this company:', companyId);
+        return {
+          success: true,
+          userId: sessionData.session.user.id,
+          companyId: sessionData.session.user.user_metadata?.company_id,
+        };
+      }
+      
+      // Company mismatch - need to re-authenticate for the new company
+      console.log('[bootstrapWhopUser] Company mismatch detected. Current:', currentWhopOrgId, 'Requested:', companyId);
+      console.log('[bootstrapWhopUser] Clearing session and re-authenticating for new company...');
+      await supabase.auth.signOut();
     }
-
-    // Get Whop identity from URL/window for company ID
-    const whopIdentity = readWhopIdentity();
-    const companyId = whopIdentity.orgId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
     
-    console.log('Bootstrapping Whop user:', {
+    console.log('[bootstrapWhopUser] Bootstrapping Whop user:', {
       companyId,
+      whopIdentity,
       isWhopContext: detectWhopContext(),
+      envFallback: process.env.NEXT_PUBLIC_WHOP_COMPANY_ID,
+      usingFallback: !whopIdentity.orgId && !!process.env.NEXT_PUBLIC_WHOP_COMPANY_ID,
     });
 
     if (!companyId) {
+      console.error('[bootstrapWhopUser] ❌ No company ID found in Whop context or environment.');
       return {
         success: false,
-        error: 'No company ID available',
+        error: 'No company ID available - app must be accessed through Whop or have NEXT_PUBLIC_WHOP_COMPANY_ID set',
       };
     }
     

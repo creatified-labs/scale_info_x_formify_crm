@@ -139,6 +139,8 @@ export const FilterPanel = ({
     onFiltersChange({
       dateRange: {},
       categories: [],
+      eventTypeIds: [],
+      bookingIds: [],
       amountRange: {},
       searchTerm: undefined
     });

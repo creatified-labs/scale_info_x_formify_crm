@@ -61,7 +61,7 @@ export const EntriesList = ({ entries, onDeleteEntry }: EntriesListProps) => {
             <div key={entry.id} className="border border-border rounded-lg p-4 hover:bg-muted/30 transition-all duration-300">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
+                  <div className="flex items-center gap-3 mb-2 flex-wrap">
                     <div className="text-lg font-semibold text-foreground">
                       £{entry.amount.toLocaleString()}
                     </div>
@@ -69,6 +69,16 @@ export const EntriesList = ({ entries, onDeleteEntry }: EntriesListProps) => {
                       <span className="text-xs px-2 py-1 rounded-full flex items-center gap-1" style={{ backgroundColor: `${entry.categoryColor}20`, color: entry.categoryColor }}>
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.categoryColor }} />
                         {entry.categoryName}
+                      </span>
+                    )}
+                    {entry.eventTypeName && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                        📅 {entry.eventTypeName}
+                      </span>
+                    )}
+                    {entry.bookingId && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
+                        🎯 From Booking
                       </span>
                     )}
                   </div>
