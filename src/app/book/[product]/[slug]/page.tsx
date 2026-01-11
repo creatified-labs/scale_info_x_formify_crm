@@ -47,6 +47,47 @@ const callTypeLabel = (type: string) => {
   }
 };
 
+const ATTRIBUTION_API = "https://whop-app-utm.vercel.app/api/link-session-contact";
+
+const getUtmSessionToken = () => {
+  const match = document.cookie.match(/utm_session=([^;]+)/);
+  return match ? match[1] : null;
+};
+
+const linkSessionToContact = async (emailAddress: string, contactName?: string) => {
+  const sessionToken = getUtmSessionToken();
+
+  if (!sessionToken) {
+    console.log("[UTM Attribution] No session token found - user may not have clicked a tracking link");
+    return;
+  }
+
+  if (!emailAddress) {
+    console.log("[UTM Attribution] No email provided");
+    return;
+  }
+
+  try {
+    const response = await fetch(ATTRIBUTION_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionToken,
+        email: emailAddress,
+        name: contactName || undefined,
+      }),
+    });
+
+    if (response.ok) {
+      console.log("[UTM Attribution] Successfully linked booking to UTM session");
+    } else {
+      console.warn("[UTM Attribution] Failed to link booking:", await response.text());
+    }
+  } catch (error) {
+    console.error("[UTM Attribution] Error linking booking:", error);
+  }
+};
+
 const PublicBooking = () => {
   const params = useParams<{ slug: string; product?: string }>();
   const slug = params.slug;
@@ -211,6 +252,8 @@ const PublicBooking = () => {
       });
       return;
     }
+
+    linkSessionToContact(email.trim().toLowerCase(), name.trim());
 
     // Validate phone if required for phone call type
     if (callType === 'phone' && eventType.phone_required_for_phone_type && !phone) {
