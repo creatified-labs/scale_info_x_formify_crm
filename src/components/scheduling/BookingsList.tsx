@@ -28,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { normalizeBookingStatus, formatBookingStatus, statusTextColorClass } from "@/lib/status";
 import { useTimezone, formatTimeInTimezone } from "@/hooks/use-timezone";
+import { formatInTimeZone } from "date-fns-tz";
 
 type BookingsListProps = {
   extraActions?: ReactNode;
@@ -1097,6 +1098,31 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
                     />
                     <span className="text-sm text-muted-foreground whitespace-nowrap">({editForm.duration_minutes} min)</span>
                   </div>
+                  {/* Show time in your timezone */}
+                  {editForm.date && editForm.time && selectedBooking && (
+                    (() => {
+                      try {
+                        // Parse the date/time and convert to your timezone
+                        const bookingDateTime = new Date(`${editForm.date}T${editForm.time}`);
+                        const inviteeTimezone = (selectedBooking as any).invitee_timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+                        const yourTime = formatInTimeZone(bookingDateTime, timezone, 'h:mm a zzz');
+                        const inviteeTime = formatInTimeZone(bookingDateTime, inviteeTimezone, 'h:mm a zzz');
+
+                        // Only show if timezones are different
+                        if (inviteeTimezone !== timezone) {
+                          return (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              <div>Invitee: {inviteeTime}</div>
+                              <div>Your time: {yourTime}</div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      } catch (e) {
+                        return null;
+                      }
+                    })()
+                  )}
                 </div>
               </div>
 
