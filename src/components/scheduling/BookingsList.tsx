@@ -413,6 +413,9 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
         throw new Error(errorData.error || "Failed to update booking");
       }
 
+      const responseData = await res.json().catch(() => ({}));
+      const calendarUpdateError = responseData.calendar_update_error;
+
       const updatedBooking: Booking = {
         ...selectedBooking,
         invitee_name: editForm.invitee_name,
@@ -426,9 +429,16 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
       } as Booking;
 
       setBookings(bookings.map((b) => (b.id === selectedBooking.id ? updatedBooking : b)));
-      toast({ 
+
+      let description = sendUpdateEmail ? "Invitee has been notified" : undefined;
+      if (calendarUpdateError) {
+        description = (description ? description + ". " : "") + "Warning: Google Calendar event could not be updated";
+      }
+
+      toast({
         title: "Booking updated",
-        description: sendUpdateEmail ? "Invitee has been notified" : undefined
+        description,
+        variant: calendarUpdateError ? "default" : undefined,
       });
       setEditDialogOpen(false);
       setSelectedBooking(null);
