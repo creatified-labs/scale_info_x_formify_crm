@@ -25,6 +25,8 @@ import {
   isToday,
   isSameDay,
 } from 'date-fns';
+import { useTimezone } from '@/hooks/use-timezone';
+import { formatInTimeZone } from 'date-fns-tz';
 
 type CalendarEvent = {
   id: string;
@@ -48,6 +50,7 @@ const CalendarView = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
+  const { timezone } = useTimezone();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [editingNotes, setEditingNotes] = useState(false);
@@ -108,13 +111,13 @@ const CalendarView = () => {
     const start = new Date(booking.start_time);
     const end = new Date(booking.end_time);
     const duration = Math.round((end.getTime() - start.getTime()) / 60000);
-    
+
     return {
       id: booking.id,
       clientName: booking.invitee_name,
       eventName: (booking as any).event_types?.name,
       date: format(start, 'yyyy-MM-dd'),
-      time: format(start, 'HH:mm'),
+      time: formatInTimeZone(start, timezone, 'HH:mm'),
       duration,
       status: booking.status,
       callType: booking.chosen_call_type || 'meeting',

@@ -27,6 +27,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { normalizeBookingStatus, formatBookingStatus, statusTextColorClass } from "@/lib/status";
+import { useTimezone, formatTimeInTimezone } from "@/hooks/use-timezone";
 
 type BookingsListProps = {
   extraActions?: ReactNode;
@@ -43,6 +44,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
   const [notesEditDialogOpen, setNotesEditDialogOpen] = useState(false);
   const [editableNotes, setEditableNotes] = useState<string>("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const { timezone } = useTimezone();
   const [editForm, setEditForm] = useState({
     invitee_name: "",
     invitee_email: "",
@@ -896,7 +898,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
                         <div className="text-sm">
                           <div>{format(new Date(booking.start_time), 'MMM dd, yyyy')}</div>
                           <div className="text-muted-foreground">
-                            {format(new Date(booking.start_time), 'HH:mm')}
+                            {formatTimeInTimezone(booking.start_time, timezone)}
                           </div>
                         </div>
                       </TableCell>

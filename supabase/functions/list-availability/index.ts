@@ -422,7 +422,10 @@ serve(async (req) => {
     console.log(`Final available slots: ${filteredSlots.length}`)
 
     return new Response(
-      JSON.stringify({ slots: filteredSlots }),
+      JSON.stringify({
+        slots: filteredSlots,
+        timezone: scheduleTimezone // Include timezone so frontend can display times correctly
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   } catch (error) {

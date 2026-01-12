@@ -17,7 +17,8 @@ function Calendar({
 }: CalendarProps) {
   return (
     <>
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{
+        __html: `
         .calendar-fixed .rdp-table {
           width: 100%;
           border-collapse: collapse;
@@ -47,7 +48,7 @@ function Calendar({
           display: flex !important;
           gap: 0.25rem !important;
         }
-      `}</style>
+      `}} />
       <DayPicker
         showOutsideDays={showOutsideDays}
         className={cn("p-4 calendar-fixed", className)}

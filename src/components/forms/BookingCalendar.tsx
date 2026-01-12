@@ -18,6 +18,7 @@ import {
   addMinutes,
   addHours,
 } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,17 +50,19 @@ interface BookingCalendarProps {
   };
   onTimeSelect?: (time: string) => void;
   onDateSelect?: (date: Date) => void;
+  onTimezoneDetected?: (timezone: string) => void;
   selectedDate?: Date | null;
   selectedTime?: string | null;
   renderCalendar?: boolean;
   renderTimesColumn?: boolean;
 }
 
-export const BookingCalendar = ({ 
-  form, 
-  onTimeSelect, 
+export const BookingCalendar = ({
+  form,
+  onTimeSelect,
   onDateSelect,
-  selectedDate, 
+  onTimezoneDetected,
+  selectedDate,
   selectedTime,
   renderCalendar = true,
   renderTimesColumn = true
@@ -75,6 +78,7 @@ export const BookingCalendar = ({
   const [availableSlotsByDate, setAvailableSlotsByDate] = useState<Record<string, TimeSlot[]>>({});
   const [prefetchedRange, setPrefetchedRange] = useState<{ start: string; end: string } | null>(null);
   const [googleSyncEnabled, setGoogleSyncEnabled] = useState(false);
+  const [scheduleTimezone, setScheduleTimezone] = useState<string>('UTC');
   const isEmailValid = useMemo(() => {
     const trimmed = typeof form.email === "string" ? form.email.trim() : "";
     if (!trimmed) return false;
@@ -262,11 +266,16 @@ export const BookingCalendar = ({
         }
 
         if (res?.ok) {
-          const data = await res.json().catch(() => ({ slots: [] }));
+          const data = await res.json().catch(() => ({ slots: [], timezone: 'UTC' }));
+          const timezone = data.timezone || 'UTC';
+          setScheduleTimezone(timezone);
+          onTimezoneDetected?.(timezone);
+          // Display times in invitee's browser timezone, not schedule timezone
+          const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
           const slots = (data.slots || []).map((s: any) => ({
             start: new Date(s.start_time),
             end: new Date(s.end_time),
-            displayTime: format(new Date(s.start_time), 'h:mm a'),
+            displayTime: formatInTimeZone(new Date(s.start_time), browserTimezone, 'h:mm a'),
           }));
           const key = format(date, 'yyyy-MM-dd');
           setAvailableSlotsByDate((prev) => ({ ...prev, [key]: slots }));
@@ -344,7 +353,12 @@ export const BookingCalendar = ({
 
       if (!res?.ok) return;
 
-      const data = await res.json().catch(() => ({ slots: [] }));
+      const data = await res.json().catch(() => ({ slots: [], timezone: 'UTC' }));
+      const timezone = data.timezone || 'UTC';
+      setScheduleTimezone(timezone);
+      onTimezoneDetected?.(timezone);
+      // Display times in invitee's browser timezone, not schedule timezone
+      const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const grouped: Record<string, TimeSlot[]> = {};
       for (const slot of data.slots || []) {
         const dateKey = slot.start_time.slice(0, 10);
@@ -352,7 +366,7 @@ export const BookingCalendar = ({
         grouped[dateKey].push({
           start: new Date(slot.start_time),
           end: new Date(slot.end_time),
-          displayTime: format(new Date(slot.start_time), 'h:mm a'),
+          displayTime: formatInTimeZone(new Date(slot.start_time), browserTimezone, 'h:mm a'),
         });
       }
 

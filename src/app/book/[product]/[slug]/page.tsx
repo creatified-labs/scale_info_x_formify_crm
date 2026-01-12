@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { PoweredByBadge } from "@/components/PoweredByBadge";
 import { usePreviewMode } from "@/components/PreviewModeToggle";
 import { DEFAULT_PRODUCT_SEGMENT } from "@/lib/urls";
+import { parseTimeInTimezone } from "@/lib/timezone";
 
 type ConfirmationDetails = {
   name: string;
@@ -305,27 +306,11 @@ const PublicBooking = () => {
     setSubmitting(true);
 
     try {
-      // Duplicate booking prevention: Check for recent booking with same email and event
-      // Parse time in 12-hour format (e.g., "9:00 AM")
-      const timeMatch = selectedTime.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-      if (!timeMatch) {
-        throw new Error('Invalid time format');
-      }
+      // Parse time in the invitee's browser timezone (since that's what they see in the UI)
+      // The displayed times are already converted to the invitee's timezone, so we parse it back to UTC
+      const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const startTime = parseTimeInTimezone(selectedDate, selectedTime, browserTimezone);
 
-      let hours = parseInt(timeMatch[1]);
-      const minutes = parseInt(timeMatch[2]);
-      const period = timeMatch[3].toUpperCase();
-
-      // Convert to 24-hour format
-      if (period === 'PM' && hours !== 12) {
-        hours += 12;
-      } else if (period === 'AM' && hours === 12) {
-        hours = 0;
-      }
-
-      const startTime = new Date(selectedDate);
-      startTime.setHours(hours, minutes, 0, 0);
-      
       const endTime = new Date(startTime);
       endTime.setMinutes(endTime.getMinutes() + eventType.duration_minutes);
 

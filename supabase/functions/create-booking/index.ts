@@ -65,6 +65,27 @@ serve(async (req) => {
     const companyId = eventType.companies?.id
     const settings = eventType.companies?.settings as any
 
+    // Get schedule timezone for calendar event (to ensure times are shown correctly in Google Calendar)
+    let scheduleTimezone = 'UTC'
+    if (eventType.availability_schedule_id) {
+      const { data: schedule } = await supabaseClient
+        .from('availability_schedules')
+        .select('timezone')
+        .eq('id', eventType.availability_schedule_id)
+        .single()
+      scheduleTimezone = schedule?.timezone || 'UTC'
+    } else {
+      // Fallback to user's default schedule timezone
+      const { data: defaultSchedule } = await supabaseClient
+        .from('availability_schedules')
+        .select('timezone')
+        .eq('user_id', eventType.user_id)
+        .eq('is_default', true)
+        .single()
+      scheduleTimezone = defaultSchedule?.timezone || 'UTC'
+    }
+    console.log(`Using schedule timezone for calendar event: ${scheduleTimezone}`)
+
     // Check calendar availability if enabled
     const checkConflicts = settings?.google_calendar?.check_conflicts ?? true
     if (checkConflicts) {
@@ -227,11 +248,11 @@ serve(async (req) => {
             description: eventType.description || `Meeting with ${invitee_name}`,
             start: {
               dateTime: start_time,
-              timeZone: invitee_timezone,
+              timeZone: scheduleTimezone,
             },
             end: {
               dateTime: end_time,
-              timeZone: invitee_timezone,
+              timeZone: scheduleTimezone,
             },
             organizer: {
               email: organizerEmail,
