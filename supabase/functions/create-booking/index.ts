@@ -578,6 +578,23 @@ serve(async (req) => {
       console.log('RESEND_API_KEY not configured - skipping email notifications')
     }
 
+    // Track submission analytics
+    try {
+      const { error: analyticsError } = await supabaseClient.rpc(
+        'increment_event_analytics_submission',
+        { event_type_id_param: event_type_id }
+      )
+      if (analyticsError) {
+        console.error('Failed to track analytics:', analyticsError)
+        // Don't fail the booking if analytics tracking fails
+      } else {
+        console.log('Analytics tracked successfully for event type:', event_type_id)
+      }
+    } catch (err) {
+      console.error('Analytics tracking error:', err)
+      // Don't fail the booking if analytics tracking fails
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true, 

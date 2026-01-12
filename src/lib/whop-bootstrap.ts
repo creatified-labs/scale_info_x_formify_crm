@@ -1,14 +1,51 @@
 import { supabase } from '@/integrations/supabase/client';
 import { detectWhopContext, readWhopIdentity } from './embed';
 
+// Request deduplication: track ongoing bootstrap requests
+let bootstrapPromise: Promise<{
+  success: boolean;
+  userId?: string;
+  companyId?: string;
+  error?: string;
+}> | null = null;
+
 /**
  * Bootstrap Whop user and company data
  * This ensures user and company exist in Supabase when app loads
- * 
+ *
  * The new flow uses a server-side API route that can access the x-whop-user-token header
  * sent by Whop's iframe, which provides proper user authentication.
+ *
+ * This function deduplicates concurrent requests - if a bootstrap is already in progress,
+ * subsequent calls will wait for and return the same result.
  */
 export async function bootstrapWhopUser(): Promise<{
+  success: boolean;
+  userId?: string;
+  companyId?: string;
+  error?: string;
+}> {
+  // Deduplicate concurrent requests
+  if (bootstrapPromise) {
+    console.log('[bootstrapWhopUser] Bootstrap already in progress, waiting for existing request...');
+    return bootstrapPromise;
+  }
+
+  // Start new bootstrap
+  bootstrapPromise = performBootstrap();
+
+  try {
+    return await bootstrapPromise;
+  } finally {
+    // Clear the promise after completion (success or failure)
+    bootstrapPromise = null;
+  }
+}
+
+/**
+ * Internal function that performs the actual bootstrap logic
+ */
+async function performBootstrap(): Promise<{
   success: boolean;
   userId?: string;
   companyId?: string;
