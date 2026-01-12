@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -9,15 +10,79 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  revalidating: boolean;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [revalidating, setRevalidating] = useState(false);
+
+  // Helper to extract company ID from URL
+  const getUrlCompanyId = useCallback(() => {
+    if (!pathname) return null;
+    const match = pathname.match(/\/dashboard\/([^/]+)/);
+    return match?.[1] || null;
+  }, [pathname]);
+
+  // Revalidate session when company context changes
+  const revalidateSession = useCallback(async () => {
+    setRevalidating(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const urlCompanyId = getUrlCompanyId();
+      const sessionCompanyId = session?.user?.user_metadata?.whop_org_id;
+
+      // If URL has company and it doesn't match session, re-authenticate
+      if (session && urlCompanyId && sessionCompanyId !== urlCompanyId) {
+        console.log('[Auth] Company mismatch - URL:', urlCompanyId, 'Session:', sessionCompanyId);
+
+        // Clear old session
+        await supabase.auth.signOut();
+
+        // Emit event to clear stale data immediately
+        window.dispatchEvent(new CustomEvent('company-switching'));
+
+        // Bootstrap with new company
+        const { bootstrapWhopUser } = await import('@/lib/whop-bootstrap');
+        const result = await bootstrapWhopUser();
+
+        if (result.success) {
+          // Get the new session and ensure it's fully loaded
+          const { data: { session: newSession } } = await supabase.auth.getSession();
+
+          if (newSession) {
+            setSession(newSession);
+            setUser(newSession?.user ?? null);
+
+            console.log('[Auth] Company switch complete - session updated');
+            console.log('[Auth] New session company:', newSession.user?.user_metadata?.whop_org_id);
+            console.log('[Auth] New session company UUID:', newSession.user?.user_metadata?.company_id);
+
+            // Wait for React state to propagate and session to fully settle
+            await new Promise(resolve => setTimeout(resolve, 150));
+            window.dispatchEvent(new CustomEvent('company-switched'));
+          } else {
+            console.error('[Auth] Re-authentication succeeded but no session returned');
+          }
+        } else {
+          console.error('[Auth] Re-authentication failed:', result.error);
+          toast({
+            title: "Company Switch Failed",
+            description: result.error || "Failed to switch companies. Please refresh the page.",
+            variant: "destructive",
+          });
+        }
+      }
+    } finally {
+      setRevalidating(false);
+    }
+  }, [getUrlCompanyId]);
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -37,8 +102,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // THEN check for existing session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log('[Auth] Initial session check:', { hasSession: !!session, userId: session?.user?.id });
-      
+
       if (session) {
+        // Check if URL company matches session company
+        const urlCompanyId = getUrlCompanyId();
+        const sessionCompanyId = session.user.user_metadata?.whop_org_id;
+
+        if (urlCompanyId && sessionCompanyId && urlCompanyId !== sessionCompanyId) {
+          console.log('[Auth] Initial load with company mismatch, re-authenticating...');
+          await revalidateSession();
+          setLoading(false);
+          return;
+        }
+
         // In development (localhost), check if user metadata has company_id
         // If not, force re-authentication to pick up the latest metadata
         const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
@@ -170,6 +246,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Monitor pathname changes and revalidate session when company changes
+  useEffect(() => {
+    if (!loading) {
+      void revalidateSession();
+    }
+  }, [pathname, loading, revalidateSession]);
+
   const showFeatureAnnouncement = () => {
     // Only show once per deployment
     const ANNOUNCEMENT_KEY = 'formify_announcement_2025_12_23';
@@ -198,7 +281,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, revalidating, signOut }}>
       {children}
     </AuthContext.Provider>
   );

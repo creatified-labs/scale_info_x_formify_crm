@@ -73,8 +73,10 @@ async function performBootstrap(): Promise<{
       }
       
       // Company mismatch - need to re-authenticate for the new company
-      console.log('[bootstrapWhopUser] Company mismatch detected. Current:', currentWhopOrgId, 'Requested:', companyId);
-      console.log('[bootstrapWhopUser] Clearing session and re-authenticating for new company...');
+      console.log('[bootstrapWhopUser] Company mismatch detected');
+      console.log('[bootstrapWhopUser]   Current session company:', currentWhopOrgId);
+      console.log('[bootstrapWhopUser]   Requested URL company:', companyId);
+      console.log('[bootstrapWhopUser]   Clearing session and re-authenticating...');
       await supabase.auth.signOut();
     }
     
@@ -188,7 +190,13 @@ async function performBootstrap(): Promise<{
         error: 'No tokens received from server',
       };
     }
-    
+
+    console.log('[bootstrapWhopUser] ✅ Bootstrap complete:', {
+      userId: data.user_id,
+      companyId: data.company_id,
+      whopOrgId: companyId,
+    });
+
     return {
       success: true,
       userId: data.user_id,

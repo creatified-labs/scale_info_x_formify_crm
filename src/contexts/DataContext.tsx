@@ -329,8 +329,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, [sb]);
 
-  const fetchData = useCallback(async () => {
-    const background = hydrated;
+  const fetchData = useCallback(async (skipValidation = false) => {
+    // For company switches, always treat as foreground operation to update loading state
+    const background = skipValidation ? false : hydrated;
+    console.log('[DataContext] fetchData called', { skipValidation, background, hydrated });
     try {
       if (!background) {
         setLoading(true);
@@ -359,6 +361,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       const companyId = await getCompanyId({ allowFallback: true });
       if (!companyId) {
+        console.warn('[DataContext] No company ID found');
         setRevenueEntries([]);
         setGoals([]);
         setCalls([]);
@@ -369,6 +372,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
           setHydrated(true);
         }
         return;
+      }
+
+      console.log('[DataContext] Fetching data for company:', companyId);
+
+      // Validate company ID matches session (skip during company switch since AuthContext already validated)
+      if (!skipValidation) {
+        const sessionCompanyId = session.user.user_metadata?.company_id;
+        if (companyId !== sessionCompanyId) {
+          console.warn('[DataContext] Company ID mismatch - waiting for re-auth');
+          console.warn('[DataContext]   getCompanyId returned:', companyId);
+          console.warn('[DataContext]   Session has:', sessionCompanyId);
+          // Set loading to false to prevent stuck loading state
+          if (!background) {
+            setLoading(false);
+          }
+          return; // Don't fetch with mismatched company
+        }
       }
 
       const [revenueRes, goalsRes, callsRes] = await Promise.all([
@@ -411,6 +431,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setRevenueEntries(mappedRevenue);
       setGoals(mappedGoals);
       setCalls(sanitizedCalls.map((row) => mapCallFromDb(row)));
+      console.log('[DataContext] ✅ Data fetch complete', {
+        revenue: mappedRevenue.length,
+        goals: mappedGoals.length,
+        calls: sanitizedCalls.length
+      });
     } catch (error: any) {
       console.warn('Error loading data (non-critical):', error?.message || error);
       setRevenueEntries([]);
@@ -418,6 +443,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setCalls([]);
     } finally {
       if (!background) {
+        console.log('[DataContext] Setting loading to false');
         setLoading(false);
       }
       if (!hydrated) {
@@ -445,9 +471,29 @@ export function DataProvider({ children }: { children: ReactNode }) {
       void fetchData();
     };
 
+    const handleCompanySwitching = () => {
+      console.log('[DataContext] Company switching - clearing stale data');
+      // Immediately clear stale data to prevent showing wrong company's data
+      setRevenueEntries([]);
+      setGoals([]);
+      setCalls([]);
+      setLoading(true);
+    };
+
+    const handleCompanySwitched = () => {
+      console.log('[DataContext] Company switched - refetching data');
+      // Add a delay to ensure session state has fully propagated through React context
+      // Skip validation since AuthContext already verified the session is correct
+      setTimeout(() => {
+        void fetchData(true); // Pass true to skip validation
+      }, 200);
+    };
+
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('call-tracker-refresh', handleManualRefresh as EventListener);
     window.addEventListener('bookings-refresh', handleBookingsRefresh as EventListener);
+    window.addEventListener('company-switching', handleCompanySwitching as EventListener);
+    window.addEventListener('company-switched', handleCompanySwitched as EventListener);
 
     const interval = setInterval(() => {
       void fetchData();
@@ -468,6 +514,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('call-tracker-refresh', handleManualRefresh as EventListener);
       window.removeEventListener('bookings-refresh', handleBookingsRefresh as EventListener);
+      window.removeEventListener('company-switching', handleCompanySwitching as EventListener);
+      window.removeEventListener('company-switched', handleCompanySwitched as EventListener);
       clearInterval(interval);
       sb.removeChannel(channel);
     };

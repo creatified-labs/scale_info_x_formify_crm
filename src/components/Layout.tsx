@@ -74,7 +74,7 @@ export const Layout = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLocalHost, setIsLocalHost] = useState(false);
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
-  const { user, signOut, loading: authLoading } = useAuth();
+  const { user, signOut, loading: authLoading, revalidating } = useAuth();
   const { toast } = useToast();
   const { plan, removeWatermark } = useFeature();
   const [brandName, setBrandName] = useState<string>("");
@@ -497,7 +497,7 @@ export const Layout = ({
         setBrandingHideBadge(false);
       }
     })();
-  }, [user?.id]);
+  }, [user?.id, user?.user_metadata?.company_id]); // Also reload when company changes
 
   useEffect(() => {
     if (typeof window === "undefined") return;
