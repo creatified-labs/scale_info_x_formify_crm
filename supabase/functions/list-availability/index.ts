@@ -7,6 +7,40 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
 }
 
+// Helper function to create a Date object representing a specific time in a specific timezone
+function createTimeInTimezone(dateObj: Date, timeStr: string, timezone: string): Date {
+  const [hour, minute] = timeStr.split(':').map(Number);
+  const dateStr = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
+
+  // Create ISO string representing the local time in the target timezone
+  const localISO = `${dateStr}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+
+  // Parse this as UTC first
+  const asUTC = new Date(localISO + 'Z');
+
+  // Use Intl.DateTimeFormat to find what this UTC time looks like in the target timezone
+  // Using 'sv-SE' locale gives us ISO 8601 format: "YYYY-MM-DD HH:MM:SS"
+  const formattedInTZ = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(asUTC);
+
+  // Parse the result as UTC to get the time value
+  const shownInTZ = new Date(formattedInTZ.replace(' ', 'T') + 'Z');
+
+  // Calculate offset between what we wanted and what it showed
+  const offset = asUTC.getTime() - shownInTZ.getTime();
+
+  // Apply the offset to get the correct UTC time that represents our desired local time
+  return new Date(asUTC.getTime() + offset);
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -58,7 +92,7 @@ serve(async (req) => {
     if (!scheduleId) {
       const { data: defaultSchedule } = await supabaseClient
         .from('availability_schedules')
-        .select('id')
+        .select('id, timezone')
         .eq('user_id', eventType.user_id)
         .eq('is_default', true)
         .single()
@@ -68,6 +102,29 @@ serve(async (req) => {
     } else {
       console.log(`Using event-specific schedule: ${scheduleId}`)
     }
+
+    // Get the schedule's timezone
+    let scheduleTimezone = 'UTC'
+    if (scheduleId) {
+      const { data: schedule } = await supabaseClient
+        .from('availability_schedules')
+        .select('timezone')
+        .eq('id', scheduleId)
+        .single()
+
+      scheduleTimezone = schedule?.timezone || 'UTC'
+    } else {
+      // Fallback to user's profile timezone if no schedule
+      const { data: userProfile } = await supabaseClient
+        .from('profiles')
+        .select('timezone')
+        .eq('id', eventType.user_id)
+        .single()
+
+      scheduleTimezone = userProfile?.timezone || 'UTC'
+    }
+
+    console.log(`Schedule timezone: ${scheduleTimezone}`)
 
     if (!scheduleId) {
       console.log('No availability schedule found for user')
@@ -135,15 +192,10 @@ serve(async (req) => {
     const timeIncrement = eventType.time_increment || duration
 
     for (const range of availableRanges) {
-      // Parse time strings (HH:MM format)
-      const [startHour, startMin] = range.start.split(':').map(Number)
-      const [endHour, endMin] = range.end.split(':').map(Number)
-
-      let currentSlotStart = new Date(fromDate)
-      currentSlotStart.setHours(startHour, startMin, 0, 0)
-
-      const rangeEnd = new Date(fromDate)
-      rangeEnd.setHours(endHour, endMin, 0, 0)
+      // Parse time strings (HH:MM format) and interpret them in the schedule's timezone
+      // This ensures that if user sets "9:00 AM" in Eastern time for this schedule, it's treated as Eastern 9 AM, not UTC 9 AM
+      let currentSlotStart = createTimeInTimezone(fromDate, range.start, scheduleTimezone)
+      const rangeEnd = createTimeInTimezone(fromDate, range.end, scheduleTimezone)
 
       // Generate slots with time increment
       while (currentSlotStart < rangeEnd) {

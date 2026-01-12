@@ -31,9 +31,10 @@ serve(async (req) => {
       schedule_id?: string;
       name?: string;
       is_default?: boolean;
+      timezone?: string;
       user_id?: string;
     }
-    const { action, schedule_id, name, is_default, user_id } = body
+    const { action, schedule_id, name, is_default, timezone, user_id } = body
 
     // Check if this is a proxied request (has user_id in body and X-Dev-Proxy header)
     const isProxied = req.headers.get('X-Dev-Proxy') === 'true' && !!user_id
@@ -118,12 +119,24 @@ serve(async (req) => {
           .eq('is_default', true)
       }
 
+      // Get user's default timezone if not provided
+      let scheduleTimezone = timezone
+      if (!scheduleTimezone) {
+        const { data: profile } = await supabaseClient
+          .from('profiles')
+          .select('timezone')
+          .eq('id', userId)
+          .single()
+        scheduleTimezone = profile?.timezone || 'UTC'
+      }
+
       const { data, error } = await supabaseClient
         .from('availability_schedules')
         .insert({
           user_id: userId,
           name: name.trim(),
-          is_default: is_default || false
+          is_default: is_default || false,
+          timezone: scheduleTimezone
         })
         .select()
         .single()
@@ -179,6 +192,7 @@ serve(async (req) => {
       const updates: any = { updated_at: new Date().toISOString() }
       if (name && name.trim().length > 0) updates.name = name.trim()
       if (is_default !== undefined) updates.is_default = is_default
+      if (timezone && timezone.trim().length > 0) updates.timezone = timezone.trim()
 
       const { data, error } = await supabaseClient
         .from('availability_schedules')

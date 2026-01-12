@@ -95,6 +95,7 @@ export interface AvailabilitySchedule {
   user_id: string;
   name: string;
   is_default: boolean;
+  timezone: string; // Timezone for this schedule (e.g., 'America/New_York', 'Europe/London')
   created_at: string;
   updated_at: string;
 }

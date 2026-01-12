@@ -6,10 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Trash2, Edit2, Star, Check, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Plus, Trash2, Edit2, Star, Check, X, ChevronDown, ChevronUp, Globe } from "lucide-react";
 import { AvailabilitySchedule, AvailabilityRule } from "@/types/scheduling";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { TIMEZONES } from "@/lib/timezones";
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -35,8 +38,10 @@ export const AvailabilitySchedulesManager = ({
   const [schedules, setSchedules] = useState<AvailabilitySchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [newScheduleName, setNewScheduleName] = useState("");
+  const [newScheduleTimezone, setNewScheduleTimezone] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [editTimezone, setEditTimezone] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [expandedScheduleId, setExpandedScheduleId] = useState<string | null>(null);
   const { toast } = useToast();
@@ -106,6 +111,7 @@ export const AvailabilitySchedulesManager = ({
             action: "create",
             name: scheduleName,
             is_default: schedules.length === 0, // First schedule is default
+            timezone: newScheduleTimezone || undefined, // Falls back to user's profile timezone
             user_id: currentUser.id, // Explicitly pass user_id
           },
           method: 'POST',
@@ -130,6 +136,7 @@ export const AvailabilitySchedulesManager = ({
       });
 
       setNewScheduleName("");
+      setNewScheduleTimezone("");
       setCreateDialogOpen(false);
       
       // Reload schedules without losing expansion state
@@ -211,11 +218,23 @@ export const AvailabilitySchedulesManager = ({
     loadSchedules();
   };
 
-  const renameSchedule = async (scheduleId: string, newName: string) => {
+  const updateSchedule = async (scheduleId: string, newName: string, newTimezone?: string) => {
     if (!newName.trim()) return;
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
+    const payload: any = {
+      action: "update",
+      schedule_id: scheduleId,
+      name: newName.trim(),
+      user_id: user.id,
+    };
+
+    // Only include timezone if it was changed
+    if (newTimezone !== undefined && newTimezone !== "") {
+      payload.timezone = newTimezone;
+    }
 
     const res = await fetch('/api/edge-proxy', {
       method: "POST",
@@ -224,12 +243,7 @@ export const AvailabilitySchedulesManager = ({
       },
       body: JSON.stringify({
         functionName: 'manage-availability-schedule',
-        payload: {
-          action: "update",
-          schedule_id: scheduleId,
-          name: newName.trim(),
-          user_id: user.id,
-        },
+        payload,
         method: 'POST',
       }),
     });
@@ -238,18 +252,19 @@ export const AvailabilitySchedulesManager = ({
       const error = await res.json();
       toast({
         title: "Error",
-        description: error.error || "Failed to rename schedule",
+        description: error.error || "Failed to update schedule",
         variant: "destructive",
       });
       return;
     }
 
     toast({
-      title: "Schedule renamed",
+      title: "Schedule updated",
     });
 
     setEditingId(null);
     setEditName("");
+    setEditTimezone("");
     loadSchedules();
   };
 
@@ -319,13 +334,15 @@ export const AvailabilitySchedulesManager = ({
             <DialogHeader>
               <DialogTitle>Create Availability Schedule</DialogTitle>
               <DialogDescription>
-                Give your schedule a name like "Working Hours" or "Weekend Hours"
+                Give your schedule a name and timezone. Perfect for teams in different locations.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 mt-4">
-              <div>
+              <div className="space-y-2">
+                <Label htmlFor="schedule-name">Schedule Name</Label>
                 <Input
-                  placeholder="Schedule name (e.g., 'Weekend Hours')"
+                  id="schedule-name"
+                  placeholder="e.g., 'London Hours' or 'SF Team'"
                   value={newScheduleName}
                   onChange={(e) => setNewScheduleName(e.target.value)}
                   onKeyDown={(e) => {
@@ -333,6 +350,24 @@ export const AvailabilitySchedulesManager = ({
                   }}
                   autoFocus
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="schedule-timezone">Timezone (Optional)</Label>
+                <Select value={newScheduleTimezone} onValueChange={setNewScheduleTimezone}>
+                  <SelectTrigger id="schedule-timezone">
+                    <SelectValue placeholder="Select timezone (defaults to your account timezone)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIMEZONES.map((tz) => (
+                      <SelectItem key={tz.value} value={tz.value}>
+                        {tz.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Availability times will be interpreted in this timezone
+                </p>
               </div>
               <Button onClick={createSchedule} className="w-full">
                 Create Schedule
@@ -366,53 +401,75 @@ export const AvailabilitySchedulesManager = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1">
                     {editingId === schedule.id ? (
-                      <div className="flex items-center gap-2 flex-1">
-                        <Input
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") renameSchedule(schedule.id, editName);
-                            if (e.key === "Escape") {
+                      <div className="flex flex-col gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") updateSchedule(schedule.id, editName, editTimezone);
+                              if (e.key === "Escape") {
+                                setEditingId(null);
+                                setEditName("");
+                                setEditTimezone("");
+                              }
+                            }}
+                            placeholder="Schedule name"
+                            autoFocus
+                            className="h-8"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateSchedule(schedule.id, editName, editTimezone);
+                            }}
+                          >
+                            <Check className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setEditingId(null);
                               setEditName("");
-                            }
-                          }}
-                          autoFocus
-                          onClick={(e) => e.stopPropagation()}
-                          className="h-8"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            renameSchedule(schedule.id, editName);
-                          }}
-                        >
-                          <Check className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingId(null);
-                            setEditName("");
-                          }}
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
+                              setEditTimezone("");
+                            }}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        <Select value={editTimezone} onValueChange={setEditTimezone}>
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="Change timezone (optional)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {TIMEZONES.map((tz) => (
+                              <SelectItem key={tz.value} value={tz.value}>
+                                {tz.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     ) : (
-                      <>
-                        <h4 className="font-semibold">{schedule.name}</h4>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <div>
+                          <h4 className="font-semibold">{schedule.name}</h4>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                            <Globe className="w-3 h-3" />
+                            <span>{schedule.timezone}</span>
+                          </div>
+                        </div>
                         {schedule.is_default && (
                           <Badge variant="secondary" className="text-xs">
                             <Star className="w-3 h-3 mr-1 fill-current" />
                             Default
                           </Badge>
                         )}
-                      </>
+                      </div>
                     )}
                   </div>
                   {editingId !== schedule.id && (
@@ -433,8 +490,9 @@ export const AvailabilitySchedulesManager = ({
                         onClick={() => {
                           setEditingId(schedule.id);
                           setEditName(schedule.name);
+                          setEditTimezone(schedule.timezone);
                         }}
-                        title="Rename schedule"
+                        title="Edit schedule"
                       >
                         <Edit2 className="w-4 h-4" />
                       </Button>

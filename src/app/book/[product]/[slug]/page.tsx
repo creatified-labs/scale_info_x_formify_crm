@@ -93,7 +93,7 @@ const PublicBooking = () => {
   const slug = params.slug;
   const rawProduct = params.product;
   const product = typeof rawProduct === "string" && rawProduct.trim().length > 0 ? rawProduct.trim() : DEFAULT_PRODUCT_SEGMENT;
-  const [eventType, setEventType] = useState<(EventType & { branding_hide_badge?: boolean }) | null>(null);
+  const [eventType, setEventType] = useState<(EventType & { branding_hide_badge?: boolean, user_timezone?: string }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -167,13 +167,14 @@ const PublicBooking = () => {
         throw new Error("event not found");
       }
       const body = await res.json();
-      const fetched = body?.event_type as (EventType & { companies?: { branding_hide_badge?: boolean } }) | null;
+      const fetched = body?.event_type as (EventType & { companies?: { branding_hide_badge?: boolean }, profiles?: { timezone?: string } }) | null;
       if (!fetched) {
         throw new Error("event not found");
       }
       setEventType({
         ...fetched,
         branding_hide_badge: fetched.companies?.branding_hide_badge ?? fetched.branding_hide_badge ?? false,
+        user_timezone: fetched.profiles?.timezone || 'UTC',
       });
     } catch (error) {
       toast({
@@ -691,7 +692,7 @@ const PublicBooking = () => {
           <Card className="flex flex-col h-auto lg:h-[520px]">
             <div className="p-4 border-b flex-shrink-0">
               <h2 className="text-base font-semibold">Select a Date</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">Europe/London</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{eventType.user_timezone || 'UTC'}</p>
             </div>
             <div className="flex-1 overflow-auto min-h-0">
               <BookingCalendar
