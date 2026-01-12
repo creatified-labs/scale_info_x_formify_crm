@@ -38,7 +38,7 @@ serve(async (req) => {
     if (type === 'view') {
       // Increment view count
       const { error } = await supabaseClient.rpc('increment_event_analytics_view', {
-        p_event_type_id: event_type_id
+        event_type_id_param: event_type_id
       })
 
       if (error) {
@@ -51,7 +51,7 @@ serve(async (req) => {
     } else if (type === 'submission') {
       // Increment submission count
       const { error } = await supabaseClient.rpc('increment_event_analytics_submission', {
-        p_event_type_id: event_type_id
+        event_type_id_param: event_type_id
       })
 
       if (error) {
