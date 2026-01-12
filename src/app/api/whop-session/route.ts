@@ -84,13 +84,23 @@ export async function GET(request: NextRequest) {
     }
 
     if (!whopOrgId) {
-      console.error('[whop-session] ❌ No company ID provided');
+      console.error('[whop-session] ❌ No company ID provided after checking all sources');
+      console.error('[whop-session] Debug info:', {
+        companyIdFromQuery,
+        pathMatch: pathMatch?.[0],
+        envFallback,
+        isDevelopment,
+      });
+
       const errorMessage = isDevelopment
-        ? 'No company ID available. Ensure NEXT_PUBLIC_WHOP_COMPANY_ID is set in .env.local or access via Whop context.'
-        : 'No company ID available. This app must be accessed through Whop.';
+        ? `No company ID available. Tried: query=${companyIdFromQuery}, path=${pathMatch?.[0]}, env=${envFallback}. Set NEXT_PUBLIC_WHOP_COMPANY_ID in .env.local or ensure the app URL includes the company ID (e.g., /dashboard/biz_xxx).`
+        : 'No company ID available. Please ensure you are accessing this app through the Whop platform. If this issue persists after refreshing, try reinstalling the app or contact support.';
 
       return NextResponse.json(
-        { error: errorMessage },
+        {
+          error: errorMessage,
+          debug: isDevelopment ? { companyIdFromQuery, pathMatch: pathMatch?.[0], envFallback } : undefined,
+        },
         { status: 400 }
       );
     }
@@ -232,12 +242,15 @@ export async function GET(request: NextRequest) {
         message: 'Company creation or lookup failed - check logs above for details'
       });
       return NextResponse.json(
-        { 
-          error: 'Failed to resolve company',
-          debug: {
+        {
+          error: isDevelopment
+            ? `Failed to resolve company for ${whopOrgId}. Check server logs for details.`
+            : 'Failed to set up your company. Please try refreshing the page. If the issue persists, contact support.',
+          debug: isDevelopment ? {
             whopOrgId,
-            message: 'Check server logs for detailed error information'
-          }
+            companyUuid,
+            message: 'Company creation or lookup failed - check server logs'
+          } : undefined,
         },
         { status: 500 }
       );

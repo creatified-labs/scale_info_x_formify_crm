@@ -1,15 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
+
+/**
+ * Verify Whop webhook signature
+ * @param payload - The webhook payload
+ * @param signature - The x-whop-signature header value
+ * @param secret - The WHOP_WEBHOOK_SECRET environment variable
+ * @returns true if signature is valid, false otherwise
+ */
+function verifyWhopSignature(payload: any, signature: string | null, secret: string | undefined): boolean {
+  if (!signature || !secret) {
+    console.warn('[whop-webhook-proxy] Missing signature or secret for verification');
+    return false;
+  }
+
+  try {
+    // Create HMAC SHA-256 hash of the payload using the secret
+    const hmac = crypto.createHmac('sha256', secret);
+    const payloadString = JSON.stringify(payload);
+    hmac.update(payloadString);
+    const expectedSignature = hmac.digest('hex');
+
+    // Compare signatures using timing-safe comparison
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    );
+  } catch (error) {
+    console.error('[whop-webhook-proxy] Signature verification error:', error);
+    return false;
+  }
+}
 
 /**
  * Whop webhook proxy route
  * This proxies Whop webhooks to the Supabase Edge Function
- * 
+ *
  * Whop webhook URL should be: https://your-domain.vercel.app/api/webhooks/whop
  */
 export async function POST(request: NextRequest) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const webhookSecret = process.env.WHOP_WEBHOOK_SECRET;
 
     if (!supabaseUrl || !supabaseAnonKey) {
       console.error('[whop-webhook-proxy] Missing Supabase configuration');
@@ -21,9 +54,33 @@ export async function POST(request: NextRequest) {
 
     // Get the webhook payload
     const payload = await request.json();
-    
+
     // Get the Whop signature header
     const whopSignature = request.headers.get('x-whop-signature');
+
+    // SECURITY: Verify webhook signature
+    if (process.env.NODE_ENV === 'production') {
+      if (!webhookSecret) {
+        console.error('[whop-webhook-proxy] ❌ WHOP_WEBHOOK_SECRET not configured in production');
+        return NextResponse.json(
+          { error: 'Webhook configuration error' },
+          { status: 500 }
+        );
+      }
+
+      const isValid = verifyWhopSignature(payload, whopSignature, webhookSecret);
+      if (!isValid) {
+        console.error('[whop-webhook-proxy] ❌ Invalid webhook signature');
+        return NextResponse.json(
+          { error: 'Invalid signature' },
+          { status: 401 }
+        );
+      }
+
+      console.log('[whop-webhook-proxy] ✅ Webhook signature verified');
+    } else {
+      console.log('[whop-webhook-proxy] ⚠️ Development mode - skipping signature verification');
+    }
 
     console.log('[whop-webhook-proxy] Received webhook:', {
       type: payload.type,

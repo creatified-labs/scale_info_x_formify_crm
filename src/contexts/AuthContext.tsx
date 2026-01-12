@@ -11,6 +11,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   revalidating: boolean;
+  bootstrapStatus: string;
   signOut: () => Promise<void>;
 }
 
@@ -22,25 +23,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [revalidating, setRevalidating] = useState(false);
+  const [lastCompanyId, setLastCompanyId] = useState<string | null>(null);
+  const [bootstrapStatus, setBootstrapStatus] = useState<string>('');
 
-  // Helper to extract company ID from URL
+  // Helper to extract company ID from URL (this is the Whop biz_xxx ID)
   const getUrlCompanyId = useCallback(() => {
     if (!pathname) return null;
     const match = pathname.match(/\/dashboard\/([^/]+)/);
     return match?.[1] || null;
   }, [pathname]);
 
-  // Revalidate session when company context changes
+  // Revalidate session when company context changes (only when explicitly switching companies)
   const revalidateSession = useCallback(async () => {
     setRevalidating(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const urlCompanyId = getUrlCompanyId();
-      const sessionCompanyId = session?.user?.user_metadata?.whop_org_id;
 
-      // If URL has company and it doesn't match session, re-authenticate
-      if (session && urlCompanyId && sessionCompanyId !== urlCompanyId) {
-        console.log('[Auth] Company mismatch - URL:', urlCompanyId, 'Session:', sessionCompanyId);
+      // CRITICAL: Compare whop_org_id (biz_xxx), NOT company_id (UUID)
+      const sessionWhopOrgId = session?.user?.user_metadata?.whop_org_id;
+
+      // Only re-authenticate if URL has a company ID AND it's different from session's whop_org_id
+      if (session && urlCompanyId && sessionWhopOrgId && sessionWhopOrgId !== urlCompanyId) {
+        console.log('[Auth] Company switch detected - URL:', urlCompanyId, 'Session:', sessionWhopOrgId);
+
+        // Update last company ID to prevent loops
+        setLastCompanyId(urlCompanyId);
 
         // Clear old session
         await supabase.auth.signOut();
@@ -49,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         window.dispatchEvent(new CustomEvent('company-switching'));
 
         // Bootstrap with new company
+        setBootstrapStatus('Connecting to new company...');
         const { bootstrapWhopUser } = await import('@/lib/whop-bootstrap');
         const result = await bootstrapWhopUser();
 
@@ -59,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (newSession) {
             setSession(newSession);
             setUser(newSession?.user ?? null);
+            setBootstrapStatus('');
 
             console.log('[Auth] Company switch complete - session updated');
             console.log('[Auth] New session company:', newSession.user?.user_metadata?.whop_org_id);
@@ -69,9 +79,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             window.dispatchEvent(new CustomEvent('company-switched'));
           } else {
             console.error('[Auth] Re-authentication succeeded but no session returned');
+            setBootstrapStatus('');
           }
         } else {
           console.error('[Auth] Re-authentication failed:', result.error);
+          setBootstrapStatus('');
           toast({
             title: "Company Switch Failed",
             description: result.error || "Failed to switch companies. Please refresh the page.",
@@ -104,11 +116,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[Auth] Initial session check:', { hasSession: !!session, userId: session?.user?.id });
 
       if (session) {
-        // Check if URL company matches session company
+        // Check if URL company matches session company (compare Whop org IDs, not UUIDs)
         const urlCompanyId = getUrlCompanyId();
-        const sessionCompanyId = session.user.user_metadata?.whop_org_id;
+        const sessionWhopOrgId = session.user.user_metadata?.whop_org_id;
 
-        if (urlCompanyId && sessionCompanyId && urlCompanyId !== sessionCompanyId) {
+        // Set initial company ID to prevent false positives on first load
+        if (urlCompanyId) {
+          setLastCompanyId(urlCompanyId);
+        }
+
+        if (urlCompanyId && sessionWhopOrgId && urlCompanyId !== sessionWhopOrgId) {
           console.log('[Auth] Initial load with company mismatch, re-authenticating...');
           await revalidateSession();
           setLoading(false);
@@ -196,8 +213,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               console.error('Dev auth failed:', await response.text());
             }
           } else {
-            // In production (Whop), always run bootstrap
+            // Check if this is a public page that doesn't need authentication
+            const isPublicPage = typeof window !== 'undefined' && (
+              window.location.pathname.startsWith('/book/') ||
+              window.location.pathname.startsWith('/meeting-link-info') ||
+              window.location.pathname === '/terms' ||
+              window.location.pathname === '/privacy'
+            );
+
+            if (isPublicPage) {
+              console.log('[Auth] Public page detected - skipping bootstrap');
+              setLoading(false);
+              return;
+            }
+
+            // In production (Whop), always run bootstrap FOR PROTECTED PAGES
             console.log('[Auth] Production environment – running Whop bootstrap');
+            setBootstrapStatus('Connecting to Whop...');
             const { bootstrapWhopUser } = await import('@/lib/whop-bootstrap');
             try {
               const result = await bootstrapWhopUser();
@@ -206,6 +238,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
               if (result.success) {
                 console.log('[Auth] ✅ Whop user bootstrapped successfully');
+                setBootstrapStatus('Loading your data...');
+
                 // Refresh session after bootstrap
                 const { data: { session: newSession } } = await supabase.auth.getSession();
                 console.log('[Auth] Session after bootstrap:', {
@@ -215,8 +249,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 });
                 setSession(newSession);
                 setUser(newSession?.user ?? null);
+                setBootstrapStatus('');
               } else {
                 console.error('[Auth] ❌ Bootstrap failed:', result.error);
+                setBootstrapStatus('');
                 // Show user-friendly error message
                 toast({
                   title: "Setup Failed",
@@ -227,6 +263,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               }
             } catch (error) {
               console.error('[Auth] ❌ Bootstrap error:', error);
+              setBootstrapStatus('');
               toast({
                 title: "Setup Error",
                 description: "An unexpected error occurred during setup. Please contact support.",
@@ -246,12 +283,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Monitor pathname changes and revalidate session when company changes
+  // FIXED: Only revalidate when company ID in URL actually changes (not on every route change)
   useEffect(() => {
-    if (!loading) {
+    if (loading) return;
+
+    const urlCompanyId = getUrlCompanyId();
+
+    // Only trigger revalidation if:
+    // 1. We have a company ID in the URL
+    // 2. It's different from the last company ID we processed
+    if (urlCompanyId && urlCompanyId !== lastCompanyId) {
+      console.log('[Auth] Company ID changed in URL:', { from: lastCompanyId, to: urlCompanyId });
+      setLastCompanyId(urlCompanyId);
       void revalidateSession();
     }
-  }, [pathname, loading, revalidateSession]);
+  }, [pathname, loading, lastCompanyId, getUrlCompanyId, revalidateSession]);
 
   const showFeatureAnnouncement = () => {
     // Only show once per deployment
@@ -281,7 +327,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, revalidating, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, revalidating, bootstrapStatus, signOut }}>
       {children}
     </AuthContext.Provider>
   );

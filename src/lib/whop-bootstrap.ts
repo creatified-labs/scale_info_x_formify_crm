@@ -43,6 +43,65 @@ export async function bootstrapWhopUser(): Promise<{
 }
 
 /**
+ * Validate production environment configuration
+ * Throws error if NEXT_PUBLIC_WHOP_COMPANY_ID is set in production
+ */
+function validateProductionConfig() {
+  if (typeof window === 'undefined') return; // Server-side, skip check
+
+  const isProduction = process.env.NODE_ENV === 'production';
+  const hasCompanyIdSet = !!process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+
+  if (isProduction && hasCompanyIdSet) {
+    const errorMsg = `
+🔴 CRITICAL SECURITY ERROR 🔴
+
+NEXT_PUBLIC_WHOP_COMPANY_ID is set in production environment!
+
+This will break multi-company support and cause all users to share the same company data.
+
+ACTION REQUIRED:
+1. Go to Vercel dashboard → Project Settings → Environment Variables
+2. Delete or empty the NEXT_PUBLIC_WHOP_COMPANY_ID variable for Production
+3. Redeploy the application
+
+This variable should ONLY be set in local development (.env.local).
+    `.trim();
+
+    console.error(errorMsg);
+    throw new Error('NEXT_PUBLIC_WHOP_COMPANY_ID must NOT be set in production');
+  }
+}
+
+/**
+ * Wait for Whop context to be available (iframe variables may take time to inject)
+ * Returns company ID once detected, or null after timeout
+ * Timeout: 30 attempts × 500ms = 15 seconds (increased from 5s to handle slower connections)
+ */
+async function waitForWhopContext(maxAttempts = 30, delayMs = 500): Promise<string | null> {
+  // Validate production configuration before proceeding
+  validateProductionConfig();
+
+  for (let i = 0; i < maxAttempts; i++) {
+    const whopIdentity = readWhopIdentity();
+    const companyId = whopIdentity.orgId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+
+    if (companyId) {
+      console.log(`[waitForWhopContext] ✅ Company ID found on attempt ${i + 1}:`, companyId);
+      return companyId;
+    }
+
+    if (i < maxAttempts - 1) {
+      console.log(`[waitForWhopContext] ⏳ Attempt ${i + 1}/${maxAttempts} - waiting for Whop context...`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+
+  console.warn('[waitForWhopContext] ❌ Timed out waiting for Whop context');
+  return null;
+}
+
+/**
  * Internal function that performs the actual bootstrap logic
  */
 async function performBootstrap(): Promise<{
@@ -52,10 +111,9 @@ async function performBootstrap(): Promise<{
   error?: string;
 }> {
   try {
-    // Get Whop identity from URL/window for company ID first
-    const whopIdentity = readWhopIdentity();
-    // Fallback to env variable if Whop context isn't detected (for direct access)
-    const companyId = whopIdentity.orgId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
+    // Wait for Whop context to be available (gives iframe time to inject variables)
+    console.log('[bootstrapWhopUser] Waiting for Whop context...');
+    const companyId = await waitForWhopContext();
 
     // Check if user already has a session
     const { data: sessionData } = await supabase.auth.getSession();
@@ -82,17 +140,16 @@ async function performBootstrap(): Promise<{
     
     console.log('[bootstrapWhopUser] Bootstrapping Whop user:', {
       companyId,
-      whopIdentity,
       isWhopContext: detectWhopContext(),
       envFallback: process.env.NEXT_PUBLIC_WHOP_COMPANY_ID,
-      usingFallback: !whopIdentity.orgId && !!process.env.NEXT_PUBLIC_WHOP_COMPANY_ID,
+      usingFallback: !companyId || companyId === process.env.NEXT_PUBLIC_WHOP_COMPANY_ID,
     });
 
     if (!companyId) {
-      console.error('[bootstrapWhopUser] ❌ No company ID found in Whop context or environment.');
+      console.error('[bootstrapWhopUser] ❌ No company ID found after waiting for Whop context.');
       return {
         success: false,
-        error: 'No company ID available - app must be accessed through Whop or have NEXT_PUBLIC_WHOP_COMPANY_ID set',
+        error: 'Failed to detect company context. Please ensure you are accessing this app through Whop, or try refreshing the page. If the issue persists, contact support.',
       };
     }
     
@@ -164,7 +221,7 @@ async function performBootstrap(): Promise<{
         }
 
         // Refresh the session so we pick up the latest user metadata (company_id, etc.)
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        const { error: refreshError } = await supabase.auth.refreshSession();
         if (refreshError) {
           console.warn('Failed to refresh session:', refreshError);
         } else {

@@ -28,6 +28,8 @@ export const IntegrationsSettings = () => {
   const [autoAddBookings, setAutoAddBookings] = useState(true);
   const [autoCreateMeetLinks, setAutoCreateMeetLinks] = useState(true);
   const [savingPreferences, setSavingPreferences] = useState(false);
+  const [calendars, setCalendars] = useState<Array<{ id: string; name: string; primary: boolean; color?: string }>>([]);
+  const [loadingCalendars, setLoadingCalendars] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -60,7 +62,7 @@ export const IntegrationsSettings = () => {
               .select('settings')
               .eq('id', companyId)
               .maybeSingle();
-            
+
             if (company?.settings) {
               const settings = company.settings as any;
               const gcalSettings = settings?.google_calendar || {};
@@ -71,6 +73,36 @@ export const IntegrationsSettings = () => {
         } catch (err) {
           console.error('Failed to load calendar preferences:', err);
         }
+
+        // Load available calendars
+        loadCalendars();
+      }
+    };
+
+    const loadCalendars = async () => {
+      setLoadingCalendars(true);
+      try {
+        const res = await fetch('/api/edge-proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            functionName: 'list-google-calendars',
+            method: 'GET',
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.calendars) {
+            setCalendars(data.calendars);
+          }
+        } else {
+          console.error('Failed to load calendars:', await res.text());
+        }
+      } catch (err) {
+        console.error('Error loading calendars:', err);
+      } finally {
+        setLoadingCalendars(false);
       }
     };
 
@@ -435,10 +467,45 @@ export const IntegrationsSettings = () => {
                 Connected as: <span className="font-medium">{googleIntegration.email}</span>
               </p>
 
+              {/* Available Calendars */}
+              {loadingCalendars ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading calendars...
+                </div>
+              ) : calendars.length > 0 ? (
+                <div className="space-y-2 border-t pt-3">
+                  <p className="text-sm font-medium">Your Calendars ({calendars.length})</p>
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {calendars.map((cal) => (
+                      <div
+                        key={cal.id}
+                        className="flex items-center gap-2 text-sm py-1.5 px-2 rounded hover:bg-muted/50"
+                      >
+                        {cal.color && (
+                          <div
+                            className="w-3 h-3 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: cal.color }}
+                          />
+                        )}
+                        <span className="flex-1 truncate">
+                          {cal.name}
+                          {cal.primary && (
+                            <Badge variant="secondary" className="ml-2 text-xs">
+                              Primary
+                            </Badge>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               {/* Calendar Preferences */}
               <div className="space-y-3 border-t pt-3">
                 <p className="text-sm font-medium">Calendar Preferences</p>
-                
+
                 <div className="flex items-center justify-between py-2">
                   <div className="flex-1">
                     <p className="text-sm font-medium">Automatically add bookings</p>

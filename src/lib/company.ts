@@ -135,27 +135,38 @@ export async function getCompanyId(options?: GetCompanyIdOptions): Promise<strin
 
   const envCompanyId = getEnvCompanyId();
   if (envCompanyId) {
-    console.log('[getCompanyId] Using env company ID:', envCompanyId);
+    console.log('[getCompanyId] ✅ Using env company ID:', envCompanyId);
     return envCompanyId;
   }
 
   // PRIORITY 1: Check user metadata first (most reliable source)
   const { data: { user } } = await supabase.auth.getUser();
-  console.log('[getCompanyId] User metadata:', {
+  console.log('[getCompanyId] Checking user metadata:', {
     hasUser: !!user,
     userId: user?.id,
     companyId: (user?.user_metadata as any)?.company_id,
-    metadata: user?.user_metadata,
+    whop_org_id: (user?.user_metadata as any)?.whop_org_id,
   });
-  
+
   if (user) {
     const cid = (user.user_metadata as any)?.company_id as string | undefined;
     if (cid) {
       // Cache it for future use
       cacheLocalCompanyId(cid);
-      console.log('[getCompanyId] Found company ID in user metadata:', cid);
+      console.log('[getCompanyId] ✅ Found company ID in user metadata:', cid);
       return cid;
+    } else {
+      // This is a critical issue - user exists but has no company_id
+      console.error('[getCompanyId] ❌ User exists but has NO company_id in metadata!', {
+        userId: user.id,
+        email: user.email,
+        whop_org_id: (user.user_metadata as any)?.whop_org_id,
+        metadata_keys: Object.keys(user.user_metadata || {}),
+        hint: 'User may need re-authentication to get company_id populated',
+      });
     }
+  } else {
+    console.warn('[getCompanyId] ⚠️ No authenticated user found');
   }
 
   // PRIORITY 2: Check localStorage only if user metadata doesn't have it

@@ -821,13 +821,15 @@ export const EventTypesList = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Event Type</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p>
-                Permanently delete "{eventToPermanentlyDelete?.name}"? This cannot be undone.
-              </p>
-              <p>
-                All associated bookings, availability, and analytics tied to this event type will be removed.
-              </p>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  Permanently delete "{eventToPermanentlyDelete?.name}"? This cannot be undone.
+                </p>
+                <p>
+                  All associated bookings, availability, and analytics tied to this event type will be removed.
+                </p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

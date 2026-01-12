@@ -197,23 +197,11 @@ serve(async (req) => {
           console.log('User created successfully:', newUser.user.id)
           userId = newUser.user.id
           effectiveUser = newUser.user
-          
-          // Create company record for Whop org
-          const { error: companyError } = await supabaseAdmin
-            .from('companies')
-            .upsert({
-              id: whopIdentity.orgId,
-              name: whopIdentity.name || whopIdentity.orgId,
-              created_at: new Date().toISOString(),
-            }, {
-              onConflict: 'id'
-            })
-          
-          if (companyError) {
-            console.error('Failed to create company record:', companyError)
-          } else {
-            console.log('Company record created:', whopIdentity.orgId)
-          }
+
+          // NOTE: Company creation is handled by /api/whop-session route
+          // Do NOT create company here - it uses UUID IDs, not biz_xxx IDs
+          // The whop-session route properly creates companies with correct ID format
+          console.log('Company creation skipped - handled by whop-session route')
         }
       } else {
         console.log('Found existing user:', userId)

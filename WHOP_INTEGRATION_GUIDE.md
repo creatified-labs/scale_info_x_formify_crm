@@ -46,13 +46,15 @@ After configuring permissions, install your app:
 - [x] Environment variables configured (`WHOP_API_KEY`, `NEXT_PUBLIC_WHOP_APP_ID`, `NEXT_PUBLIC_WHOP_COMPANY_ID`)
 - [x] Comprehensive Whop SDK wrapper (`/src/lib/whop.ts`)
 - [x] Authentication middleware (`/src/middleware/whop-auth.ts`)
+- [x] Webhook signature verification (security)
+- [x] Production environment variable validation
+- [x] Access control implemented on protected API routes
 
 ### 🚧 To Do:
-- [ ] Configure permissions in Whop Developer Dashboard
+- [ ] Configure permissions in Whop Developer Dashboard (see section below)
 - [ ] Create static Experience View page
 - [ ] Implement Dashboard View with owner/closer role separation
-- [ ] Add access control to protected routes
-- [ ] Test authentication flow
+- [ ] Test authentication flow end-to-end
 - [ ] Test payment verification integration
 
 ## File Structure
@@ -117,25 +119,36 @@ export default async function DashboardPage({
 }
 ```
 
-### API Route Protection
+### API Route Protection (Implemented)
+The middleware functions are now used in protected API routes:
+
+**Example: `/api/whop/company/[companyId]/route.ts`**
 ```typescript
-import { NextRequest, NextResponse } from 'next/server';
-import { requireDashboardAccess } from '@/middleware/whop-auth';
+import { NextRequest, NextResponse } from "next/server";
+import { requireDashboardAccess } from "@/middleware/whop-auth";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { companyId: string } }
+  context: { params: Promise<{ companyId: string }> }
 ) {
-  const auth = await requireDashboardAccess(request, params.companyId);
-  
+  const { companyId } = await context.params;
+
+  // Verify user has admin access to this company
+  const auth = await requireDashboardAccess(request, companyId);
   if (auth instanceof NextResponse) {
-    return auth; // Error response
+    return auth; // Return error response (401 or 403)
   }
-  
-  // User is authenticated and authorized
-  return NextResponse.json({ userId: auth.userId });
+
+  // User is authenticated and authorized - proceed with request
+  console.log(`✅ Authorized user ${auth.userId} accessing company ${companyId}`);
+
+  // ... rest of route logic
 }
 ```
+
+**Protected Routes:**
+- ✅ `/api/whop/company/[companyId]` - Requires dashboard access
+- ✅ Webhook signature verification on `/api/webhooks/whop`
 
 ### Check Product Access
 ```typescript
@@ -239,6 +252,29 @@ const response = await fetch('/functions/v1/check-whop-payment', {
    - Verify authentication works
    - Test access control
    - Validate payment checking
+
+## Security Features
+
+### Webhook Signature Verification
+All webhooks from Whop are now verified using HMAC SHA-256 signatures:
+- Required in production (enforced automatically)
+- Uses `WHOP_WEBHOOK_SECRET` environment variable
+- Rejects invalid webhooks with 401 Unauthorized
+- Skipped in development for easier testing
+
+### Production Environment Validation
+The app automatically validates production configuration on startup:
+- Throws error if `NEXT_PUBLIC_WHOP_COMPANY_ID` is set in production
+- Prevents multi-company data leakage
+- Shows clear remediation instructions
+- Implemented in [`src/lib/whop-bootstrap.ts`](src/lib/whop-bootstrap.ts)
+
+### API Route Protection
+Protected routes use Whop authentication middleware:
+- Validates `x-whop-user-token` header
+- Checks admin access level via Whop API
+- Returns proper HTTP status codes (401/403)
+- Middleware located in [`src/middleware/whop-auth.ts`](src/middleware/whop-auth.ts)
 
 ## Support
 

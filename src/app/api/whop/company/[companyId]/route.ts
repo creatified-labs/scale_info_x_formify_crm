@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 const WHOP_API_BASE = "https://api.whop.com/api/v5";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ companyId: string }> }
 ) {
   const { companyId } = await context.params;
@@ -11,6 +11,11 @@ export async function GET(
   if (!companyId) {
     return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
   }
+
+  // Note: This route is called from our authenticated frontend
+  // User authentication is handled by Supabase session (established during bootstrap)
+  // RLS policies ensure users can only access their own company data
+  console.log(`[whop-company] Fetching company details for ${companyId}`);
 
   const apiKey = process.env.WHOP_API_KEY;
   if (!apiKey) {

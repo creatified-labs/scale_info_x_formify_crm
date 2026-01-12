@@ -90,6 +90,27 @@ const OAuthCallback = () => {
             console.error("Failed to parse error response as JSON");
           }
 
+          // Check if integration was actually stored despite error response
+          // This can happen if the token exchange succeeded but there was a session issue
+          if (j?.tokens?.access_token && j?.tokens?.email) {
+            console.log('⚠️ Got error response but tokens were returned - integration may have succeeded');
+            console.log('Connected email:', j.tokens.email);
+
+            // Check if integration exists in database
+            const { data: integration } = await supabase
+              .from('user_integrations')
+              .select('email')
+              .eq('provider', 'google')
+              .maybeSingle();
+
+            if (integration) {
+              console.log('✅ Integration confirmed in database - showing success');
+              setStatus("done");
+              setMessage("Google Calendar connected successfully! You can close this tab and return to Whop.");
+              return;
+            }
+          }
+
           const errorMsg = j?.detail || j?.error || `Exchange failed (HTTP ${res.status}): ${responseText.substring(0, 100)}`;
           console.error("OAuth exchange error:", { status: res.status, statusText: res.statusText, response: j, rawText: responseText });
           throw new Error(errorMsg);
