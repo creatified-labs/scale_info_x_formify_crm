@@ -139,6 +139,15 @@ serve(async (req) => {
     const timeChanged = (start_time && start_time !== (existingBooking as any).start_time) ||
                        (end_time && end_time !== (existingBooking as any).end_time);
 
+    console.log('Calendar sync check:', {
+      timeChanged,
+      calendar_event_id: (existingBooking as any).calendar_event_id,
+      new_start_time: start_time,
+      old_start_time: (existingBooking as any).start_time,
+      new_end_time: end_time,
+      old_end_time: (existingBooking as any).end_time,
+    });
+
     if (timeChanged && (existingBooking as any).calendar_event_id) {
       try {
         console.log('Time changed, updating Google Calendar event...');
@@ -146,12 +155,18 @@ serve(async (req) => {
 
         if (eventType?.user_id) {
           // Get Google Calendar integration
-          const { data: integration } = await supabaseClient
+          const { data: integration, error: integrationError } = await supabaseClient
             .from('user_integrations')
             .select('access_token, refresh_token, expires_at, email')
             .eq('user_id', eventType.user_id)
             .eq('provider', 'google')
             .single();
+
+          console.log('Google Calendar integration check:', {
+            has_integration: !!integration,
+            integration_error: integrationError?.message,
+            user_id: eventType.user_id,
+          });
 
           if (integration) {
             let accessToken = integration.access_token;
@@ -244,10 +259,18 @@ serve(async (req) => {
             );
 
             if (calendarResponse.ok) {
-              console.log('Google Calendar event updated successfully');
+              const updatedEvent = await calendarResponse.json() as any;
+              console.log('Google Calendar event updated successfully:', {
+                event_id: updatedEvent.id,
+                new_start: updatedEvent.start,
+                new_end: updatedEvent.end,
+              });
             } else {
               const errorText = await calendarResponse.text();
-              console.error('Failed to update Google Calendar event:', errorText);
+              console.error('Failed to update Google Calendar event:', {
+                status: calendarResponse.status,
+                error: errorText,
+              });
               calendarUpdateError = 'Failed to update Google Calendar event';
             }
           }
