@@ -12,6 +12,7 @@ import { format, subDays, subWeeks, subMonths, startOfWeek, startOfMonth, endOfW
 
 const PerformanceGrowth = () => {
   console.log('PerformanceGrowth rendering...');
+  // Note: calls array now includes both manual calls AND synced bookings (via database trigger)
   const { revenueEntries, goals, calls } = useData();
   console.log('PerformanceGrowth data:', { revenueEntries, goals, calls });
 

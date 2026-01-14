@@ -50,7 +50,6 @@ const Index = () => {
   const { user } = useAuth();
   const { entitlements } = useEntitlements();
   const [usage, setUsage] = useState<{ bookingsTotal: number } | null>(null);
-  const [bookings, setBookings] = useState<any[]>([]);
 
   // Use the centralized currency hook for real-time sync across the app
   const { symbol: currencySymbol } = useCurrency();
@@ -116,22 +115,9 @@ const Index = () => {
     })();
   }, []);
 
-  // Fetch bookings for revenue from automated conversions
-  useEffect(() => {
-    const fetchBookings = async () => {
-      const { data } = await supabase
-        .from('bookings')
-        .select('*, event_types(id, name)')
-        .neq('status', 'canceled') // Exclude deleted/cancelled bookings
-        .order('start_time', { ascending: true });
-
-      if (data) {
-        setBookings(data);
-      }
-    };
-
-    fetchBookings();
-  }, []);
+  // Note: Bookings are now automatically synced to call_logs via database triggers
+  // So we don't need to fetch bookings separately anymore
+  // The `calls` array from DataContext already includes both manual calls and bookings
 
   const [filters, setFilters] = useState<FilterCriteria>({
     dateRange: {},
@@ -142,44 +128,9 @@ const Index = () => {
     searchTerm: undefined
   });
 
-  const bookingRevenueEntries = useMemo<RevenueEntry[]>(() => {
-    if (!bookings?.length) return [];
-
-    return bookings
-      .filter((booking: any) => booking?.is_converted && Number(booking?.conversion_amount ?? 0) > 0)
-      .map((booking: any) => {
-        const baseDate = booking?.start_time || booking?.end_time || booking?.created_at;
-        const entryDate = baseDate ? new Date(baseDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
-
-        const metadata: Record<string, unknown> = {
-          source: "booking",
-          bookingId: booking.id,
-        };
-
-        // Find the "Booking Conversions" category from the database
-        const bookingCategory = categories.find(c => c.name === "Booking Conversions");
-
-        // Extract event type information if available
-        const eventTypeName = booking.event_types?.name || booking.event_type_name;
-        const eventTypeId = booking.event_types?.id || booking.event_type_id;
-
-        return {
-          id: `booking-${booking.id}`,
-          date: entryDate,
-          amount: Number(booking.conversion_amount ?? 0),
-          description: booking.invitee_name
-            ? `${booking.invitee_name} booking conversion`
-            : "Booking conversion",
-          category: bookingCategory?.id || "booking_conversion",
-          categoryName: bookingCategory?.name || "Booking Conversions",
-          categoryColor: bookingCategory?.color || "#6366F1",
-          createdAt: new Date(baseDate ?? Date.now()),
-          metadata,
-          eventTypeId: eventTypeId || undefined,
-          eventTypeName: eventTypeName || undefined,
-        } satisfies RevenueEntry;
-      });
-  }, [bookings, categories]);
+  // Note: bookingRevenueEntries is no longer needed since bookings are synced to call_logs
+  // Revenue from booking conversions is now included in the manual revenueEntries
+  // that are created when a call (synced from booking) is marked as converted
 
   const applyFilters = useCallback(
     (entries: RevenueEntry[]) => {
@@ -221,23 +172,10 @@ const Index = () => {
 
   // Filter revenue entries based on current filters
   const filteredRevenueEntries = useMemo(() => applyFilters(revenueEntries), [applyFilters, revenueEntries]);
-  const filteredBookingRevenueEntries = useMemo(
-    () => applyFilters(bookingRevenueEntries),
-    [applyFilters, bookingRevenueEntries]
-  );
 
   const historyEntries = useMemo(() => {
-    const combined = [...filteredRevenueEntries];
-    const existingIds = new Set(combined.map((entry) => entry.id));
-
-    filteredBookingRevenueEntries.forEach((entry) => {
-      if (!existingIds.has(entry.id)) {
-        combined.push(entry);
-      }
-    });
-
-    return combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [filteredRevenueEntries, filteredBookingRevenueEntries]);
+    return filteredRevenueEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [filteredRevenueEntries]);
 
   const goalProgress = useMemo((): GoalProgress[] => {
     if (loading) {
@@ -245,27 +183,25 @@ const Index = () => {
     }
 
     return goals.map((goal) => {
-      // Combine filtered revenue entries with booking revenue entries
-      const allEntries = [...filteredRevenueEntries, ...filteredBookingRevenueEntries];
-
-      let relevantEntries = allEntries;
+      // Use filtered revenue entries (which now includes booking conversions)
+      let relevantEntries = filteredRevenueEntries;
 
       // Apply time-based filtering
       if (goal.type === 'daily') {
-        relevantEntries = allEntries.filter((entry) => entry.date === goal.period);
+        relevantEntries = filteredRevenueEntries.filter((entry) => entry.date === goal.period);
       } else if (goal.type === 'weekly') {
         const [year, week] = (goal.period || '').split('-W');
         const weekStart = new Date(parseInt(year), 0, 1 + (parseInt(week) - 1) * 7);
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekEnd.getDate() + 6);
-        relevantEntries = allEntries.filter((entry) => {
+        relevantEntries = filteredRevenueEntries.filter((entry) => {
           const entryDate = new Date(entry.date);
           return entryDate >= weekStart && entryDate <= weekEnd;
         });
       } else if (goal.type === 'monthly') {
-        relevantEntries = allEntries.filter((entry) => entry.date.startsWith(goal.period || ''));
+        relevantEntries = filteredRevenueEntries.filter((entry) => entry.date.startsWith(goal.period || ''));
       } else if (goal.type === 'yearly') {
-        relevantEntries = allEntries.filter((entry) => entry.date.startsWith(goal.period || ''));
+        relevantEntries = filteredRevenueEntries.filter((entry) => entry.date.startsWith(goal.period || ''));
       }
 
       const currentAmount = relevantEntries.reduce((sum, entry) => sum + entry.amount, 0);
@@ -277,7 +213,7 @@ const Index = () => {
         daysRemaining: 0,
       };
     });
-  }, [loading, goals, filteredRevenueEntries, filteredBookingRevenueEntries]);
+  }, [loading, goals, filteredRevenueEntries]);
 
   const summaryStats = useMemo(() => {
     if (loading) {
@@ -301,21 +237,16 @@ const Index = () => {
     const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthKey = `${lastMonthDate.getFullYear()}-${(lastMonthDate.getMonth() + 1).toString().padStart(2, '0')}`;
 
+    // Calculate total revenue from manual entries
     const totalRevenueManual = filteredRevenueEntries.reduce((sum, entry) => sum + entry.amount, 0);
-    const totalEntries = filteredRevenueEntries.length + filteredBookingRevenueEntries.length;
+    const totalEntries = filteredRevenueEntries.length;
 
+    // Calculate call conversion revenue (includes both manual calls and synced bookings)
     const callRevenueForRange = (predicate: (date: Date) => boolean) =>
       calls.reduce((sum, call) => {
         if (!call.isConverted || typeof call.conversionAmount !== 'number') return sum;
         const callDate = new Date(call.date);
         return predicate(callDate) ? sum + Number(call.conversionAmount || 0) : sum;
-      }, 0);
-
-    // Include booking conversions revenue
-    const bookingRevenueForRange = (predicate: (date: Date) => boolean) =>
-      filteredBookingRevenueEntries.reduce((sum, entry) => {
-        const entryDate = new Date(entry.date);
-        return predicate(entryDate) ? sum + entry.amount : sum;
       }, 0);
 
     const callsConversionTotal = callRevenueForRange(() => true);
@@ -326,14 +257,6 @@ const Index = () => {
       date.getFullYear() === lastMonthDate.getFullYear() && date.getMonth() === lastMonthDate.getMonth()
     );
 
-    const bookingsConversionTotal = bookingRevenueForRange(() => true);
-    const bookingsConversionThisMonth = bookingRevenueForRange((date) =>
-      date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
-    );
-    const bookingsConversionLastMonth = bookingRevenueForRange((date) =>
-      date.getFullYear() === lastMonthDate.getFullYear() && date.getMonth() === lastMonthDate.getMonth()
-    );
-
     const thisMonthRevenueManual = filteredRevenueEntries
       .filter((entry) => entry.date.startsWith(currentMonthKey))
       .reduce((sum, entry) => sum + entry.amount, 0);
@@ -341,9 +264,9 @@ const Index = () => {
       .filter((entry) => entry.date.startsWith(lastMonthKey))
       .reduce((sum, entry) => sum + entry.amount, 0);
 
-    const totalRevenue = totalRevenueManual + callsConversionTotal + bookingsConversionTotal;
-    const thisMonthRevenue = thisMonthRevenueManual + callsConversionThisMonth + bookingsConversionThisMonth;
-    const lastMonthRevenue = lastMonthRevenueManual + callsConversionLastMonth + bookingsConversionLastMonth;
+    const totalRevenue = totalRevenueManual + callsConversionTotal;
+    const thisMonthRevenue = thisMonthRevenueManual + callsConversionThisMonth;
+    const lastMonthRevenue = lastMonthRevenueManual + callsConversionLastMonth;
 
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
@@ -364,34 +287,18 @@ const Index = () => {
     const thisWeekRevenueCalls = callRevenueForRange((date) => date >= startOfWeek);
     const lastWeekRevenueCalls = callRevenueForRange((date) => date >= startOfLastWeek && date < startOfWeek);
 
-    const thisWeekRevenueBookings = bookingRevenueForRange((date) => date >= startOfWeek);
-    const lastWeekRevenueBookings = bookingRevenueForRange((date) => date >= startOfLastWeek && date < startOfWeek);
+    const thisWeekRevenue = thisWeekRevenueManual + thisWeekRevenueCalls;
+    const lastWeekRevenue = lastWeekRevenueManual + lastWeekRevenueCalls;
 
-    const thisWeekRevenue = thisWeekRevenueManual + thisWeekRevenueCalls + thisWeekRevenueBookings;
-    const lastWeekRevenue = lastWeekRevenueManual + lastWeekRevenueCalls + lastWeekRevenueBookings;
-
+    // Calculate conversion metrics (calls array now includes synced bookings)
     const currentMonthCalls = calls.filter((call) => call.date.startsWith(currentMonthKey));
     const lastMonthCalls = calls.filter((call) => call.date.startsWith(lastMonthKey));
-    
-    // Include booking conversions in monthly stats
-    const currentMonthBookings = bookings?.filter((b: any) => {
-      const bookingDate = b.start_time ? new Date(b.start_time).toISOString().split('T')[0] : '';
-      return bookingDate.startsWith(currentMonthKey);
-    }) || [];
-    const lastMonthBookings = bookings?.filter((b: any) => {
-      const bookingDate = b.start_time ? new Date(b.start_time).toISOString().split('T')[0] : '';
-      return bookingDate.startsWith(lastMonthKey);
-    }) || [];
-    
-    const currentMonthConversions = currentMonthCalls.filter((call) => call.isConverted).length + 
-      currentMonthBookings.filter((b: any) => b.is_converted).length;
-    const lastMonthConversions = lastMonthCalls.filter((call) => call.isConverted).length +
-      lastMonthBookings.filter((b: any) => b.is_converted).length;
-    
-    const currentMonthCompletedCalls = currentMonthCalls.filter((call) => call.status === 'completed').length +
-      currentMonthBookings.filter((b: any) => b.status === 'completed').length;
-    const lastMonthCompletedCalls = lastMonthCalls.filter((call) => call.status === 'completed').length +
-      lastMonthBookings.filter((b: any) => b.status === 'completed').length;
+
+    const currentMonthConversions = currentMonthCalls.filter((call) => call.isConverted).length;
+    const lastMonthConversions = lastMonthCalls.filter((call) => call.isConverted).length;
+
+    const currentMonthCompletedCalls = currentMonthCalls.filter((call) => call.status === 'completed').length;
+    const lastMonthCompletedCalls = lastMonthCalls.filter((call) => call.status === 'completed').length;
     
     const currentConversionRate = currentMonthCompletedCalls > 0
       ? (currentMonthConversions / currentMonthCompletedCalls) * 100
@@ -419,7 +326,7 @@ const Index = () => {
       conversionGrowth,
       currentMonthConversions,
     };
-  }, [loading, filteredRevenueEntries, bookings, calls, goalProgress, goals]);
+  }, [loading, filteredRevenueEntries, calls, goalProgress, goals]);
 
   const analyticsCallMetrics = useMemo(() => {
     if (loading) {
@@ -435,28 +342,16 @@ const Index = () => {
       };
     }
 
+    // The calls array now includes both manual calls AND synced bookings
     const total = calls.length;
     const completed = calls.filter((call) => call.status === 'completed').length;
     const noShow = calls.filter((call) => call.status === 'no-show').length;
     const cancelled = calls.filter((call) => call.status === 'cancelled').length;
-    
-    // Include conversions from both calls and bookings
-    const callConversions = calls.filter((call) => call.isConverted).length;
-    const bookingConversions = bookings?.filter((b: any) => b.is_converted && b.status === 'completed').length || 0;
-    const conversions = callConversions + bookingConversions;
-    
-    // Include revenue from both calls and bookings
-    const callRevenue = calls.reduce((sum, call) => sum + Number(call.conversionAmount ?? 0), 0);
-    const bookingRevenue = bookings?.reduce((sum: number, b: any) => 
-      sum + (b.is_converted ? Number(b.conversion_amount ?? 0) : 0), 0) || 0;
-    const revenue = callRevenue + bookingRevenue;
-    
-    // Include completed bookings in the total for conversion rate calculation
-    const completedBookings = bookings?.filter((b: any) => b.status === 'completed').length || 0;
-    const totalCompleted = completed + completedBookings;
-    
+    const conversions = calls.filter((call) => call.isConverted).length;
+    const revenue = calls.reduce((sum, call) => sum + Number(call.conversionAmount ?? 0), 0);
+
     const showRate = completed + noShow > 0 ? (completed / (completed + noShow)) * 100 : 0;
-    const conversionRate = totalCompleted > 0 ? (conversions / totalCompleted) * 100 : 0;
+    const conversionRate = completed > 0 ? (conversions / completed) * 100 : 0;
 
     return {
       total,
@@ -468,7 +363,7 @@ const Index = () => {
       showRate,
       conversionRate,
     };
-  }, [calls, bookings, loading]);
+  }, [calls, loading]);
 
   const formatGrowthIndicator = (growth: number) => {
     if (growth === 0) return null;
@@ -523,7 +418,7 @@ const Index = () => {
         <FilterPanel
           filters={filters}
           onFiltersChange={setFilters}
-          totalEntries={revenueEntries.length + bookingRevenueEntries.length}
+          totalEntries={revenueEntries.length}
           filteredEntries={historyEntries.length}
         />
 
