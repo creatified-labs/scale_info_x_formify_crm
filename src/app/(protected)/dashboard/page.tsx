@@ -237,16 +237,24 @@ const Index = () => {
     const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthKey = `${lastMonthDate.getFullYear()}-${(lastMonthDate.getMonth() + 1).toString().padStart(2, '0')}`;
 
-    // Note: Revenue cards show ONLY manual revenue entries to avoid double-counting
-    // Call conversion revenue is displayed separately in Analytics and Performance tabs
-    const totalRevenue = filteredRevenueEntries.reduce((sum, entry) => sum + entry.amount, 0);
-    const totalEntries = filteredRevenueEntries.length;
-    const thisMonthRevenue = filteredRevenueEntries
-      .filter((entry) => entry.date.startsWith(currentMonthKey))
-      .reduce((sum, entry) => sum + entry.amount, 0);
-    const lastMonthRevenue = filteredRevenueEntries
-      .filter((entry) => entry.date.startsWith(lastMonthKey))
-      .reduce((sum, entry) => sum + entry.amount, 0);
+    // Note: Revenue cards show call conversion revenue ONLY
+    // This prevents double-counting when users track revenue through calls/bookings
+    // Manual revenue entries are for other revenue sources (not from calls)
+    const callRevenueForRange = (predicate: (date: Date) => boolean) =>
+      calls.reduce((sum, call) => {
+        if (!call.isConverted || typeof call.conversionAmount !== 'number') return sum;
+        const callDate = new Date(call.date);
+        return predicate(callDate) ? sum + Number(call.conversionAmount || 0) : sum;
+      }, 0);
+
+    const totalRevenue = callRevenueForRange(() => true);
+    const totalEntries = calls.filter(call => call.isConverted).length;
+    const thisMonthRevenue = callRevenueForRange((date) =>
+      date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
+    );
+    const lastMonthRevenue = callRevenueForRange((date) =>
+      date.getFullYear() === lastMonthDate.getFullYear() && date.getMonth() === lastMonthDate.getMonth()
+    );
 
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
@@ -254,16 +262,8 @@ const Index = () => {
     const startOfLastWeek = new Date(startOfWeek);
     startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
 
-    // Note: Weekly revenue cards show ONLY manual revenue entries to avoid double-counting
-    const thisWeekRevenue = filteredRevenueEntries
-      .filter((entry) => new Date(entry.date) >= startOfWeek)
-      .reduce((sum, entry) => sum + entry.amount, 0);
-    const lastWeekRevenue = filteredRevenueEntries
-      .filter((entry) => {
-        const entryDate = new Date(entry.date);
-        return entryDate >= startOfLastWeek && entryDate < startOfWeek;
-      })
-      .reduce((sum, entry) => sum + entry.amount, 0);
+    const thisWeekRevenue = callRevenueForRange((date) => date >= startOfWeek);
+    const lastWeekRevenue = callRevenueForRange((date) => date >= startOfLastWeek && date < startOfWeek);
 
     // Calculate conversion metrics (calls array now includes synced bookings)
     const currentMonthCalls = calls.filter((call) => call.date.startsWith(currentMonthKey));
@@ -409,7 +409,7 @@ const Index = () => {
                 {currencySymbol}{summaryStats.totalRevenue.toLocaleString()}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                From {summaryStats.totalEntries} entries
+                From {summaryStats.totalEntries} {summaryStats.totalEntries === 1 ? 'conversion' : 'conversions'}
               </p>
             </CardContent>
           </Card>
