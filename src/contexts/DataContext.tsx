@@ -866,30 +866,35 @@ export function DataProvider({ children }: { children: ReactNode }) {
         window.dispatchEvent(new Event('bookings-refresh'));
       }
 
-      if (call.isConverted && call.conversionAmount) {
-        const existingRevenue = revenueEntries.find((e) => e.metadata?.callId === call.id);
-        if (existingRevenue) {
-          await updateRevenueEntry({
-            ...existingRevenue,
-            date: call.date,
-            amount: call.conversionAmount,
-            description: `Conversion from ${call.callType}: ${call.clientName}`,
-          });
+      // Only create/update revenue entries for manual calls (no bookingId)
+      // Booking conversions are handled by the convert-booking edge function
+      // to avoid creating duplicate revenue entries
+      if (!call.bookingId) {
+        if (call.isConverted && call.conversionAmount) {
+          const existingRevenue = revenueEntries.find((e) => e.metadata?.callId === call.id);
+          if (existingRevenue) {
+            await updateRevenueEntry({
+              ...existingRevenue,
+              date: call.date,
+              amount: call.conversionAmount,
+              description: `Conversion from ${call.callType}: ${call.clientName}`,
+            });
+          } else {
+            await addRevenueEntry({
+              date: call.date,
+              amount: call.conversionAmount,
+              description: `Conversion from ${call.callType}: ${call.clientName}`,
+              category: 'calls',
+              categoryName: 'Calls',
+              categoryColor: 'hsl(142, 76%, 36%)',
+              metadata: { callId: call.id },
+            });
+          }
         } else {
-          await addRevenueEntry({
-            date: call.date,
-            amount: call.conversionAmount,
-            description: `Conversion from ${call.callType}: ${call.clientName}`,
-            category: 'calls',
-            categoryName: 'Calls',
-            categoryColor: 'hsl(142, 76%, 36%)',
-            metadata: { callId: call.id },
-          });
-        }
-      } else {
-        const revenueEntry = revenueEntries.find((e) => e.metadata?.callId === call.id);
-        if (revenueEntry) {
-          await deleteRevenueEntry(revenueEntry.id);
+          const revenueEntry = revenueEntries.find((e) => e.metadata?.callId === call.id);
+          if (revenueEntry) {
+            await deleteRevenueEntry(revenueEntry.id);
+          }
         }
       }
 
