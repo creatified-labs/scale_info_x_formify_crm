@@ -91,6 +91,5 @@ export function useCurrency() {
     symbol,
     formatAmount,
     loading,
-    companyId,
   };
 }
