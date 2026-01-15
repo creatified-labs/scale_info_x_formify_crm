@@ -148,50 +148,16 @@ const Index = () => {
     searchTerm: undefined
   });
 
-  // Create synthetic revenue entries from converted calls/bookings that don't have persistent entries
-  // This ensures backward compatibility with old conversions before the persistent entry fix
+  // Revenue entries from the database already include all conversions
+  // We no longer need to create synthetic entries - the database is the source of truth
+  // This prevents the doubling issue where conversions were counted twice
   const allRevenueEntries = useMemo(() => {
     if (loading || switching) return [];
-
-    // Get IDs of calls/bookings that already have persistent revenue entries
-    // Check both entry.bookingId AND entry.metadata.booking_id for backward compatibility
-    const persistentBookingIds = new Set<string>();
-    revenueEntries.forEach(entry => {
-      if (entry.bookingId) {
-        persistentBookingIds.add(entry.bookingId);
-      }
-      // Also check metadata.booking_id for older entries
-      const metadataBookingId = (entry.metadata as any)?.booking_id;
-      if (metadataBookingId) {
-        persistentBookingIds.add(metadataBookingId);
-      }
-    });
-
-    // Create synthetic entries only for converted calls without persistent entries
-    const syntheticEntries: RevenueEntry[] = calls
-      .filter(call =>
-        call.isConverted &&
-        call.conversionAmount &&
-        call.conversionAmount > 0 &&
-        call.bookingId &&
-        !persistentBookingIds.has(call.bookingId)
-      )
-      .map(call => ({
-        id: `booking-conversion-${call.bookingId}`, // Match persistent entry ID format
-        date: call.date,
-        amount: call.conversionAmount!,
-        description: `Booking: ${call.clientName || 'Unknown'}`,
-        category: 'calls',
-        categoryName: 'Calls',
-        metadata: {
-          source: 'booking',
-          bookingId: call.bookingId
-        },
-        createdAt: call.createdAt,
-      } as RevenueEntry));
-
-    return [...revenueEntries, ...syntheticEntries];
-  }, [revenueEntries, calls, loading, switching]);
+    
+    // Just return the revenue entries directly - no synthetic entries needed
+    // The convert-booking edge function already creates revenue_entries in the database
+    return revenueEntries;
+  }, [revenueEntries, loading, switching]);
 
   const applyFilters = useCallback(
     (entries: RevenueEntry[]) => {
