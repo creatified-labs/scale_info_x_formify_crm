@@ -54,13 +54,17 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
         });
 
         if (mounted && data?.default_currency) {
-          console.log('[CurrencyContext] Setting currency to:', data.default_currency);
-          setCurrency(data.default_currency);
-          // Cache in localStorage for instant loading next time
+          // Cache in localStorage FIRST for instant loading next time
           try {
             localStorage.setItem('user_currency', data.default_currency);
           } catch (err) {
             console.warn('[CurrencyContext] Failed to cache currency:', err);
+          }
+          
+          // Only update state if currency actually changed to avoid unnecessary re-renders
+          if (data.default_currency !== currency) {
+            console.log('[CurrencyContext] Setting currency to:', data.default_currency);
+            setCurrency(data.default_currency);
           }
         }
 
