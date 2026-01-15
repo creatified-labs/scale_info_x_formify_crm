@@ -425,7 +425,7 @@ const Index = () => {
         <FilterPanel
           filters={filters}
           onFiltersChange={setFilters}
-          totalEntries={revenueEntries.length}
+          totalEntries={allRevenueEntries.length}
           filteredEntries={historyEntries.length}
         />
 
