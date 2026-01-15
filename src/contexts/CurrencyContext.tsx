@@ -62,11 +62,28 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
 
     loadCurrency();
 
+    // Reload currency when page becomes visible (e.g., navigating back from settings)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadCurrency();
+      }
+    };
+
+    // Reload currency when window regains focus
+    const handleFocus = () => {
+      loadCurrency();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
     return () => {
       mounted = false;
       if (subscription) {
         supabase.removeChannel(subscription);
       }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
     };
   }, []); // Empty dependency array - only run once on mount
 
