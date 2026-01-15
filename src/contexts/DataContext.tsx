@@ -440,39 +440,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const mappedGoals = (goalsRes.data ?? []).map((row: any) => mapGoalFromDb(row as DbGoalRow));
       const rawCalls = (callsRes.data ?? []) as DbCallRow[];
 
-      // Debug: Log raw revenue data
-      console.log('[DataContext] Raw revenue data from DB:', {
-        count: mappedRevenue.length,
-        totalAmount: mappedRevenue.reduce((sum: number, e: RevenueEntry) => sum + e.amount, 0),
-        entries: mappedRevenue.map((e: RevenueEntry) => ({
-          id: e.id,
-          amount: e.amount,
-          bookingId: e.bookingId,
-          callId: (e.metadata as any)?.callId,
-          metaBookingId: (e.metadata as any)?.booking_id
-        }))
-      });
-
-      // Set state immediately - use mappedRevenue directly (migration already cleaned up duplicates)
+      // Set state immediately
       setRevenueEntries(mappedRevenue);
       setGoals(mappedGoals);
       setCalls(rawCalls.map((row) => mapCallFromDb(row)));
       setCategories(categoriesRes.data ?? []);
 
-      console.log('[DataContext] ✅ Data fetch complete', {
-        revenue: mappedRevenue.length,
-        goals: mappedGoals.length,
-        calls: rawCalls.length,
-        categories: categoriesRes.data?.length ?? 0
-      });
 
       // Clean up orphaned call logs in background (don't block UI)
       cleanupOrphanedCallLogs(rawCalls).then((sanitizedCalls) => {
         if (sanitizedCalls.length !== rawCalls.length) {
-          console.log('[DataContext] Cleanup complete - updating calls', {
-            before: rawCalls.length,
-            after: sanitizedCalls.length
-          });
           setCalls(sanitizedCalls.map((row) => mapCallFromDb(row)));
         }
       }).catch((error) => {

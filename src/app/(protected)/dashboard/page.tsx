@@ -166,58 +166,23 @@ const Index = () => {
       }
 
       return entries.filter((entry) => {
-        // Date range filter
-        if (filters.dateRange.from && new Date(entry.date) < filters.dateRange.from) {
-          console.log('[Dashboard] Filtered out by dateRange.from:', entry.id, entry.date);
-          return false;
-        }
-        if (filters.dateRange.to && new Date(entry.date) > filters.dateRange.to) {
-          console.log('[Dashboard] Filtered out by dateRange.to:', entry.id, entry.date);
-          return false;
-        }
-
-        // Category filter - only apply if categories are specified
-        if (filters.categories.length > 0 && entry.category && !filters.categories.includes(entry.category)) {
-          console.log('[Dashboard] Filtered out by category:', entry.id, entry.category, 'not in', filters.categories);
-          return false;
-        }
-
-        // Amount range filter
-        if (filters.amountRange.min !== undefined && entry.amount < filters.amountRange.min) {
-          console.log('[Dashboard] Filtered out by amountRange.min:', entry.id, entry.amount);
-          return false;
-        }
-        if (filters.amountRange.max !== undefined && entry.amount > filters.amountRange.max) {
-          console.log('[Dashboard] Filtered out by amountRange.max:', entry.id, entry.amount);
-          return false;
-        }
-
-        // Search term filter
+        if (filters.dateRange.from && new Date(entry.date) < filters.dateRange.from) return false;
+        if (filters.dateRange.to && new Date(entry.date) > filters.dateRange.to) return false;
+        if (filters.categories.length > 0 && entry.category && !filters.categories.includes(entry.category)) return false;
+        if (filters.amountRange.min !== undefined && entry.amount < filters.amountRange.min) return false;
+        if (filters.amountRange.max !== undefined && entry.amount > filters.amountRange.max) return false;
         if (filters.searchTerm) {
           const haystack = `${entry.description ?? ""}`.toLowerCase();
-          if (!haystack.includes(filters.searchTerm.toLowerCase())) {
-            console.log('[Dashboard] Filtered out by searchTerm:', entry.id);
-            return false;
-          }
+          if (!haystack.includes(filters.searchTerm.toLowerCase())) return false;
         }
-
         return true;
       });
     },
     [filters, loading, switching]
   );
 
-  // Filter all revenue entries (including synthetic) based on current filters
-  const filteredRevenueEntries = useMemo(() => {
-    const filtered = applyFilters(allRevenueEntries);
-    console.log('[Dashboard] Filtering revenue entries:', {
-      allEntries: allRevenueEntries.length,
-      filteredEntries: filtered.length,
-      filters,
-      entries: allRevenueEntries.map(e => ({ id: e.id, date: e.date, amount: e.amount, category: e.category }))
-    });
-    return filtered;
-  }, [applyFilters, allRevenueEntries, filters]);
+  // Filter all revenue entries based on current filters
+  const filteredRevenueEntries = useMemo(() => applyFilters(allRevenueEntries), [applyFilters, allRevenueEntries]);
 
   const historyEntries = useMemo(() => {
     return filteredRevenueEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -397,10 +362,38 @@ const Index = () => {
 
   if (loading || switching) {
     return (
-      <div className="min-h-screen bg-background p-4 md:p-6 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">{switching ? 'Switching company...' : 'Loading dashboard...'}</p>
+      <div className="min-h-screen bg-background p-4 md:p-6">
+        <div className="max-w-7xl mx-auto space-y-8">
+          {/* Header skeleton */}
+          <div className="text-center">
+            <div className="h-10 w-80 bg-muted/50 rounded-lg mx-auto mb-2 animate-pulse" />
+            <div className="h-5 w-96 bg-muted/30 rounded mx-auto animate-pulse" />
+          </div>
+
+          {/* Stats cards skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {[...Array(5)].map((_, i) => (
+              <Card key={i} className="card-smooth">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                  <div className="h-4 w-24 bg-muted/50 rounded animate-pulse" />
+                  <div className="h-5 w-5 bg-muted/30 rounded animate-pulse" />
+                </CardHeader>
+                <CardContent className="pb-4">
+                  <div className="h-8 w-20 bg-muted/50 rounded animate-pulse mb-2" />
+                  <div className="h-3 w-16 bg-muted/30 rounded animate-pulse" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Tabs skeleton */}
+          <div className="h-10 w-full bg-muted/30 rounded-lg animate-pulse" />
+
+          {/* Content skeleton */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="h-64 bg-muted/20 rounded-lg animate-pulse" />
+            <div className="h-64 bg-muted/20 rounded-lg animate-pulse" />
+          </div>
         </div>
       </div>
     );
