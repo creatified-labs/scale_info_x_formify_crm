@@ -248,7 +248,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     email: row.client_email || undefined,
     phone: row.client_phone || undefined,
     callType: row.call_type,
-    date: row.call_date,
+    // Extract date part only (YYYY-MM-DD) from timestamp or date string
+    date: row.call_date.split('T')[0].split(' ')[0],
     time: row.call_time || "",
     duration: row.duration_minutes ?? 30,
     status: row.status,
