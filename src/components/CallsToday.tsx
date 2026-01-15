@@ -15,7 +15,7 @@ type TimeRange = 'last7days' | 'last14days' | 'thisMonth' | 'last30days';
 
 export const CallsToday = () => {
   const { calls } = useData();
-  const { symbol: currencySymbol } = useCurrency();
+  const { symbol: currencySymbol, loading: currencyLoading } = useCurrency();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [bookings, setBookings] = useState<any[]>([]);
   const [timeRange, setTimeRange] = useState<TimeRange>('thisMonth');
@@ -309,7 +309,7 @@ export const CallsToday = () => {
                   {timeRange === 'thisMonth' && 'This month'}
                   {timeRange === 'last30days' && 'Last 30 days'})
                 </p>
-                <p className="text-2xl font-bold text-primary">{currencySymbol}{bookingStats.totalConversionRevenue.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-primary">{currencyLoading ? '' : currencySymbol}{bookingStats.totalConversionRevenue.toLocaleString()}</p>
               </div>
               <TrendingUp className="w-8 h-8 text-primary opacity-50" />
             </div>
@@ -367,7 +367,7 @@ export const CallsToday = () => {
                           {call.isConverted && call.conversionAmount && (
                             <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium">
                               <DollarSign className="w-3.5 h-3.5 flex-shrink-0" />
-                              <span>{currencySymbol}{call.conversionAmount.toLocaleString()} revenue</span>
+                              <span>{currencyLoading ? '' : currencySymbol}{call.conversionAmount.toLocaleString()} revenue</span>
                             </div>
                           )}
                           {call.phone && (

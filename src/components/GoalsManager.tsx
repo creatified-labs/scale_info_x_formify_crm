@@ -24,7 +24,7 @@ interface GoalsManagerProps {
 }
 
 export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: GoalsManagerProps) => {
-  const { symbol: currencySymbol } = useCurrency();
+  const { symbol: currencySymbol, loading: currencyLoading } = useCurrency();
   const [showAddForm, setShowAddForm] = useState(false);
   const [goalType, setGoalType] = useState<'daily' | 'weekly' | 'monthly' | 'yearly' | 'deadline'>('monthly');
   const [targetAmount, setTargetAmount] = useState("");
@@ -234,7 +234,7 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
                             <p className="font-semibold text-sm mb-1">Goal Details</p>
                             <div className="space-y-1 text-xs">
                               <p><span className="text-muted-foreground">Type:</span> {progress.goal.type} Revenue Goal</p>
-                              <p><span className="text-muted-foreground">Target:</span> {currencySymbol}{progress.goal.targetAmount.toLocaleString()}</p>
+                              <p><span className="text-muted-foreground">Target:</span> {currencyLoading ? '' : currencySymbol}{progress.goal.targetAmount.toLocaleString()}</p>
                               <p><span className="text-muted-foreground">Period:</span> {formatPeriod(progress.goal)}</p>
                               {progress.goal.description && (
                                 <p><span className="text-muted-foreground">Description:</span> {progress.goal.description}</p>
@@ -269,10 +269,10 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
                 <span className="text-muted-foreground">Progress</span>
                 <div className="text-right">
                   <div className="number-display text-primary text-lg">
-                    {currencySymbol}{progress.currentAmount.toLocaleString()}
+                    {currencyLoading ? '' : currencySymbol}{progress.currentAmount.toLocaleString()}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    / {currencySymbol}{progress.goal.targetAmount.toLocaleString()}
+                    / {currencyLoading ? '' : currencySymbol}{progress.goal.targetAmount.toLocaleString()}
                   </div>
                 </div>
               </div>

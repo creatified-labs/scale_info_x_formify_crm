@@ -80,6 +80,13 @@ export function useCurrency() {
   const symbol = getCurrencySymbol(currency);
 
   const formatAmount = (amount: number): string => {
+    // Don't show currency symbol while loading to prevent flash from £ to $
+    if (loading) {
+      return amount.toLocaleString('en-GB', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    }
     return `${symbol}${amount.toLocaleString('en-GB', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2

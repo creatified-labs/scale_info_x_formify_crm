@@ -53,7 +53,7 @@ const Index = () => {
   const [usage, setUsage] = useState<{ bookingsTotal: number } | null>(null);
 
   // Use the centralized currency hook for real-time sync across the app
-  const { symbol: currencySymbol } = useCurrency();
+  const { symbol: currencySymbol, loading: currencyLoading } = useCurrency();
 
   // Resolve organization metadata from Whop embed globals or internal API
   useEffect(() => {
@@ -438,7 +438,7 @@ const Index = () => {
             </CardHeader>
             <CardContent className="pb-4">
               <div className="text-2xl lg:text-3xl number-display text-primary">
-                {currencySymbol}{summaryStats.totalRevenue.toLocaleString()}
+                {currencyLoading ? '' : currencySymbol}{summaryStats.totalRevenue.toLocaleString()}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 From {summaryStats.totalEntries} {summaryStats.totalEntries === 1 ? 'conversion' : 'conversions'}
@@ -453,7 +453,7 @@ const Index = () => {
             </CardHeader>
             <CardContent className="pb-4">
               <div className="text-2xl lg:text-3xl number-display text-primary">
-                {currencySymbol}{summaryStats.thisMonthRevenue.toLocaleString()}
+                {currencyLoading ? '' : currencySymbol}{summaryStats.thisMonthRevenue.toLocaleString()}
               </div>
               <div className="flex items-center justify-between mt-1">
                 <p className="text-xs text-muted-foreground">
@@ -471,7 +471,7 @@ const Index = () => {
             </CardHeader>
             <CardContent className="pb-4">
               <div className="text-2xl lg:text-3xl number-display text-primary">
-                {currencySymbol}{summaryStats.thisWeekRevenue.toLocaleString()}
+                {currencyLoading ? '' : currencySymbol}{summaryStats.thisWeekRevenue.toLocaleString()}
               </div>
               <div className="flex items-center justify-between mt-1">
                 <p className="text-xs text-muted-foreground">
@@ -614,7 +614,7 @@ const Index = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {currencySymbol}{summaryStats.thisMonthRevenue.toLocaleString()}
+                    {currencyLoading ? '' : currencySymbol}{summaryStats.thisMonthRevenue.toLocaleString()}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     Total revenue this month
@@ -671,7 +671,7 @@ const Index = () => {
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-muted-foreground">Revenue</p>
                     <p className="text-2xl font-bold text-primary">
-                      {currencySymbol}{analyticsCallMetrics.revenue.toLocaleString()}
+                      {currencyLoading ? '' : currencySymbol}{analyticsCallMetrics.revenue.toLocaleString()}
                     </p>
                   </div>
                 </div>

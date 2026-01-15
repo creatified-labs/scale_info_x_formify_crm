@@ -13,7 +13,7 @@ interface RevenueChartProps {
 }
 
 export const RevenueChart = ({ entries }: RevenueChartProps) => {
-  const { symbol } = useCurrency();
+  const { symbol, loading: currencyLoading } = useCurrency();
   const chartData = useMemo(() => {
     if (entries.length === 0) return { daily: [], weekly: [], monthly: [] };
 
@@ -102,11 +102,11 @@ export const RevenueChart = ({ entries }: RevenueChartProps) => {
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-6 text-sm text-muted-foreground">
           <div className="flex items-center gap-1">
             <span>Total Revenue:</span>
-            <span className="number-display text-foreground text-lg">{symbol}{totalRevenue.toLocaleString()}</span>
+            <span className="number-display text-foreground text-lg">{currencyLoading ? '' : symbol}{totalRevenue.toLocaleString()}</span>
           </div>
           <div className="flex items-center gap-1">
             <span>Daily Average:</span>
-            <span className="number-display text-foreground text-lg">{symbol}{averageDaily.toLocaleString()}</span>
+            <span className="number-display text-foreground text-lg">{currencyLoading ? '' : symbol}{averageDaily.toLocaleString()}</span>
           </div>
         </div>
       </CardHeader>
@@ -144,12 +144,12 @@ export const RevenueChart = ({ entries }: RevenueChartProps) => {
                   />
                   <YAxis 
                     tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                    tickFormatter={(value) => `${symbol}${value}`}
+                    tickFormatter={(value) => `${currencyLoading ? '' : symbol}${value}`}
                     axisLine={false}
                     tickLine={false}
                   />
                   <Tooltip 
-                    formatter={(value) => [`${symbol}${value}`, 'Revenue']}
+                    formatter={(value) => [`${currencyLoading ? '' : symbol}${value}`, 'Revenue']}
                     labelFormatter={(label, payload) => {
                       if (payload && payload[0]) {
                         return new Date(payload[0].payload.date).toLocaleDateString();
@@ -211,12 +211,12 @@ export const RevenueChart = ({ entries }: RevenueChartProps) => {
                   />
                   <YAxis 
                     tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                    tickFormatter={(value) => `${symbol}${value}`}
+                    tickFormatter={(value) => `${currencyLoading ? '' : symbol}${value}`}
                     axisLine={false}
                     tickLine={false}
                   />
                   <Tooltip 
-                    formatter={(value) => [`${symbol}${value}`, 'Revenue']}
+                    formatter={(value) => [`${currencyLoading ? '' : symbol}${value}`, 'Revenue']}
                     contentStyle={{
                       backgroundColor: 'hsl(var(--popover))',
                       border: '1px solid hsl(var(--border))',
@@ -259,12 +259,12 @@ export const RevenueChart = ({ entries }: RevenueChartProps) => {
                   />
                   <YAxis 
                     tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                    tickFormatter={(value) => `${symbol}${value}`}
+                    tickFormatter={(value) => `${currencyLoading ? '' : symbol}${value}`}
                     axisLine={false}
                     tickLine={false}
                   />
                   <Tooltip 
-                    formatter={(value) => [`${symbol}${value}`, 'Revenue']}
+                    formatter={(value) => [`${currencyLoading ? '' : symbol}${value}`, 'Revenue']}
                     contentStyle={{
                       backgroundColor: 'hsl(var(--popover))',
                       border: '1px solid hsl(var(--border))',

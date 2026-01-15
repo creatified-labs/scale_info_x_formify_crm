@@ -52,7 +52,7 @@ const CalendarView = () => {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   const { timezone } = useTimezone();
-  const { symbol: currencySymbol } = useCurrency();
+  const { symbol: currencySymbol, loading: currencyLoading } = useCurrency();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [editingNotes, setEditingNotes] = useState(false);
@@ -350,7 +350,7 @@ const CalendarView = () => {
                                       Converted
                                     </div>
                                     <p className="text-lg font-semibold text-green-700">
-                                      {currencySymbol}{event.conversionAmount?.toLocaleString()}
+                                      {currencyLoading ? '' : currencySymbol}{event.conversionAmount?.toLocaleString()}
                                     </p>
                                   </div>
                                 )}
