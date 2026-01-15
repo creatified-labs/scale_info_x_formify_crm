@@ -515,7 +515,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
 
       console.log('[DataContext] Fetching data for company:', session.user.user_metadata.company_id);
-      await fetchData(false); // Full validation
+      
+      // Fetch data with skipValidation=true to trust the new session immediately
+      await fetchData(true);
+      
+      // Clear switching state after fetch completes
       setSwitching(false);
     };
 

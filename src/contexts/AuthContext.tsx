@@ -74,8 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.log('[Auth] New session company:', newSession.user?.user_metadata?.whop_org_id);
             console.log('[Auth] New session company UUID:', newSession.user?.user_metadata?.company_id);
 
-            // Wait for React state to propagate and session to fully settle
-            await new Promise(resolve => setTimeout(resolve, 150));
+            // Dispatch immediately - no need to wait
             window.dispatchEvent(new CustomEvent('company-switched'));
           } else {
             console.error('[Auth] Re-authentication succeeded but no session returned');
