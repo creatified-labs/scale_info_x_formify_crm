@@ -40,7 +40,8 @@ const Index = () => {
     updateRevenueEntry,
     deleteRevenueEntry,
     addGoal,
-    deleteGoal
+    deleteGoal,
+    refetch
   } = useData();
 
   const { companyId } = useParams<{ companyId?: string }>();
@@ -115,6 +116,24 @@ const Index = () => {
       setUsage({ bookingsTotal: u.bookingsTotal });
     })();
   }, []);
+
+  // Force refetch if revenue entries are missing bookingId (indicates old cached data)
+  // This prevents showing doubled values on first load after deployment
+  useEffect(() => {
+    if (loading || switching || revenueEntries.length === 0) return;
+
+    // Check if any entries have booking_id in metadata but missing bookingId field
+    const hasMissingBookingIds = revenueEntries.some(entry =>
+      entry.metadata &&
+      (entry.metadata as any).booking_id &&
+      !entry.bookingId
+    );
+
+    if (hasMissingBookingIds) {
+      console.log('[Dashboard] Detected old data format, refetching...');
+      refetch();
+    }
+  }, [revenueEntries, loading, switching, refetch]);
 
   // Note: Bookings are now automatically synced to call_logs via database triggers
   // So we don't need to fetch bookings separately anymore
