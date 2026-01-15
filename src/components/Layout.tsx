@@ -32,7 +32,6 @@ import { detectWhopContext, readWhopIdentity } from "@/lib/embed";
 import { BrandingProvider } from "@/contexts/BrandingContext";
 import { LockTile } from "@/components/entitlements/LockTile";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CountdownBanner } from "@/components/CountdownBanner";
 
 // Common timezones grouped by region
 const TIMEZONES = [
@@ -575,7 +574,6 @@ export const Layout = ({
       <div className="relative z-10 min-h-screen">
         {/* Header */}
         <header className="fixed top-0 left-0 right-0 z-50 bg-transparent">
-          <CountdownBanner />
           <div className="px-4 sm:px-6 py-4 sm:py-6">
             <div className="max-w-4xl mx-auto border border-border rounded-3xl px-4 sm:px-6 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 relative">
               {badge && (
