@@ -24,7 +24,6 @@ const Analytics = () => {
   const { revenueEntries, goals } = useData();
   const { entitlements } = useEntitlements();
   const hasAdvancedAnalytics = entitlements.analytics_revenue === "advanced";
-  const [bookingConversions, setBookingConversions] = useState<any[]>([]);
   const { csvExport, plan } = useFeature();
   const isPreview = plan === 'preview';
   const [previewBookings7, setPreviewBookings7] = useState<number | null>(null);
@@ -32,31 +31,6 @@ const Analytics = () => {
 
   // Use the centralized currency hook for real-time sync across the app
   const { formatAmount, symbol: currencySymbol, loading: currencyLoading } = useCurrency();
-
-  // Fetch converted bookings
-  useEffect(() => {
-    const fetchConversions = async () => {
-      const companyId = await getCompanyId({ allowFallback: false });
-      if (!companyId) {
-        setBookingConversions([]);
-        return;
-      }
-
-      const { data } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('company_id', companyId)
-        .neq('status', 'canceled') // Exclude deleted/cancelled bookings
-        .eq('is_converted', true)
-        .not('conversion_amount', 'is', null);
-      
-      if (data) {
-        setBookingConversions(data);
-      }
-    };
-
-    fetchConversions();
-  }, []);
 
   // Preview-only: fetch bookings count for last 7 days
   useEffect(() => {
@@ -77,45 +51,31 @@ const Analytics = () => {
     })();
   }, [isPreview]);
 
-  // Combine revenue entries with booking conversions
-  // Note: Filter out bookings that already have persistent revenue_entries records
-  // to prevent double-counting (persistent entries have id format: booking-conversion-{booking_id})
+  // All revenue entries are now in the database - no need to create synthetic entries
   const allRevenueData = useMemo(() => {
-    const persistentRevenueBookingIds = new Set(
-      revenueEntries
-        .filter(entry => entry.id?.startsWith('booking-conversion-'))
-        .map(entry => entry.id?.replace('booking-conversion-', ''))
-    );
-
-    const bookingRevenue = bookingConversions
-      .filter(booking => !persistentRevenueBookingIds.has(booking.id))
-      .map(booking => ({
-        id: booking.id,
-        date: booking.start_time.split('T')[0],
-        amount: Number(booking.conversion_amount),
-        description: `Booking: ${booking.invitee_name}`,
-        category: 'general',
-        createdAt: new Date(booking.converted_at || booking.start_time)
-      }));
-
-    return [...revenueEntries, ...bookingRevenue];
-  }, [revenueEntries, bookingConversions]);
+    return revenueEntries;
+  }, [revenueEntries]);
 
   const lastUpdatedLabel = useMemo(() => format(new Date(), "MMM d, yyyy 'at' HH:mm"), []);
 
   const summaryStats = useMemo(() => {
-    const manualRevenueTotal = revenueEntries.reduce((sum, entry) => sum + entry.amount, 0);
-    const bookingRevenueTotal = bookingConversions.reduce((sum, booking) => sum + Number(booking.conversion_amount ?? 0), 0);
+    // Separate manual entries from booking conversions based on bookingId field
+    const manualEntries = revenueEntries.filter(entry => !entry.bookingId);
+    const conversionEntries = revenueEntries.filter(entry => entry.bookingId);
+    
+    const manualRevenueTotal = manualEntries.reduce((sum, entry) => sum + entry.amount, 0);
+    const bookingRevenueTotal = conversionEntries.reduce((sum, entry) => sum + entry.amount, 0);
     const totalRevenue = manualRevenueTotal + bookingRevenueTotal;
+    
     return {
       manualRevenueTotal,
       bookingRevenueTotal,
       totalRevenue,
-      totalEntries: allRevenueData.length,
-      conversionsCount: bookingConversions.length,
+      totalEntries: revenueEntries.length,
+      conversionsCount: conversionEntries.length,
       conversionShare: totalRevenue > 0 ? (bookingRevenueTotal / totalRevenue) * 100 : 0,
     };
-  }, [revenueEntries, bookingConversions, allRevenueData]);
+  }, [revenueEntries]);
 
   const tooltipStyle = useMemo(() => ({
     backgroundColor: 'var(--chart-tooltip-bg, rgba(15,15,15,0.9))',
