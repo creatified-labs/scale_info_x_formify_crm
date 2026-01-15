@@ -31,7 +31,7 @@ const Analytics = () => {
   const [exportingCsv, setExportingCsv] = useState(false);
 
   // Use the centralized currency hook for real-time sync across the app
-  const { formatAmount } = useCurrency();
+  const { formatAmount, symbol: currencySymbol } = useCurrency();
 
   // Fetch converted bookings
   useEffect(() => {
@@ -512,9 +512,9 @@ const Analytics = () => {
                   <LineChart data={analytics.monthlyTrend}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `£${value}`} />
+                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `${currencySymbol}${value}`} />
                     <Tooltip
-                      formatter={(value) => [`£${value}`, "Revenue"]}
+                      formatter={(value) => [`${currencySymbol}${value}`, "Revenue"]}
                       contentStyle={tooltipStyle}
                       labelStyle={tooltipLabelStyle}
                     />
@@ -587,9 +587,9 @@ const Analytics = () => {
                     <BarChart data={analytics.dayOfWeekData} barCategoryGap="30%">
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `£${value}`} />
+                      <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `${currencySymbol}${value}`} />
                       <Tooltip
-                      formatter={(value) => [`£${value}`, "Average"]}
+                      formatter={(value) => [`${currencySymbol}${value}`, "Average"]}
                       contentStyle={tooltipStyle}
                       labelStyle={tooltipLabelStyle}
                     />
