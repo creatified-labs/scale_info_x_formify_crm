@@ -73,6 +73,7 @@ interface DataContextType {
   calls: Call[];
   categories: Category[];
   loading: boolean;
+  switching: boolean;
   addRevenueEntry: (entry: Omit<RevenueEntry, 'id' | 'createdAt'>, goalId?: string) => Promise<void>;
   updateRevenueEntry: (entry: RevenueEntry) => Promise<void>;
   deleteRevenueEntry: (entryId: string) => Promise<void>;
@@ -96,6 +97,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [calls, setCalls] = useState<Call[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [switching, setSwitching] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const sb = supabase as any;
 
@@ -474,6 +476,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     const handleCompanySwitching = () => {
       console.log('[DataContext] Company switching - clearing stale data');
+      // Mark as switching to distinguish from initial load
+      setSwitching(true);
       // Immediately clear stale data to prevent showing wrong company's data
       setRevenueEntries([]);
       setGoals([]);
@@ -481,13 +485,44 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setLoading(true);
     };
 
-    const handleCompanySwitched = () => {
-      console.log('[DataContext] Company switched - refetching data');
-      // Add a delay to ensure session state has fully propagated through React context
-      // Skip validation since AuthContext already verified the session is correct
-      setTimeout(() => {
-        void fetchData(true); // Pass true to skip validation
-      }, 200);
+    const handleCompanySwitched = async () => {
+      console.log('[DataContext] Company switched - waiting for session');
+
+      // Wait for session to be ready before fetching data
+      let retries = 0;
+      const maxRetries = 20; // 2 seconds max wait
+
+      while (retries < maxRetries) {
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (session) {
+          // Verify company ID matches before fetching
+          const newCompanyId = await getCompanyId({ allowFallback: false });
+          const sessionCompanyId = session.user.user_metadata?.company_id;
+
+          if (newCompanyId && newCompanyId === sessionCompanyId) {
+            console.log('[DataContext] Session ready, fetching data for company:', newCompanyId);
+            await fetchData(false); // Full validation
+            setSwitching(false);
+            return;
+          }
+
+          console.log('[DataContext] Company ID mismatch, waiting...', {
+            newCompanyId,
+            sessionCompanyId,
+            retry: retries
+          });
+        }
+
+        // Wait 100ms before retrying
+        await new Promise(resolve => setTimeout(resolve, 100));
+        retries++;
+      }
+
+      // If we get here, session didn't stabilize - clear switching state
+      console.warn('[DataContext] Session did not stabilize after company switch');
+      setSwitching(false);
+      setLoading(false);
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -983,6 +1018,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     calls,
     categories,
     loading,
+    switching,
     addRevenueEntry,
     updateRevenueEntry,
     deleteRevenueEntry,

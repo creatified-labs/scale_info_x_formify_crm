@@ -35,6 +35,7 @@ const Index = () => {
     calls,
     categories,
     loading,
+    switching,
     addRevenueEntry,
     updateRevenueEntry,
     deleteRevenueEntry,
@@ -134,7 +135,7 @@ const Index = () => {
 
   const applyFilters = useCallback(
     (entries: RevenueEntry[]) => {
-      if (loading) {
+      if (loading || switching) {
         return [];
       }
 
@@ -167,7 +168,7 @@ const Index = () => {
         return true;
       });
     },
-    [filters, loading]
+    [filters, loading, switching]
   );
 
   // Filter revenue entries based on current filters
@@ -178,7 +179,7 @@ const Index = () => {
   }, [filteredRevenueEntries]);
 
   const goalProgress = useMemo((): GoalProgress[] => {
-    if (loading) {
+    if (loading || switching) {
       return [];
     }
 
@@ -213,10 +214,10 @@ const Index = () => {
         daysRemaining: 0,
       };
     });
-  }, [loading, goals, filteredRevenueEntries]);
+  }, [loading, switching, goals, filteredRevenueEntries]);
 
   const summaryStats = useMemo(() => {
-    if (loading) {
+    if (loading || switching) {
       return {
         totalRevenue: 0,
         totalEntries: 0,
@@ -301,10 +302,10 @@ const Index = () => {
       conversionGrowth,
       currentMonthConversions,
     };
-  }, [loading, filteredRevenueEntries, calls, goalProgress, goals]);
+  }, [loading, switching, filteredRevenueEntries, calls, goalProgress, goals]);
 
   const analyticsCallMetrics = useMemo(() => {
-    if (loading) {
+    if (loading || switching) {
       return {
         total: 0,
         completed: 0,
@@ -338,7 +339,7 @@ const Index = () => {
       showRate,
       conversionRate,
     };
-  }, [calls, loading]);
+  }, [calls, loading, switching]);
 
   const formatGrowthIndicator = (growth: number) => {
     if (growth === 0) return null;
@@ -352,12 +353,12 @@ const Index = () => {
       </div>;
   };
 
-  if (loading) {
+  if (loading || switching) {
     return (
       <div className="min-h-screen bg-background p-4 md:p-6 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading dashboard...</p>
+          <p className="text-muted-foreground">{switching ? 'Switching company...' : 'Loading dashboard...'}</p>
         </div>
       </div>
     );
