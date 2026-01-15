@@ -1,13 +1,15 @@
 -- Regenerate revenue entries from converted calls
 -- The app uses call_logs table, not bookings table, for conversion tracking
 
--- First, update existing revenue entries to include event type name in description
+-- First, update existing revenue entries to use event type name as category
 UPDATE revenue_entries re
 SET 
   description = COALESCE(et.name, 'Booking') || ': ' || COALESCE(
     SPLIT_PART(re.description, ': ', 2),
     'Unknown'
   ),
+  category = LOWER(REPLACE(et.name, ' ', '_')),
+  category_name = et.name,
   event_type_name = et.name
 FROM bookings b
 LEFT JOIN event_types et ON et.id = b.event_type_id
@@ -39,8 +41,8 @@ SELECT
   c.conversion_amount as amount,
   COALESCE(c.conversion_currency, 'GBP') as currency,
   COALESCE(et.name, 'Booking') || ': ' || COALESCE(c.client_name, 'Unknown') as description,
-  'calls' as category,
-  'Calls' as category_name,
+  LOWER(REPLACE(COALESCE(et.name, 'Booking'), ' ', '_')) as category,
+  COALESCE(et.name, 'Booking') as category_name,
   c.booking_id,
   b.event_type_id,
   et.name,
