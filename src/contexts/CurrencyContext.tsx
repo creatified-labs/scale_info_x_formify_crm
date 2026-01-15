@@ -99,7 +99,14 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
       loadCurrency();
     };
 
+    // Listen for company switch event to reload currency for new company
+    const handleCompanySwitched = () => {
+      console.log('[CurrencyContext] Company switched, reloading currency...');
+      loadCurrency();
+    };
+
     window.addEventListener('currency-updated', handleCurrencyUpdate);
+    window.addEventListener('company-switched', handleCompanySwitched);
 
     return () => {
       mounted = false;
@@ -107,6 +114,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
         supabase.removeChannel(subscription);
       }
       window.removeEventListener('currency-updated', handleCurrencyUpdate);
+      window.removeEventListener('company-switched', handleCompanySwitched);
     };
   }, []); // Empty dependency array - only run once on mount
 
