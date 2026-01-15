@@ -129,9 +129,43 @@ const Index = () => {
     searchTerm: undefined
   });
 
-  // Note: bookingRevenueEntries is no longer needed since bookings are synced to call_logs
-  // Revenue from booking conversions is now included in the manual revenueEntries
-  // that are created when a call (synced from booking) is marked as converted
+  // Create synthetic revenue entries from converted calls/bookings that don't have persistent entries
+  // This ensures backward compatibility with old conversions before the persistent entry fix
+  const allRevenueEntries = useMemo(() => {
+    if (loading || switching) return [];
+
+    // Get IDs of calls/bookings that already have persistent revenue entries
+    const persistentCallIds = new Set(
+      revenueEntries
+        .filter(entry => entry.id?.startsWith('booking-conversion-'))
+        .map(entry => entry.id?.replace('booking-conversion-', ''))
+    );
+
+    // Create synthetic entries only for converted calls without persistent entries
+    const syntheticEntries: RevenueEntry[] = calls
+      .filter(call =>
+        call.isConverted &&
+        call.conversionAmount &&
+        call.conversionAmount > 0 &&
+        call.bookingId &&
+        !persistentCallIds.has(call.bookingId)
+      )
+      .map(call => ({
+        id: `booking-${call.bookingId}`,
+        date: call.date,
+        amount: call.conversionAmount!,
+        description: `Booking: ${call.clientName || 'Unknown'}`,
+        category: 'calls',
+        categoryName: 'Calls',
+        metadata: {
+          source: 'booking',
+          bookingId: call.bookingId
+        },
+        createdAt: call.createdAt,
+      } as RevenueEntry));
+
+    return [...revenueEntries, ...syntheticEntries];
+  }, [revenueEntries, calls, loading, switching]);
 
   const applyFilters = useCallback(
     (entries: RevenueEntry[]) => {
@@ -171,8 +205,8 @@ const Index = () => {
     [filters, loading, switching]
   );
 
-  // Filter revenue entries based on current filters
-  const filteredRevenueEntries = useMemo(() => applyFilters(revenueEntries), [applyFilters, revenueEntries]);
+  // Filter all revenue entries (including synthetic) based on current filters
+  const filteredRevenueEntries = useMemo(() => applyFilters(allRevenueEntries), [applyFilters, allRevenueEntries]);
 
   const historyEntries = useMemo(() => {
     return filteredRevenueEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
