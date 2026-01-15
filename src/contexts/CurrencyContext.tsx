@@ -26,37 +26,48 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user || !mounted) {
+          console.log('[CurrencyContext] No session or not mounted');
           return;
         }
 
         // Load initial currency
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('profiles')
           .select('default_currency')
           .eq('id', session.user.id)
           .maybeSingle();
 
+        console.log('[CurrencyContext] Loaded currency from DB:', {
+          currency: data?.default_currency,
+          error,
+          userId: session.user.id
+        });
+
         if (mounted && data?.default_currency) {
+          console.log('[CurrencyContext] Setting currency to:', data.default_currency);
           setCurrency(data.default_currency);
         }
 
-        // Set up real-time subscription for currency updates
-        subscription = supabase
-          .channel(`currency-updates:${session.user.id}`)
-          .on('postgres_changes', {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'profiles',
-            filter: `id=eq.${session.user.id}`,
-          }, (payload) => {
-            if (mounted && payload.new && (payload.new as any).default_currency) {
-              const newCurrency = (payload.new as any).default_currency;
-              setCurrency(newCurrency);
-            }
-          })
-          .subscribe();
-      } catch {
-        // Silent fail - use default currency
+        // Set up real-time subscription for currency updates (only once)
+        if (!subscription) {
+          subscription = supabase
+            .channel(`currency-updates:${session.user.id}`)
+            .on('postgres_changes', {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'profiles',
+              filter: `id=eq.${session.user.id}`,
+            }, (payload) => {
+              if (mounted && payload.new && (payload.new as any).default_currency) {
+                const newCurrency = (payload.new as any).default_currency;
+                console.log('[CurrencyContext] Real-time update received:', newCurrency);
+                setCurrency(newCurrency);
+              }
+            })
+            .subscribe();
+        }
+      } catch (err) {
+        console.error('[CurrencyContext] Error loading currency:', err);
       }
     };
 
