@@ -312,8 +312,34 @@ serve(async (req) => {
       .eq('id', booking.event_type_id)
       .single()
 
-    // Create revenue entry
-    const revenueEntryId = `booking-${booking.id}`
+    // Create revenue entry with standardized ID format (matches convert-booking)
+    const revenueEntryId = `booking-conversion-${booking.id}`
+
+    // Check if revenue entry already exists from manual conversion
+    const { data: existingEntry } = await supabaseAdmin
+      .from('revenue_entries')
+      .select('id')
+      .eq('id', revenueEntryId)
+      .maybeSingle()
+
+    if (existingEntry) {
+      console.log(`Revenue entry already exists for booking ${booking.id}, skipping creation`)
+      return new Response(
+        JSON.stringify({
+          success: true,
+          booking_id: booking.id,
+          revenue_entry_id: revenueEntryId,
+          message: 'Revenue entry already exists',
+          amount: amount,
+          currency: currency,
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      )
+    }
+
     const { error: revenueError } = await supabaseAdmin
       .from('revenue_entries')
       .upsert({

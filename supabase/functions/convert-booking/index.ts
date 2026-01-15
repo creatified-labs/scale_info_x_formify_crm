@@ -23,7 +23,7 @@ serve(async (req) => {
       }
     )
 
-    const { booking_id, is_converted, conversion_amount } = await req.json()
+    const { booking_id, is_converted, conversion_amount, conversion_currency } = await req.json()
 
     if (!booking_id) {
       return new Response(
@@ -32,7 +32,7 @@ serve(async (req) => {
       )
     }
 
-    console.log('Converting booking:', booking_id, 'is_converted:', is_converted, 'amount:', conversion_amount)
+    console.log('Converting booking:', booking_id, 'is_converted:', is_converted, 'amount:', conversion_amount, 'currency:', conversion_currency)
 
     const updateData: any = {
       is_converted,
@@ -41,8 +41,10 @@ serve(async (req) => {
 
     if (is_converted && conversion_amount !== undefined) {
       updateData.conversion_amount = conversion_amount
+      updateData.conversion_currency = conversion_currency || 'GBP'
     } else if (!is_converted) {
       updateData.conversion_amount = null
+      updateData.conversion_currency = null
     }
 
     const { data, error } = await supabaseClient
@@ -64,12 +66,20 @@ serve(async (req) => {
 
     // If there's a linked call_log, update it too
     if (data) {
+      const callLogUpdateData: any = {
+        is_converted,
+        conversion_amount: is_converted && conversion_amount !== undefined ? conversion_amount : null,
+      }
+
+      if (is_converted && conversion_amount !== undefined) {
+        callLogUpdateData.conversion_currency = conversion_currency || 'GBP'
+      } else if (!is_converted) {
+        callLogUpdateData.conversion_currency = null
+      }
+
       const { error: callLogError } = await supabaseClient
         .from('call_logs')
-        .update({
-          is_converted,
-          conversion_amount: is_converted && conversion_amount !== undefined ? conversion_amount : null,
-        })
+        .update(callLogUpdateData)
         .eq('booking_id', booking_id)
 
       if (callLogError) {
@@ -83,6 +93,7 @@ serve(async (req) => {
       if (is_converted && conversion_amount !== undefined && conversion_amount > 0) {
         // Create a revenue entry for this conversion
         const entryDate = data.start_time ? data.start_time.split('T')[0] : new Date().toISOString().split('T')[0]
+        const entryCurrency = conversion_currency || 'GBP'
 
         const { error: revenueError } = await supabaseClient
           .from('revenue_entries')
@@ -91,6 +102,7 @@ serve(async (req) => {
             company_id: data.company_id,
             entry_date: entryDate,
             amount: conversion_amount,
+            currency: entryCurrency,
             description: `Booking: ${data.invitee_name || 'Unknown'}`,
             category: 'calls',
             category_name: 'Calls',

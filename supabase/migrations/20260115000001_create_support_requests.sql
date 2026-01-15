@@ -24,6 +24,7 @@ CREATE INDEX IF NOT EXISTS idx_support_requests_created_at ON public.support_req
 ALTER TABLE public.support_requests ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Anyone can insert support requests (no auth required)
+DROP POLICY IF EXISTS "Anyone can create support requests" ON public.support_requests;
 CREATE POLICY "Anyone can create support requests"
   ON public.support_requests
   FOR INSERT
@@ -31,6 +32,7 @@ CREATE POLICY "Anyone can create support requests"
   WITH CHECK (true);
 
 -- Policy: Only authenticated users can view all support requests
+DROP POLICY IF EXISTS "Authenticated users can view support requests" ON public.support_requests;
 CREATE POLICY "Authenticated users can view support requests"
   ON public.support_requests
   FOR SELECT
@@ -38,6 +40,7 @@ CREATE POLICY "Authenticated users can view support requests"
   USING (true);
 
 -- Policy: Only authenticated users can update support requests
+DROP POLICY IF EXISTS "Authenticated users can update support requests" ON public.support_requests;
 CREATE POLICY "Authenticated users can update support requests"
   ON public.support_requests
   FOR UPDATE
