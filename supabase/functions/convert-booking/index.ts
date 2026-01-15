@@ -51,7 +51,7 @@ serve(async (req) => {
       .from('bookings')
       .update(updateData)
       .eq('id', booking_id)
-      .select()
+      .select('*, event_types(name)')
       .single()
 
     if (error) {
@@ -94,6 +94,8 @@ serve(async (req) => {
         // Create a revenue entry for this conversion
         const entryDate = data.start_time ? data.start_time.split('T')[0] : new Date().toISOString().split('T')[0]
         const entryCurrency = conversion_currency || 'GBP'
+        const eventTypeName = (data as any).event_types?.name || 'Booking'
+        const inviteeName = data.invitee_name || 'Unknown'
 
         const { error: revenueError } = await supabaseClient
           .from('revenue_entries')
@@ -103,9 +105,12 @@ serve(async (req) => {
             entry_date: entryDate,
             amount: conversion_amount,
             currency: entryCurrency,
-            description: `Booking: ${data.invitee_name || 'Unknown'}`,
+            description: `${eventTypeName}: ${inviteeName}`,
             category: 'calls',
             category_name: 'Calls',
+            event_type_id: data.event_type_id,
+            event_type_name: eventTypeName,
+            booking_id: booking_id,
             metadata: {
               source: 'booking_conversion',
               booking_id: booking_id,

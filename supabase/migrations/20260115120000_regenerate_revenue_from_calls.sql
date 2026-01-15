@@ -1,6 +1,20 @@
 -- Regenerate revenue entries from converted calls
 -- The app uses call_logs table, not bookings table, for conversion tracking
 
+-- First, update existing revenue entries to include event type name in description
+UPDATE revenue_entries re
+SET 
+  description = COALESCE(et.name, 'Booking') || ': ' || COALESCE(
+    SPLIT_PART(re.description, ': ', 2),
+    'Unknown'
+  ),
+  event_type_name = et.name
+FROM bookings b
+LEFT JOIN event_types et ON et.id = b.event_type_id
+WHERE re.booking_id = b.id
+  AND re.description LIKE 'Booking:%'
+  AND et.name IS NOT NULL;
+
 -- Insert revenue entries for all converted calls that don't already have revenue entries
 INSERT INTO revenue_entries (
   id,
@@ -12,6 +26,8 @@ INSERT INTO revenue_entries (
   category,
   category_name,
   booking_id,
+  event_type_id,
+  event_type_name,
   metadata,
   created_at,
   updated_at
@@ -22,10 +38,12 @@ SELECT
   c.call_date as entry_date,
   c.conversion_amount as amount,
   COALESCE(c.conversion_currency, 'GBP') as currency,
-  'Booking: ' || COALESCE(c.client_name, 'Unknown') as description,
+  COALESCE(et.name, 'Booking') || ': ' || COALESCE(c.client_name, 'Unknown') as description,
   'calls' as category,
   'Calls' as category_name,
   c.booking_id,
+  b.event_type_id,
+  et.name,
   jsonb_build_object(
     'source', 'booking_conversion',
     'booking_id', c.booking_id,
@@ -34,6 +52,8 @@ SELECT
   c.created_at,
   c.updated_at
 FROM call_logs c
+LEFT JOIN bookings b ON b.id = c.booking_id
+LEFT JOIN event_types et ON et.id = b.event_type_id
 WHERE c.is_converted = true
   AND c.conversion_amount IS NOT NULL
   AND c.conversion_amount > 0
