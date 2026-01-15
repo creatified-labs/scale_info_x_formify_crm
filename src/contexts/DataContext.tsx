@@ -440,14 +440,56 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const mappedGoals = (goalsRes.data ?? []).map((row: any) => mapGoalFromDb(row as DbGoalRow));
       const rawCalls = (callsRes.data ?? []) as DbCallRow[];
 
+      // Deduplicate revenue entries - prefer booking-conversion entries over callId entries
+      // This handles cases where both edge function and DataContext created entries for same booking
+      const deduplicatedRevenue = (() => {
+        const bookingConversionIds = new Set<string>();
+        const callIdToBookingId = new Map<string, string>();
+        
+        // First pass: collect booking IDs from booking-conversion entries
+        mappedRevenue.forEach((entry: RevenueEntry) => {
+          if (entry.id.startsWith('booking-conversion-')) {
+            const bookingId = entry.id.replace('booking-conversion-', '');
+            bookingConversionIds.add(bookingId);
+          }
+          // Also track metadata.booking_id
+          const metaBookingId = (entry.metadata as any)?.booking_id;
+          if (metaBookingId) {
+            bookingConversionIds.add(metaBookingId);
+          }
+        });
+        
+        // Build map of callId -> bookingId from calls
+        rawCalls.forEach(call => {
+          if (call.booking_id) {
+            callIdToBookingId.set(call.id, call.booking_id);
+          }
+        });
+        
+        // Second pass: filter out duplicate entries (callId entries where booking-conversion exists)
+        return mappedRevenue.filter((entry: RevenueEntry) => {
+          const callId = (entry.metadata as any)?.callId;
+          if (callId) {
+            const bookingId = callIdToBookingId.get(callId);
+            if (bookingId && bookingConversionIds.has(bookingId)) {
+              // This is a duplicate - skip it
+              console.log('[DataContext] Filtering duplicate revenue entry:', entry.id, 'for booking:', bookingId);
+              return false;
+            }
+          }
+          return true;
+        });
+      })();
+
       // Set state immediately - don't wait for cleanup
-      setRevenueEntries(mappedRevenue);
+      setRevenueEntries(deduplicatedRevenue);
       setGoals(mappedGoals);
       setCalls(rawCalls.map((row) => mapCallFromDb(row)));
       setCategories(categoriesRes.data ?? []);
 
       console.log('[DataContext] ✅ Data fetch complete', {
-        revenue: mappedRevenue.length,
+        revenue: deduplicatedRevenue.length,
+        revenueBeforeDedup: mappedRevenue.length,
         goals: mappedGoals.length,
         calls: rawCalls.length,
         categories: categoriesRes.data?.length ?? 0
