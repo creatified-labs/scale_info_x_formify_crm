@@ -20,24 +20,41 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
+    let subscription: ReturnType<typeof supabase.channel> | null = null;
 
     const loadCurrency = async () => {
       try {
-        // Use getSession which is faster than getUser
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) {
+        if (!session?.user || !mounted) {
           return;
         }
 
+        // Load initial currency
         const { data } = await supabase
           .from('profiles')
           .select('default_currency')
           .eq('id', session.user.id)
           .maybeSingle();
 
-        if (mounted && data?.default_currency && data.default_currency !== currency) {
+        if (mounted && data?.default_currency) {
           setCurrency(data.default_currency);
         }
+
+        // Set up real-time subscription for currency updates
+        subscription = supabase
+          .channel(`currency-updates:${session.user.id}`)
+          .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'profiles',
+            filter: `id=eq.${session.user.id}`,
+          }, (payload) => {
+            if (mounted && payload.new && (payload.new as any).default_currency) {
+              const newCurrency = (payload.new as any).default_currency;
+              setCurrency(newCurrency);
+            }
+          })
+          .subscribe();
       } catch {
         // Silent fail - use default currency
       }
@@ -45,34 +62,13 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
 
     loadCurrency();
 
-    // Subscribe to profile changes for real-time currency updates
-    let subscription: ReturnType<typeof supabase.channel> | null = null;
-    
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session?.user || !mounted) return;
-
-      subscription = supabase
-        .channel(`currency-context:${session.user.id}`)
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'profiles',
-          filter: `id=eq.${session.user.id}`,
-        }, (payload) => {
-          if (mounted && payload.new && (payload.new as any).default_currency) {
-            setCurrency((payload.new as any).default_currency);
-          }
-        })
-        .subscribe();
-    });
-
     return () => {
       mounted = false;
       if (subscription) {
         supabase.removeChannel(subscription);
       }
     };
-  }, [currency]);
+  }, []); // Empty dependency array - only run once on mount
 
   const symbol = getCurrencySymbol(currency);
 
