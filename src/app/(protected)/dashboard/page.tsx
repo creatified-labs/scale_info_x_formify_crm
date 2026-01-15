@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { Calendar, PoundSterling, Target, TrendingUp, ArrowUp, ArrowDown, Phone, UserX, CheckCircle, Activity as ActivityIcon } from "lucide-react";
+import { Calendar, Banknote, Target, TrendingUp, ArrowUp, ArrowDown, Phone, UserX, CheckCircle, Activity as ActivityIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -438,7 +438,7 @@ const Index = () => {
           <Card className="card-smooth">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
               <CardTitle className="text-sm font-medium text-responsive">Total Revenue</CardTitle>
-              <PoundSterling className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+              <Banknote className="h-5 w-5 text-muted-foreground flex-shrink-0" />
             </CardHeader>
             <CardContent className="pb-4">
               <div className="text-2xl lg:text-3xl number-display text-primary">
@@ -614,7 +614,7 @@ const Index = () => {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                   <CardTitle className="text-sm font-medium">Sales Made</CardTitle>
-                  <PoundSterling className="h-5 w-5 text-muted-foreground" />
+                  <Banknote className="h-5 w-5 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
