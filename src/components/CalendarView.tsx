@@ -11,6 +11,7 @@ import { ChevronLeft, ChevronRight, Calendar, Clock, User, FileText, Phone, Chec
 import { supabase } from '@/integrations/supabase/client';
 import { getCompanyId } from '@/lib/company';
 import { Booking } from '@/types/scheduling';
+import { useCurrency } from '@/hooks/useCurrency';
 import {
   format,
   startOfWeek,
@@ -51,6 +52,7 @@ const CalendarView = () => {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   const { timezone } = useTimezone();
+  const { symbol: currencySymbol } = useCurrency();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [editingNotes, setEditingNotes] = useState(false);
@@ -348,7 +350,7 @@ const CalendarView = () => {
                                       Converted
                                     </div>
                                     <p className="text-lg font-semibold text-green-700">
-                                      £{event.conversionAmount?.toLocaleString()}
+                                      {currencySymbol}{event.conversionAmount?.toLocaleString()}
                                     </p>
                                   </div>
                                 )}
