@@ -238,22 +238,19 @@ const Index = () => {
     const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthKey = `${lastMonthDate.getFullYear()}-${(lastMonthDate.getMonth() + 1).toString().padStart(2, '0')}`;
 
-    // Note: Revenue cards show call conversion revenue ONLY
-    // This prevents double-counting when users track revenue through calls/bookings
-    // Manual revenue entries are for other revenue sources (not from calls)
-    const callRevenueForRange = (predicate: (date: Date) => boolean) =>
-      calls.reduce((sum, call) => {
-        if (!call.isConverted || typeof call.conversionAmount !== 'number') return sum;
-        const callDate = new Date(call.date);
-        return predicate(callDate) ? sum + Number(call.conversionAmount || 0) : sum;
+    // Calculate revenue from filtered revenue entries (includes both manual entries and converted calls)
+    const revenueForRange = (predicate: (date: Date) => boolean) =>
+      filteredRevenueEntries.reduce((sum, entry) => {
+        const entryDate = new Date(entry.date);
+        return predicate(entryDate) ? sum + entry.amount : sum;
       }, 0);
 
-    const totalRevenue = callRevenueForRange(() => true);
-    const totalEntries = calls.filter(call => call.isConverted).length;
-    const thisMonthRevenue = callRevenueForRange((date) =>
+    const totalRevenue = revenueForRange(() => true);
+    const totalEntries = filteredRevenueEntries.length;
+    const thisMonthRevenue = revenueForRange((date) =>
       date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
     );
-    const lastMonthRevenue = callRevenueForRange((date) =>
+    const lastMonthRevenue = revenueForRange((date) =>
       date.getFullYear() === lastMonthDate.getFullYear() && date.getMonth() === lastMonthDate.getMonth()
     );
 
@@ -263,8 +260,8 @@ const Index = () => {
     const startOfLastWeek = new Date(startOfWeek);
     startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
 
-    const thisWeekRevenue = callRevenueForRange((date) => date >= startOfWeek);
-    const lastWeekRevenue = callRevenueForRange((date) => date >= startOfLastWeek && date < startOfWeek);
+    const thisWeekRevenue = revenueForRange((date) => date >= startOfWeek);
+    const lastWeekRevenue = revenueForRange((date) => date >= startOfLastWeek && date < startOfWeek);
 
     // Calculate conversion metrics (calls array now includes synced bookings)
     const currentMonthCalls = calls.filter((call) => call.date.startsWith(currentMonthKey));
