@@ -32,6 +32,7 @@ import { detectWhopContext, readWhopIdentity } from "@/lib/embed";
 import { BrandingProvider } from "@/contexts/BrandingContext";
 import { LockTile } from "@/components/entitlements/LockTile";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CountdownBanner } from "@/components/CountdownBanner";
 
 // Common timezones grouped by region
 const TIMEZONES = [
@@ -573,72 +574,75 @@ export const Layout = ({
       {/* Content Layer */}
       <div className="relative z-10 min-h-screen">
         {/* Header */}
-        <header className="fixed top-0 left-0 right-0 z-50 px-4 sm:px-6 py-4 sm:py-6 bg-transparent">
-          <div className="max-w-4xl mx-auto border border-border rounded-3xl px-4 sm:px-6 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 relative">
-            {badge && (
-              <div className="absolute -top-2 -left-2 z-50">
-                <div
-                  className={`flex items-center gap-1 rounded-full border-2 px-2 py-0.5 text-[10px] font-semibold shadow-sm select-none ${toneClasses[badge.tone]}`}
-                >
-                  <Star className="h-3 w-3" />
-                  <span>{badge.label.toUpperCase()}</span>
+        <header className="fixed top-0 left-0 right-0 z-50 bg-transparent">
+          <CountdownBanner />
+          <div className="px-4 sm:px-6 py-4 sm:py-6">
+            <div className="max-w-4xl mx-auto border border-border rounded-3xl px-4 sm:px-6 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 relative">
+              {badge && (
+                <div className="absolute -top-2 -left-2 z-50">
+                  <div
+                    className={`flex items-center gap-1 rounded-full border-2 px-2 py-0.5 text-[10px] font-semibold shadow-sm select-none ${toneClasses[badge.tone]}`}
+                  >
+                    <Star className="h-3 w-3" />
+                    <span>{badge.label.toUpperCase()}</span>
+                  </div>
                 </div>
-              </div>
-            )}
-            <div className="flex items-center justify-between gap-2 sm:gap-4">
-              {/* Logo */}
-              <div className="flex items-center flex-shrink-0">
-                <span className="text-base sm:text-lg font-semibold tracking-tight text-foreground">{removeWatermark && brandName.trim().length > 0 ? brandName.trim() : 'Scale Info'}</span>
-              </div>
+              )}
+              <div className="flex items-center justify-between gap-2 sm:gap-4">
+                {/* Logo */}
+                <div className="flex items-center flex-shrink-0">
+                  <span className="text-base sm:text-lg font-semibold tracking-tight text-foreground">{removeWatermark && brandName.trim().length > 0 ? brandName.trim() : 'Scale Info'}</span>
+                </div>
 
-              {/* Desktop Navigation */}
-              <nav className="hidden md:flex items-center space-x-1 flex-1 justify-center">
-                {navigation.map(item => {
-                  const Icon = item.icon;
-                  return <Link key={item.name} href={item.href}>
-                      <Button variant={isActive(item.href) ? "default" : "ghost"} size="sm" className="button-smooth gap-2">
-                        <Icon className="w-4 h-4" />
-                        <span className="hidden lg:inline">{item.name}</span>
-                      </Button>
-                    </Link>;
-                })}
-              </nav>
+                {/* Desktop Navigation */}
+                <nav className="hidden md:flex items-center space-x-1 flex-1 justify-center">
+                  {navigation.map(item => {
+                    const Icon = item.icon;
+                    return <Link key={item.name} href={item.href}>
+                        <Button variant={isActive(item.href) ? "default" : "ghost"} size="sm" className="button-smooth gap-2">
+                          <Icon className="w-4 h-4" />
+                          <span className="hidden lg:inline">{item.name}</span>
+                        </Button>
+                      </Link>;
+                  })}
+                </nav>
 
-              {/* Right side controls */}
-              <div className="flex items-center gap-1.5">
-                {user && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="flex h-9 w-9"
-                        aria-label="Account menu"
-                      >
-                        <Settings className="h-5 w-5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem asChild>
-                        <Link href="/account" className="cursor-pointer">
-                          <Settings className="mr-2 h-4 w-4" />
-                          <span>Account settings</span>
-                        </Link>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-                
-                {/* Mobile menu button */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="md:hidden h-9 w-9"
-                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                  aria-label="Menu"
-                >
-                  {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-                </Button>
+                {/* Right side controls */}
+                <div className="flex items-center gap-1.5">
+                  {user && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="flex h-9 w-9"
+                          aria-label="Account menu"
+                        >
+                          <Settings className="h-5 w-5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem asChild>
+                          <Link href="/account" className="cursor-pointer">
+                            <Settings className="mr-2 h-4 w-4" />
+                            <span>Account settings</span>
+                          </Link>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                  
+                  {/* Mobile menu button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="md:hidden h-9 w-9"
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    aria-label="Menu"
+                  >
+                    {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -647,7 +651,7 @@ export const Layout = ({
         
         {/* Mobile Navigation */}
         {isMobileMenuOpen && (
-          <div className="fixed top-24 left-6 right-6 z-40 md:hidden">
+          <div className="fixed top-32 left-6 right-6 z-40 md:hidden">
             <div className="border border-border rounded-3xl px-4 py-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
               <nav className="space-y-2">
                 {navigation.map(item => {
@@ -671,7 +675,7 @@ export const Layout = ({
         )}
 
       {/* Main Content */}
-      <main className="flex-1 pt-24">
+      <main className="flex-1 pt-28">
         {children}
       </main>
 
