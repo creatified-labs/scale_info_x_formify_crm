@@ -223,6 +223,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     createdAt: new Date(row.created_at),
     metadata: row.metadata || undefined,
     goalId: row.goal_id || undefined,
+    bookingId: (row.metadata as any)?.booking_id || undefined,
     eventTypeId: row.event_type_id || undefined,
     eventTypeName: row.event_type_name || undefined,
   });
@@ -380,7 +381,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       console.log('[DataContext] Fetching data for company:', companyId);
 
       // Validate company ID matches session (skip during company switch since AuthContext already validated)
-      if (!skipValidation) {
+      // Also skip validation on initial hydration to allow first load from Whop to proceed
+      if (!skipValidation && hydrated) {
         const sessionCompanyId = session.user.user_metadata?.company_id;
         if (companyId !== sessionCompanyId) {
           console.warn('[DataContext] Company ID mismatch - waiting for re-auth');

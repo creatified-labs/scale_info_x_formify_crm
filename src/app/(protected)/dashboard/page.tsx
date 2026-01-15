@@ -135,10 +135,11 @@ const Index = () => {
     if (loading || switching) return [];
 
     // Get IDs of calls/bookings that already have persistent revenue entries
+    // Use the bookingId field directly instead of parsing from the ID string
     const persistentCallIds = new Set(
       revenueEntries
-        .filter(entry => entry.id?.startsWith('booking-conversion-'))
-        .map(entry => entry.id?.replace('booking-conversion-', ''))
+        .filter(entry => entry.bookingId) // Filter entries with bookingId
+        .map(entry => entry.bookingId!) // Extract the bookingId
     );
 
     // Create synthetic entries only for converted calls without persistent entries
