@@ -130,6 +130,13 @@ export default function AccountSettingsPage() {
 
       if (error) throw error;
 
+      // Cache in localStorage for instant loading on next page load
+      try {
+        localStorage.setItem('user_currency', defaultCurrency);
+      } catch (err) {
+        console.warn('Failed to cache currency in localStorage:', err);
+      }
+
       // Dispatch custom event to notify CurrencyContext to reload immediately
       window.dispatchEvent(new CustomEvent('currency-updated'));
 

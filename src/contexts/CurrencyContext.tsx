@@ -14,8 +14,18 @@ interface CurrencyContextType {
 const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
 
 export function CurrencyProvider({ children }: { children: ReactNode }) {
-  // Default to GBP - most users use GBP, prevents flash
-  const [currency, setCurrency] = useState<string>('GBP');
+  // Load from localStorage immediately for instant display, fallback to GBP
+  const getInitialCurrency = () => {
+    if (typeof window === 'undefined') return 'GBP';
+    try {
+      const cached = localStorage.getItem('user_currency');
+      return cached || 'GBP';
+    } catch {
+      return 'GBP';
+    }
+  };
+
+  const [currency, setCurrency] = useState<string>(getInitialCurrency());
   const [loading, setLoading] = useState(false); // Start as false to prevent flash
 
   useEffect(() => {
@@ -46,6 +56,12 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
         if (mounted && data?.default_currency) {
           console.log('[CurrencyContext] Setting currency to:', data.default_currency);
           setCurrency(data.default_currency);
+          // Cache in localStorage for instant loading next time
+          try {
+            localStorage.setItem('user_currency', data.default_currency);
+          } catch (err) {
+            console.warn('[CurrencyContext] Failed to cache currency:', err);
+          }
         }
 
         // Set up real-time subscription for currency updates (only once)
