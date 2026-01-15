@@ -22,6 +22,7 @@ type DbRevenueRow = {
   created_at: string;
   metadata?: Record<string, unknown> | null;
   goal_id?: string | null;
+  booking_id?: string | null;
   event_type_id?: string | null;
   event_type_name?: string | null;
 };
@@ -223,7 +224,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     createdAt: new Date(row.created_at),
     metadata: row.metadata || undefined,
     goalId: row.goal_id || undefined,
-    bookingId: (row.metadata as any)?.booking_id || undefined,
+    bookingId: row.booking_id || (row.metadata as any)?.booking_id || undefined,
     eventTypeId: row.event_type_id || undefined,
     eventTypeName: row.event_type_name || undefined,
   });

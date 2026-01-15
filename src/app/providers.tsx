@@ -7,6 +7,7 @@ import { useState } from "react";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { DataProvider } from "@/contexts/DataContext";
 import { EntitlementsProvider } from "@/contexts/EntitlementsContext";
+import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
 
@@ -19,13 +20,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <AuthProvider>
-            <EntitlementsProvider>
-              <DataProvider>
-                {children}
-                <Toaster />
-                <ShadcnToaster />
-              </DataProvider>
-            </EntitlementsProvider>
+            <CurrencyProvider>
+              <EntitlementsProvider>
+                <DataProvider>
+                  {children}
+                  <Toaster />
+                  <ShadcnToaster />
+                </DataProvider>
+              </EntitlementsProvider>
+            </CurrencyProvider>
           </AuthProvider>
         </TooltipProvider>
       </QueryClientProvider>

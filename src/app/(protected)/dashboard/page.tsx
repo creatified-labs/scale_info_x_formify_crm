@@ -154,12 +154,18 @@ const Index = () => {
     if (loading || switching) return [];
 
     // Get IDs of calls/bookings that already have persistent revenue entries
-    // Use the bookingId field directly instead of parsing from the ID string
-    const persistentCallIds = new Set(
-      revenueEntries
-        .filter(entry => entry.bookingId) // Filter entries with bookingId
-        .map(entry => entry.bookingId!) // Extract the bookingId
-    );
+    // Check both entry.bookingId AND entry.metadata.booking_id for backward compatibility
+    const persistentBookingIds = new Set<string>();
+    revenueEntries.forEach(entry => {
+      if (entry.bookingId) {
+        persistentBookingIds.add(entry.bookingId);
+      }
+      // Also check metadata.booking_id for older entries
+      const metadataBookingId = (entry.metadata as any)?.booking_id;
+      if (metadataBookingId) {
+        persistentBookingIds.add(metadataBookingId);
+      }
+    });
 
     // Create synthetic entries only for converted calls without persistent entries
     const syntheticEntries: RevenueEntry[] = calls
@@ -168,7 +174,7 @@ const Index = () => {
         call.conversionAmount &&
         call.conversionAmount > 0 &&
         call.bookingId &&
-        !persistentCallIds.has(call.bookingId)
+        !persistentBookingIds.has(call.bookingId)
       )
       .map(call => ({
         id: `booking-conversion-${call.bookingId}`, // Match persistent entry ID format
