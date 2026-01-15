@@ -14,14 +14,14 @@ interface CurrencyContextType {
 const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
 
 export function CurrencyProvider({ children }: { children: ReactNode }) {
-  // Load from localStorage immediately for instant display, fallback to GBP
+  // Load from localStorage immediately for instant display, fallback to USD
   const getInitialCurrency = () => {
-    if (typeof window === 'undefined') return 'GBP';
+    if (typeof window === 'undefined') return 'USD';
     try {
       const cached = localStorage.getItem('user_currency');
-      return cached || 'GBP';
+      return cached || 'USD';
     } catch {
-      return 'GBP';
+      return 'USD';
     }
   };
 
