@@ -21,7 +21,7 @@ DELETE FROM revenue_entries
 WHERE id IN (
   SELECT re1.id
   FROM revenue_entries re1
-  INNER JOIN revenue_entries re2 ON re2.booking_id = (re1.metadata->>'booking_id')
+  INNER JOIN revenue_entries re2 ON re2.booking_id = (re1.metadata->>'booking_id')::uuid
   WHERE re1.metadata->>'booking_id' IS NOT NULL
     AND re1.booking_id IS NULL
     AND re1.id != re2.id
