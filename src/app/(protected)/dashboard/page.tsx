@@ -166,27 +166,37 @@ const Index = () => {
       }
 
       return entries.filter((entry) => {
+        // Date range filter
         if (filters.dateRange.from && new Date(entry.date) < filters.dateRange.from) {
+          console.log('[Dashboard] Filtered out by dateRange.from:', entry.id, entry.date);
           return false;
         }
         if (filters.dateRange.to && new Date(entry.date) > filters.dateRange.to) {
+          console.log('[Dashboard] Filtered out by dateRange.to:', entry.id, entry.date);
           return false;
         }
 
+        // Category filter - only apply if categories are specified
         if (filters.categories.length > 0 && entry.category && !filters.categories.includes(entry.category)) {
+          console.log('[Dashboard] Filtered out by category:', entry.id, entry.category, 'not in', filters.categories);
           return false;
         }
 
+        // Amount range filter
         if (filters.amountRange.min !== undefined && entry.amount < filters.amountRange.min) {
+          console.log('[Dashboard] Filtered out by amountRange.min:', entry.id, entry.amount);
           return false;
         }
         if (filters.amountRange.max !== undefined && entry.amount > filters.amountRange.max) {
+          console.log('[Dashboard] Filtered out by amountRange.max:', entry.id, entry.amount);
           return false;
         }
 
+        // Search term filter
         if (filters.searchTerm) {
           const haystack = `${entry.description ?? ""}`.toLowerCase();
           if (!haystack.includes(filters.searchTerm.toLowerCase())) {
+            console.log('[Dashboard] Filtered out by searchTerm:', entry.id);
             return false;
           }
         }
@@ -198,7 +208,16 @@ const Index = () => {
   );
 
   // Filter all revenue entries (including synthetic) based on current filters
-  const filteredRevenueEntries = useMemo(() => applyFilters(allRevenueEntries), [applyFilters, allRevenueEntries]);
+  const filteredRevenueEntries = useMemo(() => {
+    const filtered = applyFilters(allRevenueEntries);
+    console.log('[Dashboard] Filtering revenue entries:', {
+      allEntries: allRevenueEntries.length,
+      filteredEntries: filtered.length,
+      filters,
+      entries: allRevenueEntries.map(e => ({ id: e.id, date: e.date, amount: e.amount, category: e.category }))
+    });
+    return filtered;
+  }, [applyFilters, allRevenueEntries, filters]);
 
   const historyEntries = useMemo(() => {
     return filteredRevenueEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
