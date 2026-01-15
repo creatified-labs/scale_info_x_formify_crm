@@ -78,15 +78,25 @@ const Analytics = () => {
   }, [isPreview]);
 
   // Combine revenue entries with booking conversions
+  // Note: Filter out bookings that already have persistent revenue_entries records
+  // to prevent double-counting (persistent entries have id format: booking-conversion-{booking_id})
   const allRevenueData = useMemo(() => {
-    const bookingRevenue = bookingConversions.map(booking => ({
-      id: booking.id,
-      date: booking.start_time.split('T')[0],
-      amount: Number(booking.conversion_amount),
-      description: `Booking: ${booking.invitee_name}`,
-      category: 'general',
-      createdAt: new Date(booking.converted_at || booking.start_time)
-    }));
+    const persistentRevenueBookingIds = new Set(
+      revenueEntries
+        .filter(entry => entry.id?.startsWith('booking-conversion-'))
+        .map(entry => entry.id?.replace('booking-conversion-', ''))
+    );
+
+    const bookingRevenue = bookingConversions
+      .filter(booking => !persistentRevenueBookingIds.has(booking.id))
+      .map(booking => ({
+        id: booking.id,
+        date: booking.start_time.split('T')[0],
+        amount: Number(booking.conversion_amount),
+        description: `Booking: ${booking.invitee_name}`,
+        category: 'general',
+        createdAt: new Date(booking.converted_at || booking.start_time)
+      }));
 
     return [...revenueEntries, ...bookingRevenue];
   }, [revenueEntries, bookingConversions]);

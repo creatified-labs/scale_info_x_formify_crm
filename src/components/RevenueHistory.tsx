@@ -14,6 +14,7 @@ interface EntriesListProps {
 
 const SOURCE_BADGES = {
   booking: { label: "Booking Conversion", color: "bg-blue-500/15 text-blue-400" },
+  booking_conversion: { label: "Booking Conversion", color: "bg-blue-500/15 text-blue-400" },
   manual: { label: "Manual Entry", color: "bg-emerald-500/15 text-emerald-400" },
   call: { label: "Call Tracker", color: "bg-purple-500/15 text-purple-400" },
 } as const;
@@ -24,6 +25,7 @@ const getEntrySource = (entry: RevenueEntry): EntrySource => {
   if (metadataSource && metadataSource in SOURCE_BADGES) {
     return metadataSource as EntrySource;
   }
+  // Fallback: check ID format for legacy entries
   if (entry.id.startsWith("booking-")) {
     return "booking";
   }
