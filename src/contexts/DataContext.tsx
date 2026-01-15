@@ -394,7 +394,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      const [revenueRes, goalsRes, callsRes] = await Promise.all([
+      // Fetch all data in parallel including categories
+      const [revenueRes, goalsRes, callsRes, categoriesRes] = await Promise.all([
         sb
           .from("revenue_entries")
           .select("*")
@@ -412,9 +413,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
           .eq("company_id", companyId)
           .order("call_date", { ascending: false })
           .order("created_at", { ascending: false }),
+        sb
+          .from("revenue_categories")
+          .select("*")
+          .eq("company_id", companyId)
+          .order("created_at", { ascending: false }),
       ]);
-
-      await fetchCategories(companyId);
 
       if (revenueRes.error) {
         console.warn('Revenue query error (non-critical):', revenueRes.error);
@@ -425,19 +429,38 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (callsRes.error) {
         console.warn('Calls query error (non-critical):', callsRes.error);
       }
+      if (categoriesRes.error) {
+        console.warn('Categories query error (non-critical):', categoriesRes.error);
+      }
 
       const mappedRevenue = (revenueRes.data ?? []).map((row: any) => mapRevenueFromDb(row as DbRevenueRow));
       const mappedGoals = (goalsRes.data ?? []).map((row: any) => mapGoalFromDb(row as DbGoalRow));
       const rawCalls = (callsRes.data ?? []) as DbCallRow[];
-      const sanitizedCalls = await cleanupOrphanedCallLogs(rawCalls);
 
+      // Set state immediately - don't wait for cleanup
       setRevenueEntries(mappedRevenue);
       setGoals(mappedGoals);
-      setCalls(sanitizedCalls.map((row) => mapCallFromDb(row)));
+      setCalls(rawCalls.map((row) => mapCallFromDb(row)));
+      setCategories(categoriesRes.data ?? []);
+
       console.log('[DataContext] ✅ Data fetch complete', {
         revenue: mappedRevenue.length,
         goals: mappedGoals.length,
-        calls: sanitizedCalls.length
+        calls: rawCalls.length,
+        categories: categoriesRes.data?.length ?? 0
+      });
+
+      // Clean up orphaned call logs in background (don't block UI)
+      cleanupOrphanedCallLogs(rawCalls).then((sanitizedCalls) => {
+        if (sanitizedCalls.length !== rawCalls.length) {
+          console.log('[DataContext] Cleanup complete - updating calls', {
+            before: rawCalls.length,
+            after: sanitizedCalls.length
+          });
+          setCalls(sanitizedCalls.map((row) => mapCallFromDb(row)));
+        }
+      }).catch((error) => {
+        console.warn('[DataContext] Background cleanup failed (non-critical):', error);
       });
     } catch (error: any) {
       console.warn('Error loading data (non-critical):', error?.message || error);
@@ -486,43 +509,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     const handleCompanySwitched = async () => {
-      console.log('[DataContext] Company switched - waiting for session');
+      console.log('[DataContext] Company switched - fetching data immediately');
 
-      // Wait for session to be ready before fetching data
-      let retries = 0;
-      const maxRetries = 20; // 2 seconds max wait
+      // Trust session metadata immediately - RLS will enforce correct company isolation
+      const { data: { session } } = await supabase.auth.getSession();
 
-      while (retries < maxRetries) {
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (session) {
-          // Verify company ID matches before fetching
-          const newCompanyId = await getCompanyId({ allowFallback: false });
-          const sessionCompanyId = session.user.user_metadata?.company_id;
-
-          if (newCompanyId && newCompanyId === sessionCompanyId) {
-            console.log('[DataContext] Session ready, fetching data for company:', newCompanyId);
-            await fetchData(false); // Full validation
-            setSwitching(false);
-            return;
-          }
-
-          console.log('[DataContext] Company ID mismatch, waiting...', {
-            newCompanyId,
-            sessionCompanyId,
-            retry: retries
-          });
-        }
-
-        // Wait 100ms before retrying
-        await new Promise(resolve => setTimeout(resolve, 100));
-        retries++;
+      if (!session?.user?.user_metadata?.company_id) {
+        console.error('[DataContext] No company_id in session after switch');
+        setLoading(false);
+        setSwitching(false);
+        return;
       }
 
-      // If we get here, session didn't stabilize - clear switching state
-      console.warn('[DataContext] Session did not stabilize after company switch');
+      console.log('[DataContext] Fetching data for company:', session.user.user_metadata.company_id);
+      await fetchData(false); // Full validation
       setSwitching(false);
-      setLoading(false);
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -533,7 +534,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     const interval = setInterval(() => {
       void fetchData();
-    }, 30000);
+    }, 60000); // 60 seconds - reduced polling frequency to minimize network contention
 
     const channel = sb
       .channel('bookings-calls-sync')

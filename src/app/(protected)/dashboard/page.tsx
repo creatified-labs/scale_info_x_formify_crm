@@ -151,7 +151,7 @@ const Index = () => {
         !persistentCallIds.has(call.bookingId)
       )
       .map(call => ({
-        id: `booking-${call.bookingId}`,
+        id: `booking-conversion-${call.bookingId}`, // Match persistent entry ID format
         date: call.date,
         amount: call.conversionAmount!,
         description: `Booking: ${call.clientName || 'Unknown'}`,
