@@ -130,6 +130,9 @@ export default function AccountSettingsPage() {
 
       if (error) throw error;
 
+      // Dispatch custom event to notify CurrencyContext to reload immediately
+      window.dispatchEvent(new CustomEvent('currency-updated'));
+
       toast({
         title: "Currency updated",
         description: `Default currency set to ${CURRENCIES.find(c => c.code === defaultCurrency)?.name}`,

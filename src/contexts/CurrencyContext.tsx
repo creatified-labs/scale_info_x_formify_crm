@@ -73,28 +73,20 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
 
     loadCurrency();
 
-    // Reload currency when page becomes visible (e.g., navigating back from settings)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        loadCurrency();
-      }
-    };
-
-    // Reload currency when window regains focus
-    const handleFocus = () => {
+    // Listen for custom currency update event (triggered when user saves in settings)
+    const handleCurrencyUpdate = () => {
+      console.log('[CurrencyContext] Currency update event received, reloading...');
       loadCurrency();
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
+    window.addEventListener('currency-updated', handleCurrencyUpdate);
 
     return () => {
       mounted = false;
       if (subscription) {
         supabase.removeChannel(subscription);
       }
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('currency-updated', handleCurrencyUpdate);
     };
   }, []); // Empty dependency array - only run once on mount
 
