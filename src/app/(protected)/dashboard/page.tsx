@@ -360,44 +360,8 @@ const Index = () => {
       </div>;
   };
 
-  if (loading || switching) {
-    return (
-      <div className="min-h-screen bg-background p-4 md:p-6">
-        <div className="max-w-7xl mx-auto space-y-8">
-          {/* Header skeleton */}
-          <div className="text-center">
-            <div className="h-10 w-80 bg-muted/50 rounded-lg mx-auto mb-2 animate-pulse" />
-            <div className="h-5 w-96 bg-muted/30 rounded mx-auto animate-pulse" />
-          </div>
-
-          {/* Stats cards skeleton */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {[...Array(5)].map((_, i) => (
-              <Card key={i} className="card-smooth">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <div className="h-4 w-24 bg-muted/50 rounded animate-pulse" />
-                  <div className="h-5 w-5 bg-muted/30 rounded animate-pulse" />
-                </CardHeader>
-                <CardContent className="pb-4">
-                  <div className="h-8 w-20 bg-muted/50 rounded animate-pulse mb-2" />
-                  <div className="h-3 w-16 bg-muted/30 rounded animate-pulse" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Tabs skeleton */}
-          <div className="h-10 w-full bg-muted/30 rounded-lg animate-pulse" />
-
-          {/* Content skeleton */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="h-64 bg-muted/20 rounded-lg animate-pulse" />
-            <div className="h-64 bg-muted/20 rounded-lg animate-pulse" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Remove skeleton loaders - show content immediately for instant page load
+  // Data will be empty initially and update once loaded
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">

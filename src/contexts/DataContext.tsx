@@ -97,7 +97,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [calls, setCalls] = useState<Call[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start as false for instant page load
   const [switching, setSwitching] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const sb = supabase as any;
