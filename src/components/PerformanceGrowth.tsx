@@ -24,64 +24,29 @@ const PerformanceGrowth = () => {
     const currentWeek = { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) };
     const lastWeek = { start: startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }), end: endOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }) };
 
-    const callRevenueForFilter = (filterFn: (callDate: Date, call: typeof calls[number]) => boolean) =>
-      calls.reduce((sum, call) => {
-        if (!call.isConverted || typeof call.conversionAmount !== 'number') {
-          return sum;
-        }
-        const callDate = new Date(call.date);
-        return filterFn(callDate, call) ? sum + Number(call.conversionAmount ?? 0) : sum;
-      }, 0);
-
-    // Revenue metrics
-    const currentMonthRevenueManual = revenueEntries
+    // Revenue metrics - all revenue is now in revenue_entries table
+    // No need to calculate from calls separately as conversions are already in revenue_entries
+    const currentMonthRevenue = revenueEntries
       .filter(entry => entry.date.startsWith(currentMonth))
       .reduce((sum, entry) => sum + entry.amount, 0);
 
-    const currentMonthRevenueConverted = callRevenueForFilter((callDate) =>
-      callDate.getFullYear() === now.getFullYear() &&
-      callDate.getMonth() === now.getMonth()
-    );
-
-    const currentMonthRevenue = currentMonthRevenueManual + currentMonthRevenueConverted;
-
-    const lastMonthReference = subMonths(now, 1);
-    const lastMonthRevenueManual = revenueEntries
+    const lastMonthRevenue = revenueEntries
       .filter(entry => entry.date.startsWith(lastMonth))
       .reduce((sum, entry) => sum + entry.amount, 0);
 
-    const lastMonthRevenueConverted = callRevenueForFilter((callDate) =>
-      callDate.getFullYear() === lastMonthReference.getFullYear() &&
-      callDate.getMonth() === lastMonthReference.getMonth()
-    );
-
-    const lastMonthRevenue = lastMonthRevenueManual + lastMonthRevenueConverted;
-
-    const currentWeekRevenueManual = revenueEntries
+    const currentWeekRevenue = revenueEntries
       .filter(entry => {
         const entryDate = new Date(entry.date);
         return entryDate >= currentWeek.start && entryDate <= currentWeek.end;
       })
       .reduce((sum, entry) => sum + entry.amount, 0);
 
-    const currentWeekRevenueConverted = callRevenueForFilter((callDate) =>
-      callDate >= currentWeek.start && callDate <= currentWeek.end
-    );
-
-    const currentWeekRevenue = currentWeekRevenueManual + currentWeekRevenueConverted;
-
-    const lastWeekRevenueManual = revenueEntries
+    const lastWeekRevenue = revenueEntries
       .filter(entry => {
         const entryDate = new Date(entry.date);
         return entryDate >= lastWeek.start && entryDate <= lastWeek.end;
       })
       .reduce((sum, entry) => sum + entry.amount, 0);
-
-    const lastWeekRevenueConverted = callRevenueForFilter((callDate) =>
-      callDate >= lastWeek.start && callDate <= lastWeek.end
-    );
-
-    const lastWeekRevenue = lastWeekRevenueManual + lastWeekRevenueConverted;
 
     // Call metrics
     const currentMonthCalls = calls.filter(call => call.date.startsWith(currentMonth));
