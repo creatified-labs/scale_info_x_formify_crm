@@ -79,58 +79,54 @@ const OAuthCallback = () => {
 
         console.log("Edge Function response status:", res.status, res.statusText);
 
-        if (!res.ok) {
-          const responseText = await res.text();
-          console.error("Edge Function error response (text):", responseText);
+        const responseText = await res.text();
+        console.log("Edge Function response text:", responseText.substring(0, 200));
 
-          let j: any = {};
-          try {
-            j = JSON.parse(responseText);
-          } catch (e) {
-            console.error("Failed to parse error response as JSON");
-          }
+        let j: any = {};
+        try {
+          j = JSON.parse(responseText);
+        } catch (e) {
+          console.error("Failed to parse response as JSON");
+        }
 
+        console.log("Parsed response:", j);
+
+        // Check if the response indicates success
+        const isSuccess = res.ok && (j?.success === true || j?.email);
+
+        if (!isSuccess) {
+          console.warn("Response not OK or missing success indicator");
+          
           // Check if integration was actually stored despite error response
           // This can happen if the token exchange succeeded but there was a session issue
           if (j?.tokens?.access_token && j?.tokens?.email) {
             console.log('⚠️ Got error response but tokens were returned - integration may have succeeded');
             console.log('Connected email:', j.tokens.email);
+          }
 
-            // Check if integration exists in database
-            const { data: integration } = await supabase
-              .from('user_integrations')
-              .select('email')
-              .eq('provider', 'google')
-              .maybeSingle();
+          // Always check database to confirm if integration exists
+          console.log('Checking database for integration...');
+          const { data: integration, error: integrationError } = await supabase
+            .from('user_integrations')
+            .select('email, provider')
+            .eq('provider', 'google')
+            .maybeSingle();
 
-            if (integration) {
-              console.log('✅ Integration confirmed in database - showing success');
-              setStatus("done");
-              setMessage("Google Calendar connected successfully! You can close this tab and return to Whop.");
-              return;
-            }
+          console.log('Database check result:', { integration, integrationError });
+
+          if (integration) {
+            console.log('✅ Integration confirmed in database - showing success');
+            setStatus("done");
+            setMessage("Google Calendar connected successfully! You can close this tab and return to Whop.");
+            return;
           }
 
           const errorMsg = j?.detail || j?.error || `Exchange failed (HTTP ${res.status}): ${responseText.substring(0, 100)}`;
           console.error("OAuth exchange error:", { status: res.status, statusText: res.statusText, response: j, rawText: responseText });
           throw new Error(errorMsg);
         }
-        await supabase.auth.getSession();
-        const { data: userResult } = await supabase.auth.getUser();
-        const emailConfirmed = Boolean(userResult?.user?.email_confirmed_at || userResult?.user?.confirmed_at);
 
-        if (!userResult?.user) {
-          setStatus("error");
-          setMessage("We couldn’t finish signing you in. Please try again.");
-          return;
-        }
-
-        if (!emailConfirmed) {
-          setStatus("error");
-          setMessage("Check your email inbox to confirm your account, then try signing in again.");
-          return;
-        }
-
+        console.log('✅ Success response received:', j);
         setStatus("done");
         setMessage("Google Calendar connected successfully! You can close this tab and return to Whop.");
         // Don't auto-redirect - let user close the popup manually

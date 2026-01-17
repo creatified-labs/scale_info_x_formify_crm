@@ -24,6 +24,7 @@ import { TimeBlocksEditor } from "./TimeBlocksEditor";
 import { getCompanyId } from "@/lib/company";
 import { NotificationsSection } from "@/components/calendar/editor-sections/NotificationsSection";
 import { AvailabilityScheduleSelector } from "./AvailabilityScheduleSelector";
+import { EmbedCodeGenerator } from "@/components/embed/EmbedCodeGenerator";
 
 const createDefaultNotifications = (): NotificationSettings => ({
   email: { enabled: true, confirmation: true, confirmationDelay: 0, reminders: [1440, 60], followup: 0 },
@@ -135,7 +136,7 @@ interface EventTypeEditorProps {
   eventType: EventType | null;
   onClose: () => void;
   onSaved?: () => Promise<void> | void;
-  initialTab?: "basics" | "call-types" | "questions" | "notifications" | "confirmation" | "appearance" | "time-blocks" | "preview";
+  initialTab?: "basics" | "call-types" | "questions" | "notifications" | "confirmation" | "appearance" | "time-blocks" | "embed" | "preview";
 }
 
 export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "basics" }: EventTypeEditorProps) => {
@@ -565,7 +566,7 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
-        <TabsList className="grid w-full grid-cols-8">
+        <TabsList className="grid w-full grid-cols-9">
           <TabsTrigger value="basics">Basics</TabsTrigger>
           <TabsTrigger value="call-types">Call Types</TabsTrigger>
           <TabsTrigger value="questions">
@@ -579,6 +580,7 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="confirmation">Confirmation</TabsTrigger>
           <TabsTrigger value="time-blocks">Time Blocks</TabsTrigger>
+          <TabsTrigger value="embed">Embed</TabsTrigger>
           <TabsTrigger value="preview">Preview</TabsTrigger>
         </TabsList>
 
@@ -1040,6 +1042,33 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
             <Card className="p-6">
               <p className="text-center text-muted-foreground">
                 Save this event type first to configure time blocks
+              </p>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="embed" className="mt-6">
+          {eventType && (
+            <EmbedCodeGenerator
+              eventType={eventType}
+              livePreviewData={{
+                name,
+                description,
+                duration,
+                allowedCallTypes,
+                defaultCallType,
+                phoneRequired,
+                inPersonLocation,
+                customLinkLabel,
+                customLinkUrl,
+                questions,
+              }}
+            />
+          )}
+          {!eventType && (
+            <Card className="p-6">
+              <p className="text-center text-muted-foreground">
+                Save this event type first to generate embed codes
               </p>
             </Card>
           )}
