@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Copy, Check, ExternalLink } from "lucide-react";
@@ -31,6 +32,12 @@ export const EmbedCodeGenerator = ({ eventType, productSlug, livePreviewData }: 
   const [copiedHtml, setCopiedHtml] = useState(false);
   const [copiedReact, setCopiedReact] = useState(false);
   const [copiedJs, setCopiedJs] = useState(false);
+  const [embedHeight, setEmbedHeight] = useState<"600" | "800" | "1000">("800");
+  const [hideBranding, setHideBranding] = useState(false);
+  const [hideHeader, setHideHeader] = useState(false);
+  const [prefillName, setPrefillName] = useState("");
+  const [prefillEmail, setPrefillEmail] = useState("");
+  const [prefillPhone, setPrefillPhone] = useState("");
   const { toast } = useToast();
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
@@ -57,12 +64,23 @@ export const EmbedCodeGenerator = ({ eventType, productSlug, livePreviewData }: 
     return url;
   }, [baseUrl, productPath, eventType.slug, selectedOption, livePreviewData]);
   
-  const embedUrl = `${baseUrl}/embed/${productPath}/${eventType.slug}?type=${selectedOption}`;
+  const embedUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set('type', selectedOption);
+    
+    if (hideBranding) params.set('hide_branding', 'true');
+    if (hideHeader) params.set('hide_header', 'true');
+    if (prefillName) params.set('prefill_name', prefillName);
+    if (prefillEmail) params.set('prefill_email', prefillEmail);
+    if (prefillPhone) params.set('prefill_phone', prefillPhone);
+    
+    return `${baseUrl}/embed/${productPath}/${eventType.slug}?${params.toString()}`;
+  }, [baseUrl, productPath, eventType.slug, selectedOption, hideBranding, hideHeader, prefillName, prefillEmail, prefillPhone]);
 
   const iframeCode = `<iframe 
   src="${embedUrl}" 
   width="100%" 
-  height="800" 
+  height="${embedHeight}" 
   frameborder="0"
   style="border: none; border-radius: 8px;"
 ></iframe>`;
@@ -74,7 +92,7 @@ function BookingEmbed() {
     <iframe
       src="${embedUrl}"
       width="100%"
-      height="800"
+      height="${embedHeight}"
       frameBorder="0"
       style={{ border: 'none', borderRadius: '8px' }}
       title="Booking Form"
@@ -90,7 +108,7 @@ export default BookingEmbed;`;
     var iframe = document.createElement('iframe');
     iframe.src = '${embedUrl}';
     iframe.width = '100%';
-    iframe.height = '800';
+    iframe.height = '${embedHeight}';
     iframe.frameBorder = '0';
     iframe.style.border = 'none';
     iframe.style.borderRadius = '8px';
@@ -223,6 +241,94 @@ export default BookingEmbed;`;
 
         <div className="space-y-6">
           <div>
+            <h3 className="text-base font-semibold mb-3">Customization Options</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Configure how the embed appears and behaves on your website.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="embed-height">Embed Height</Label>
+              <select
+                id="embed-height"
+                value={embedHeight}
+                onChange={(e) => setEmbedHeight(e.target.value as "600" | "800" | "1000")}
+                className="w-full px-3 py-2 border rounded-md bg-background"
+              >
+                <option value="600">Compact (600px)</option>
+                <option value="800">Standard (800px)</option>
+                <option value="1000">Full (1000px)</option>
+              </select>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="hide-branding"
+                  checked={hideBranding}
+                  onChange={(e) => setHideBranding(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300"
+                />
+                <Label htmlFor="hide-branding" className="cursor-pointer">Hide branding badge</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="hide-header"
+                  checked={hideHeader}
+                  onChange={(e) => setHideHeader(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300"
+                />
+                <Label htmlFor="hide-header" className="cursor-pointer">Hide event title/description</Label>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-medium mb-3">Prefill Form Fields (Optional)</h4>
+            <p className="text-xs text-muted-foreground mb-3">
+              Pre-populate form fields for logged-in users or marketing campaigns
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="prefill-name" className="text-xs">Name</Label>
+                <Input
+                  id="prefill-name"
+                  placeholder="John Doe"
+                  value={prefillName}
+                  onChange={(e) => setPrefillName(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="prefill-email" className="text-xs">Email</Label>
+                <Input
+                  id="prefill-email"
+                  type="email"
+                  placeholder="user@example.com"
+                  value={prefillEmail}
+                  onChange={(e) => setPrefillEmail(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="prefill-phone" className="text-xs">Phone</Label>
+                <Input
+                  id="prefill-phone"
+                  placeholder="+1234567890"
+                  value={prefillPhone}
+                  onChange={(e) => setPrefillPhone(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div>
             <h3 className="text-base font-semibold mb-3">Choose Your Code Format</h3>
             <p className="text-sm text-muted-foreground mb-4">
               Select the implementation method that works best for your website.
@@ -331,14 +437,34 @@ export default BookingEmbed;`;
           </div>
         </div>
 
-        <div className="rounded-lg border bg-blue-50 dark:bg-blue-950/20 p-4">
-          <h4 className="font-medium text-sm mb-2">💡 Integration Tips</h4>
-          <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
-            <li>Adjust the height attribute (default: 800px) to fit your page layout</li>
-            <li>The embed is fully responsive and will adapt to mobile screens</li>
-            <li>All bookings made through the embed are tracked in your dashboard</li>
-            <li>The embed inherits your event type's theme settings (light/dark mode)</li>
-          </ul>
+        <div className="space-y-4">
+          <div className="rounded-lg border bg-blue-50 dark:bg-blue-950/20 p-4">
+            <h4 className="font-medium text-sm mb-2">💡 Integration Tips</h4>
+            <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+              <li>The embed is fully responsive and will adapt to mobile screens</li>
+              <li>All bookings made through the embed are tracked in your dashboard</li>
+              <li>The embed inherits your event type's theme settings (light/dark mode)</li>
+              <li>Use prefill parameters to improve conversion for logged-in users</li>
+              <li>UTM parameters are automatically captured for attribution tracking</li>
+            </ul>
+          </div>
+
+          <div className="rounded-lg border bg-purple-50 dark:bg-purple-950/20 p-4">
+            <h4 className="font-medium text-sm mb-2">🔔 Booking Callbacks</h4>
+            <p className="text-xs text-muted-foreground mb-2">
+              Listen for booking completion events on your parent page:
+            </p>
+            <div className="rounded bg-muted/50 p-3">
+              <pre className="text-xs overflow-x-auto">
+                <code>{`window.addEventListener('message', (event) => {
+  if (event.data.type === 'booking_completed') {
+    console.log('Booking created:', event.data.data);
+    // Redirect, show thank you message, etc.
+  }
+});`}</code>
+              </pre>
+            </div>
+          </div>
         </div>
       </div>
     </Card>

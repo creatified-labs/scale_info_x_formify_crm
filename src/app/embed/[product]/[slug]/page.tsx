@@ -21,6 +21,22 @@ export default function EmbedBookingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const embedCustomization = useMemo(() => {
+    return {
+      hideBranding: searchParams.get("hide_branding") === "true",
+      primaryColor: searchParams.get("primary_color") || null,
+      hideHeader: searchParams.get("hide_header") === "true",
+    };
+  }, [searchParams]);
+
+  const prefillData = useMemo(() => {
+    return {
+      name: searchParams.get("prefill_name") || "",
+      email: searchParams.get("prefill_email") || "",
+      phone: searchParams.get("prefill_phone") || "",
+    };
+  }, [searchParams]);
+
   const previewOverrides = useMemo(() => {
     if (!isPreviewMode) return null;
     
@@ -90,11 +106,12 @@ export default function EmbedBookingPage() {
       }
       const baseEventType = {
         ...fetched,
-        branding_hide_badge: fetched.companies?.branding_hide_badge ?? fetched.branding_hide_badge ?? false,
+        branding_hide_badge: embedCustomization.hideBranding || fetched.companies?.branding_hide_badge ?? fetched.branding_hide_badge ?? false,
         user_timezone: fetched.profiles?.timezone || 'UTC',
       };
       
-      setEventType(previewOverrides ? { ...baseEventType, ...previewOverrides } : baseEventType);
+      const finalEventType = previewOverrides ? { ...baseEventType, ...previewOverrides } : baseEventType;
+      setEventType(finalEventType);
     } catch (error) {
       setError("Event type not found");
       setEventType(null);
@@ -126,9 +143,9 @@ export default function EmbedBookingPage() {
 
   return (
     <>
-      {embedType === "option1" && <EmbedOption1 eventType={eventType} />}
-      {embedType === "option2" && <EmbedOption2 eventType={eventType} />}
-      {embedType === "option3" && <EmbedOption3 eventType={eventType} />}
+      {embedType === "option1" && <EmbedOption1 eventType={eventType} prefillData={prefillData} embedCustomization={embedCustomization} />}
+      {embedType === "option2" && <EmbedOption2 eventType={eventType} prefillData={prefillData} embedCustomization={embedCustomization} />}
+      {embedType === "option3" && <EmbedOption3 eventType={eventType} prefillData={prefillData} embedCustomization={embedCustomization} />}
     </>
   );
 }
