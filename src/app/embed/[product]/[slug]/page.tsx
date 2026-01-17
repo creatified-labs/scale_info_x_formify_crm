@@ -106,7 +106,7 @@ export default function EmbedBookingPage() {
       }
       const baseEventType = {
         ...fetched,
-        branding_hide_badge: embedCustomization.hideBranding || fetched.companies?.branding_hide_badge ?? fetched.branding_hide_badge ?? false,
+        branding_hide_badge: embedCustomization.hideBranding || (fetched.companies?.branding_hide_badge ?? fetched.branding_hide_badge ?? false),
         user_timezone: fetched.profiles?.timezone || 'UTC',
       };
       
