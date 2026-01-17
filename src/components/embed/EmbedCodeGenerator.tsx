@@ -28,8 +28,9 @@ interface EmbedCodeGeneratorProps {
 
 export const EmbedCodeGenerator = ({ eventType, productSlug, livePreviewData }: EmbedCodeGeneratorProps) => {
   const [selectedOption, setSelectedOption] = useState<"option1" | "option2" | "option3">("option1");
-  const [copiedIframe, setCopiedIframe] = useState(false);
-  const [copiedScript, setCopiedScript] = useState(false);
+  const [copiedHtml, setCopiedHtml] = useState(false);
+  const [copiedReact, setCopiedReact] = useState(false);
+  const [copiedJs, setCopiedJs] = useState(false);
   const { toast } = useToast();
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
@@ -66,6 +67,23 @@ export const EmbedCodeGenerator = ({ eventType, productSlug, livePreviewData }: 
   style="border: none; border-radius: 8px;"
 ></iframe>`;
 
+  const reactCode = `import React from 'react';
+
+function BookingEmbed() {
+  return (
+    <iframe
+      src="${embedUrl}"
+      width="100%"
+      height="800"
+      frameBorder="0"
+      style={{ border: 'none', borderRadius: '8px' }}
+      title="Booking Form"
+    />
+  );
+}
+
+export default BookingEmbed;`;
+
   const scriptCode = `<div id="booking-embed-${eventType.slug}"></div>
 <script>
   (function() {
@@ -80,15 +98,18 @@ export const EmbedCodeGenerator = ({ eventType, productSlug, livePreviewData }: 
   })();
 </script>`;
 
-  const copyToClipboard = async (text: string, type: 'iframe' | 'script') => {
+  const copyToClipboard = async (text: string, type: 'html' | 'react' | 'js') => {
     try {
       await navigator.clipboard.writeText(text);
-      if (type === 'iframe') {
-        setCopiedIframe(true);
-        setTimeout(() => setCopiedIframe(false), 2000);
+      if (type === 'html') {
+        setCopiedHtml(true);
+        setTimeout(() => setCopiedHtml(false), 2000);
+      } else if (type === 'react') {
+        setCopiedReact(true);
+        setTimeout(() => setCopiedReact(false), 2000);
       } else {
-        setCopiedScript(true);
-        setTimeout(() => setCopiedScript(false), 2000);
+        setCopiedJs(true);
+        setTimeout(() => setCopiedJs(false), 2000);
       }
       toast({
         title: "Copied!",
@@ -118,12 +139,12 @@ export const EmbedCodeGenerator = ({ eventType, productSlug, livePreviewData }: 
         </div>
 
         <div>
-          <Label className="mb-3 block">Select Embed Style</Label>
+          <Label className="mb-3 block">Select Design Style</Label>
           <Tabs value={selectedOption} onValueChange={(v) => setSelectedOption(v as any)}>
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="option1">HTML (iframe)</TabsTrigger>
-              <TabsTrigger value="option2">React (iframe)</TabsTrigger>
-              <TabsTrigger value="option3">React (Atom)</TabsTrigger>
+              <TabsTrigger value="option1">Classic</TabsTrigger>
+              <TabsTrigger value="option2">Wizard</TabsTrigger>
+              <TabsTrigger value="option3">Progressive</TabsTrigger>
             </TabsList>
             
             <TabsContent value="option1" className="mt-4 space-y-4">
@@ -200,69 +221,113 @@ export const EmbedCodeGenerator = ({ eventType, productSlug, livePreviewData }: 
           </Tabs>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <Label>Iframe Embed Code</Label>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => copyToClipboard(iframeCode, 'iframe')}
-                className="flex items-center gap-2"
-              >
-                {copiedIframe ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4" />
-                    Copy
-                  </>
-                )}
-              </Button>
-            </div>
-            <div className="rounded-lg border bg-muted/30 p-4">
-              <pre className="text-xs overflow-x-auto">
-                <code>{iframeCode}</code>
-              </pre>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Simple iframe embed. Best for most use cases.
+            <h3 className="text-base font-semibold mb-3">Choose Your Code Format</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Select the implementation method that works best for your website.
             </p>
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <Label>JavaScript Embed Code</Label>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => copyToClipboard(scriptCode, 'script')}
-                className="flex items-center gap-2"
-              >
-                {copiedScript ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4" />
-                    Copy
-                  </>
-                )}
-              </Button>
+          <div className="space-y-4">
+            {/* HTML (iframe) */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-base">HTML (iframe)</Label>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => copyToClipboard(iframeCode, 'html')}
+                  className="flex items-center gap-2"
+                >
+                  {copiedHtml ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      Copy
+                    </>
+                  )}
+                </Button>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <pre className="text-xs overflow-x-auto">
+                  <code>{iframeCode}</code>
+                </pre>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Simple iframe embed. Works on any website - just paste into your HTML.
+              </p>
             </div>
-            <div className="rounded-lg border bg-muted/30 p-4">
-              <pre className="text-xs overflow-x-auto">
-                <code>{scriptCode}</code>
-              </pre>
+
+            {/* React Component */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-base">React Component</Label>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => copyToClipboard(reactCode, 'react')}
+                  className="flex items-center gap-2"
+                >
+                  {copiedReact ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      Copy
+                    </>
+                  )}
+                </Button>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <pre className="text-xs overflow-x-auto">
+                  <code>{reactCode}</code>
+                </pre>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                React component for Next.js, Create React App, or any React application.
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              JavaScript snippet that creates the iframe dynamically. Use if you need more control.
-            </p>
+
+            {/* JavaScript */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-base">JavaScript</Label>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => copyToClipboard(scriptCode, 'js')}
+                  className="flex items-center gap-2"
+                >
+                  {copiedJs ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      Copy
+                    </>
+                  )}
+                </Button>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <pre className="text-xs overflow-x-auto">
+                  <code>{scriptCode}</code>
+                </pre>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                JavaScript snippet that dynamically creates the iframe. Use for more control or dynamic loading.
+              </p>
+            </div>
           </div>
         </div>
 
