@@ -88,26 +88,16 @@ const linkSessionToContact = async (emailAddress: string, contactName?: string) 
 
 interface EmbedOption1Props {
   eventType: EventType & { branding_hide_badge?: boolean; user_timezone?: string };
-  prefillData?: {
-    name?: string;
-    email?: string;
-    phone?: string;
-  };
-  embedCustomization?: {
-    hideBranding?: boolean;
-    primaryColor?: string | null;
-    hideHeader?: boolean;
-  };
 }
 
-export const EmbedOption1 = ({ eventType, prefillData, embedCustomization }: EmbedOption1Props) => {
+export const EmbedOption1 = ({ eventType }: EmbedOption1Props) => {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [name, setName] = useState(prefillData?.name || "");
-  const [email, setEmail] = useState(prefillData?.email || "");
-  const [phone, setPhone] = useState(prefillData?.phone || "");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [callType, setCallType] = useState<string>("");
   const [questionAnswers, setQuestionAnswers] = useState<Record<string, any>>({});
   const { toast } = useToast();
@@ -334,22 +324,6 @@ export const EmbedOption1 = ({ eventType, prefillData, embedCustomization }: Emb
 
       setSubmitted(true);
       setConfirmationDetails(confirmation);
-
-      // Notify parent window via postMessage
-      if (window.parent !== window) {
-        window.parent.postMessage({
-          type: 'booking_completed',
-          data: {
-            bookingId: createdBookingId,
-            eventTypeName: eventType.name,
-            inviteeName: name.trim(),
-            inviteeEmail: email.trim().toLowerCase(),
-            startTime: startTime.toISOString(),
-            endTime: endTime.toISOString(),
-            callType,
-          }
-        }, '*');
-      }
 
       toast({
         title: "Success!",
