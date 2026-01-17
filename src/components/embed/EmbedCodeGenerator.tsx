@@ -121,9 +121,9 @@ export const EmbedCodeGenerator = ({ eventType, productSlug, livePreviewData }: 
           <Label className="mb-3 block">Select Embed Style</Label>
           <Tabs value={selectedOption} onValueChange={(v) => setSelectedOption(v as any)}>
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="option1">Classic</TabsTrigger>
-              <TabsTrigger value="option2">Wizard</TabsTrigger>
-              <TabsTrigger value="option3">Progressive</TabsTrigger>
+              <TabsTrigger value="option1">HTML (iframe)</TabsTrigger>
+              <TabsTrigger value="option2">React (iframe)</TabsTrigger>
+              <TabsTrigger value="option3">React (Atom)</TabsTrigger>
             </TabsList>
             
             <TabsContent value="option1" className="mt-4 space-y-4">
