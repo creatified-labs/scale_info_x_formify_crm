@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, User } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -121,23 +121,56 @@ export async function GET(request: NextRequest) {
     if (!companyUuid) {
       // Create the company
       const newCompanyId = randomUUID();
-      
-      // Generate booking slug from company name
-      // Default to "Scale Info" if no name is available
-      const companyName = whopName || 'Scale Info';
-      const bookingSlug = companyName
+
+      // Fetch the Whop business name using the API
+      let whopBusinessName: string | null = null;
+      const whopApiKey = process.env.WHOP_API_KEY;
+
+      if (!whopApiKey) {
+        console.warn('[whop-session] WHOP_API_KEY not set - cannot fetch business name, using fallback');
+      }
+
+      if (whopApiKey && whopOrgId) {
+        try {
+          console.log('[whop-session] Fetching Whop business name for:', whopOrgId);
+          const companyResponse = await fetch(`https://api.whop.com/api/v5/companies/${whopOrgId}`, {
+            headers: {
+              'Authorization': `Bearer ${whopApiKey}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (companyResponse.ok) {
+            const companyData = await companyResponse.json();
+            whopBusinessName = companyData.title || companyData.name || null;
+            console.log('[whop-session] Whop business name:', whopBusinessName);
+          } else {
+            console.warn('[whop-session] Failed to fetch Whop company:', companyResponse.status);
+          }
+        } catch (error) {
+          console.error('[whop-session] Error fetching Whop company:', error);
+        }
+      }
+
+      // Use Whop business name, fall back to user name, then "Scale Info"
+      const companyName = whopBusinessName || whopName || 'Scale Info';
+
+      // Generate booking slug from business name + random suffix for uniqueness
+      // e.g., "creatified" -> creatified7x3k, "My Business" -> mybusiness7x3k
+      const baseSlug = companyName
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '')
-        .replace(/^-+|-+$/g, '')
-        .substring(0, 50);
-      
+        .substring(0, 20);
+      const randomSuffix = randomUUID().substring(0, 4).toLowerCase();
+      const bookingSlug = `${baseSlug || 'scaleinfo'}${randomSuffix}`;
+
       console.log('[whop-session] Creating new company:', {
         id: newCompanyId,
         name: companyName,
         whop_company_id: whopOrgId,
         booking_slug_prefix: bookingSlug,
       });
-      
+
       const { data: newCompany, error: companyError } = await supabaseAdmin
         .from('companies')
         .insert({
@@ -164,11 +197,52 @@ export async function GET(request: NextRequest) {
           details: companyError.details,
           hint: companyError.hint,
         });
-        
-        if (!companyError.message.includes('duplicate')) {
+
+        // Check if it's a duplicate error
+        if (companyError.message.includes('duplicate')) {
+          // First, check if this company already exists (whop_company_id duplicate)
+          console.log('[whop-session] Duplicate detected, checking if company exists');
+          const { data: existingCompany } = await supabaseAdmin
+            .from('companies')
+            .select('id, whop_company_id')
+            .eq('whop_company_id', whopOrgId)
+            .maybeSingle();
+
+          if (existingCompany) {
+            company = existingCompany;
+            companyUuid = existingCompany.id;
+            console.log('[whop-session] Found existing company:', companyUuid);
+          } else {
+            // It's likely a booking_slug_prefix collision - retry with a different slug
+            console.log('[whop-session] Slug collision detected, retrying with new random suffix');
+            const retrySlug = `${baseSlug || 'scaleinfo'}${randomUUID().substring(0, 6).toLowerCase()}`;
+
+            const { data: retryCompany, error: retryError } = await supabaseAdmin
+              .from('companies')
+              .insert({
+                id: newCompanyId,
+                name: companyName,
+                whop_company_id: whopOrgId,
+                branding_display_name: companyName,
+                branding_name: companyName,
+                booking_slug_prefix: retrySlug,
+              })
+              .select('id, whop_company_id')
+              .single();
+
+            if (retryError) {
+              console.error('[whop-session] ❌ Retry also failed:', retryError.message);
+            } else if (retryCompany) {
+              company = retryCompany;
+              companyUuid = retryCompany.id;
+              console.log('[whop-session] Company created on retry with slug:', retrySlug);
+            }
+          }
+        } else {
+          // Non-duplicate error
           return NextResponse.json(
-            { 
-              error: 'Failed to create company', 
+            {
+              error: 'Failed to create company',
               details: companyError.message,
               code: companyError.code,
               hint: companyError.hint,
@@ -177,30 +251,12 @@ export async function GET(request: NextRequest) {
             { status: 500 }
           );
         }
-        
-        // If duplicate error, retry fetching the existing company
-        console.log('[whop-session] Duplicate company detected, retrying lookup');
-        const { data: existingCompany } = await supabaseAdmin
-          .from('companies')
-          .select('id, whop_company_id')
-          .eq('whop_company_id', whopOrgId)
-          .maybeSingle();
-        
-        console.log('[whop-session] Existing company lookup result:', existingCompany);
-        
-        if (existingCompany) {
-          company = existingCompany;
-          companyUuid = existingCompany.id;
-          console.log('[whop-session] Found existing company after duplicate:', companyUuid);
-        } else {
-          console.error('[whop-session] ❌ Duplicate error but could not find existing company');
-        }
       } else {
         console.log('[whop-session] Company created successfully:', newCompany);
         company = newCompany;
         companyUuid = newCompany?.id ?? null;
         console.log('[whop-session] Set companyUuid to:', companyUuid);
-        
+
         // Create default event type for new company
         if (companyUuid) {
           console.log('[whop-session] Creating default event type for new company');
@@ -262,59 +318,56 @@ export async function GET(request: NextRequest) {
 
     console.log('[whop-session] Looking for user with email:', userEmail);
 
-    // Find existing auth user by email
-    const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers();
-    let authUser = authUsers?.users?.find(u => u.email === userEmail);
+    // Try to create user first (more efficient than listing all users)
+    // If user already exists, we'll handle the error and fetch them
+    let authUser: User | null = null;
 
-    console.log('[whop-session] Existing user found:', !!authUser);
+    console.log('[whop-session] Attempting to create auth user with email:', userEmail);
+    const { data: newAuthUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+      email: userEmail,
+      email_confirm: true,
+      user_metadata: {
+        company_id: companyUuid,
+        whop_org_id: whopOrgId,
+        whop_user_id: whopUserId || null,
+        name: whopName || `User ${whopOrgId}`,
+      },
+    });
 
-    if (!authUser) {
-      // Create new auth user
-      console.log('[whop-session] Creating new auth user with email:', userEmail);
-      const { data: newAuthUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-        email: userEmail,
-        email_confirm: true,
-        user_metadata: {
-          company_id: companyUuid,
-          whop_org_id: whopOrgId,
-          whop_user_id: whopUserId || null,
-          name: whopName || `User ${whopOrgId}`,
-        },
-      });
+    if (createError) {
+      if (createError.message.includes('already been registered')) {
+        // User exists - fetch them from users table then get auth user
+        console.log('[whop-session] User already exists, fetching existing user');
+        const { data: userByEmail } = await supabaseAdmin
+          .from('users')
+          .select('id')
+          .eq('email', userEmail)
+          .maybeSingle();
 
-      console.log('[whop-session] User creation result:', {
-        success: !createError,
-        error: createError,
-        userId: newAuthUser?.user?.id,
-      });
+        if (userByEmail?.id) {
+          const { data: existingAuth } = await supabaseAdmin.auth.admin.getUserById(userByEmail.id);
+          if (existingAuth?.user) {
+            authUser = existingAuth.user;
+            console.log('[whop-session] Found existing user:', authUser.id);
+          }
+        }
 
-      if (createError && !createError.message.includes('already been registered')) {
+        // If not in users table, try listing recent users (fallback)
+        if (!authUser) {
+          console.log('[whop-session] User not in users table, searching auth users');
+          const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers({ perPage: 100 });
+          authUser = authUsers?.users?.find(u => u.email === userEmail) || null;
+        }
+      } else {
         console.error('[whop-session] Failed to create auth user:', createError);
         return NextResponse.json(
           { error: 'Failed to create user', details: createError.message },
           { status: 500 }
         );
       }
-
-      if (newAuthUser?.user) {
-        authUser = newAuthUser.user;
-      }
-    }
-
-    if (!authUser) {
-      // Fetch the user directly by email/default provider
-      const { data: userByEmail } = await supabaseAdmin
-        .from('users')
-        .select('id')
-        .eq('email', userEmail)
-        .maybeSingle();
-
-      if (userByEmail?.id) {
-        const { data: existingAuth } = await supabaseAdmin.auth.admin.getUserById(userByEmail.id);
-        if (existingAuth?.user) {
-          authUser = existingAuth.user;
-        }
-      }
+    } else if (newAuthUser?.user) {
+      authUser = newAuthUser.user;
+      console.log('[whop-session] Created new user:', authUser.id);
     }
 
     if (!authUser) {

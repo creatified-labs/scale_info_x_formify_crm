@@ -165,9 +165,22 @@ async function performBootstrap(): Promise<{
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Server-side auth failed:', errorText);
+
+      // Try to parse the error as JSON to get a cleaner message
+      let errorMessage = 'Authentication failed. Please try refreshing the page.';
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.error) {
+          errorMessage = errorJson.error;
+        }
+      } catch {
+        // If not JSON, use a generic message (don't expose raw error text to users)
+        console.error('Could not parse error response:', errorText);
+      }
+
       return {
         success: false,
-        error: `Authentication failed: ${errorText}`,
+        error: errorMessage,
       };
     }
 
