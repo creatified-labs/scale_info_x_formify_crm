@@ -5,7 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Edit, Copy, ExternalLink, Video, Phone, MapPin, Link as LinkIcon, RefreshCw, Eye, CheckCircle, Trash2, Archive, ArchiveRestore } from "lucide-react";
+import { Plus, Edit, Copy, ExternalLink, Video, Phone, MapPin, Link as LinkIcon, RefreshCw, Eye, CheckCircle, Trash2, Archive, ArchiveRestore, LayoutGrid, List, Calendar } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { EventType, CallType } from "@/types/scheduling";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -49,6 +50,7 @@ export const EventTypesList = () => {
   const [permanentDeleteDialogOpen, setPermanentDeleteDialogOpen] = useState(false);
   const [eventToPermanentlyDelete, setEventToPermanentlyDelete] = useState<EventTypeWithAnalytics | null>(null);
   const [viewTab, setViewTab] = useState<"active" | "archived">("active");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [loadError, setLoadError] = useState<string | null>(null);
   const { toast } = useToast();
   const { entitlements } = useEntitlements();
@@ -688,6 +690,99 @@ export const EventTypesList = () => {
     </Card>
   );
 
+  const renderEventListItem = (event: EventTypeWithAnalytics, isArchived: boolean = false) => (
+    <div key={event.id} className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-muted/50 transition-colors">
+      <div className="flex items-center gap-4 flex-1 min-w-0">
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+          <Calendar className="w-5 h-5 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-medium text-sm truncate">{event.name}</h3>
+          <p className="text-xs text-muted-foreground">
+            {event.duration_minutes} min • {event.location_type.replace('_', ' ')}
+          </p>
+        </div>
+      </div>
+      
+      <div className="flex items-center gap-3">
+        {!isArchived ? (
+          <>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={event.is_active}
+                      onCheckedChange={() => toggleActive(event.id, event.is_active)}
+                    />
+                    <span className="text-xs text-muted-foreground w-14">
+                      {event.is_active ? "Active" : "Paused"}
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{event.is_active ? "Pause" : "Activate"} this event type</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => copyBookingLink(event.slug)}
+            >
+              <Copy className="w-4 h-4 mr-1" />
+              Copy Link
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEditingEvent(event)}
+            >
+              <Edit className="w-4 h-4 mr-1" />
+              Edit
+            </Button>
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setEventToDelete(event);
+                setDeleteDialogOpen(true);
+              }}
+              title="Archive event type"
+            >
+              <Archive className="w-4 h-4 text-muted-foreground" />
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => unarchiveEventType(event.id)}
+            >
+              <ArchiveRestore className="w-4 h-4 mr-1" />
+              Restore
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                setEventToPermanentlyDelete(event);
+                setPermanentDeleteDialogOpen(true);
+              }}
+            >
+              <Trash2 className="w-4 h-4 mr-1" />
+              Delete
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -701,6 +796,24 @@ export const EventTypesList = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          <div className="flex border rounded-lg overflow-hidden">
+            <Button
+              variant={viewMode === "grid" ? "default" : "ghost"}
+              size="sm"
+              className="rounded-none"
+              onClick={() => setViewMode("grid")}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "default" : "ghost"}
+              size="sm"
+              className="rounded-none"
+              onClick={() => setViewMode("list")}
+            >
+              <List className="w-4 h-4" />
+            </Button>
+          </div>
           <Button 
             variant="outline" 
             onClick={refreshAllEventTypes}
@@ -772,9 +885,13 @@ export const EventTypesList = () => {
                 Create Your First Event Type
               </Button>
             </Card>
-          ) : (
+          ) : viewMode === "grid" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {eventTypes.map((event) => renderEventCard(event, false))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {eventTypes.map((event) => renderEventListItem(event, false))}
             </div>
           )}
         </TabsContent>
@@ -788,9 +905,13 @@ export const EventTypesList = () => {
                 Event types you archive will appear here
               </p>
             </Card>
-          ) : (
+          ) : viewMode === "grid" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {archivedEventTypes.map((event) => renderEventCard(event, true))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {archivedEventTypes.map((event) => renderEventListItem(event, true))}
             </div>
           )}
         </TabsContent>

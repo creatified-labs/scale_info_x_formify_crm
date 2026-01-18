@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Copy, Check, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { EventType, InviteeQuestion, CallType } from "@/types/scheduling";
+import { getPublicOrigin } from "@/lib/urls";
 
 interface EmbedCodeGeneratorProps {
   eventType: EventType;
@@ -27,17 +28,22 @@ interface EmbedCodeGeneratorProps {
 }
 
 export const EmbedCodeGenerator = ({ eventType, productSlug, livePreviewData }: EmbedCodeGeneratorProps) => {
-  const [selectedOption, setSelectedOption] = useState<"option1" | "option2" | "option3">("option1");
+  const [selectedOption, setSelectedOption] = useState<'classic' | 'wizard' | 'progressive'>(eventType.embed_view_style || 'classic');
   const [copiedHtml, setCopiedHtml] = useState(false);
   const [copiedReact, setCopiedReact] = useState(false);
-  const [copiedJs, setCopiedJs] = useState(false);
   const { toast } = useToast();
 
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  // Sync selectedOption when embed_view_style changes
+  useEffect(() => {
+    setSelectedOption(eventType.embed_view_style || 'classic');
+  }, [eventType.embed_view_style]);
+
+  const publicOrigin = getPublicOrigin();
+  const localOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   const productPath = productSlug || 'default';
   
   const previewUrl = useMemo(() => {
-    const url = `${baseUrl}/embed/${productPath}/${eventType.slug}?type=${selectedOption}`;
+    const url = `${localOrigin}/embed/${productPath}/${eventType.slug}?type=${selectedOption}`;
     
     if (livePreviewData) {
       const params = new URLSearchParams();
@@ -51,15 +57,15 @@ export const EmbedCodeGenerator = ({ eventType, productSlug, livePreviewData }: 
         params.set('questions', JSON.stringify(livePreviewData.questions));
       }
       
-      return `${baseUrl}/embed/${productPath}/${eventType.slug}?${params.toString()}`;
+      return `${localOrigin}/embed/${productPath}/${eventType.slug}?${params.toString()}`;
     }
     
     return url;
-  }, [baseUrl, productPath, eventType.slug, selectedOption, livePreviewData]);
+  }, [localOrigin, productPath, eventType.slug, selectedOption, livePreviewData]);
   
   const embedUrl = useMemo(() => {
-    return `${baseUrl}/embed/${productPath}/${eventType.slug}?type=${selectedOption}`;
-  }, [baseUrl, productPath, eventType.slug, selectedOption]);
+    return `${publicOrigin}/embed/${productPath}/${eventType.slug}?type=${selectedOption}`;
+  }, [publicOrigin, productPath, eventType.slug, selectedOption]);
 
   const iframeCode = `<iframe 
   src="${embedUrl}" 
@@ -86,32 +92,15 @@ function BookingEmbed() {
 
 export default BookingEmbed;`;
 
-  const scriptCode = `<div id="booking-embed-${eventType.slug}"></div>
-<script>
-  (function() {
-    var iframe = document.createElement('iframe');
-    iframe.src = '${embedUrl}';
-    iframe.width = '100%';
-    iframe.height = '800';
-    iframe.frameBorder = '0';
-    iframe.style.border = 'none';
-    iframe.style.borderRadius = '8px';
-    document.getElementById('booking-embed-${eventType.slug}').appendChild(iframe);
-  })();
-</script>`;
-
-  const copyToClipboard = async (text: string, type: 'html' | 'react' | 'js') => {
+  const copyToClipboard = async (text: string, type: 'html' | 'react') => {
     try {
       await navigator.clipboard.writeText(text);
       if (type === 'html') {
         setCopiedHtml(true);
         setTimeout(() => setCopiedHtml(false), 2000);
-      } else if (type === 'react') {
+      } else {
         setCopiedReact(true);
         setTimeout(() => setCopiedReact(false), 2000);
-      } else {
-        setCopiedJs(true);
-        setTimeout(() => setCopiedJs(false), 2000);
       }
       toast({
         title: "Copied!",
@@ -144,12 +133,12 @@ export default BookingEmbed;`;
           <Label className="mb-3 block">Select Design Style</Label>
           <Tabs value={selectedOption} onValueChange={(v) => setSelectedOption(v as any)}>
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="option1">Classic</TabsTrigger>
-              <TabsTrigger value="option2">Wizard</TabsTrigger>
-              <TabsTrigger value="option3">Progressive</TabsTrigger>
+              <TabsTrigger value="classic">Classic</TabsTrigger>
+              <TabsTrigger value="wizard">Wizard</TabsTrigger>
+              <TabsTrigger value="progressive">Progressive</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="option1" className="mt-4 space-y-4">
+            <TabsContent value="classic" className="mt-4 space-y-4">
               <div className="rounded-lg border p-4 bg-muted/50">
                 <h4 className="font-medium mb-2">Classic Layout</h4>
                 <p className="text-sm text-muted-foreground">
@@ -173,7 +162,7 @@ export default BookingEmbed;`;
               </div>
             </TabsContent>
             
-            <TabsContent value="option2" className="mt-4 space-y-4">
+            <TabsContent value="wizard" className="mt-4 space-y-4">
               <div className="rounded-lg border p-4 bg-muted/50">
                 <h4 className="font-medium mb-2">Wizard Flow</h4>
                 <p className="text-sm text-muted-foreground">
@@ -197,7 +186,7 @@ export default BookingEmbed;`;
               </div>
             </TabsContent>
             
-            <TabsContent value="option3" className="mt-4 space-y-4">
+            <TabsContent value="progressive" className="mt-4 space-y-4">
               <div className="rounded-lg border p-4 bg-muted/50">
                 <h4 className="font-medium mb-2">Progressive Reveal</h4>
                 <p className="text-sm text-muted-foreground">
@@ -295,39 +284,6 @@ export default BookingEmbed;`;
               </div>
               <p className="text-xs text-muted-foreground mt-2">
                 React component for Next.js, Create React App, or any React application.
-              </p>
-            </div>
-
-            {/* JavaScript */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <Label className="text-base">JavaScript</Label>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => copyToClipboard(scriptCode, 'js')}
-                  className="flex items-center gap-2"
-                >
-                  {copiedJs ? (
-                    <>
-                      <Check className="w-4 h-4" />
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" />
-                      Copy
-                    </>
-                  )}
-                </Button>
-              </div>
-              <div className="rounded-lg border bg-muted/30 p-4">
-                <pre className="text-xs overflow-x-auto">
-                  <code>{scriptCode}</code>
-                </pre>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                JavaScript snippet that dynamically creates the iframe. Use for more control or dynamic loading.
               </p>
             </div>
           </div>

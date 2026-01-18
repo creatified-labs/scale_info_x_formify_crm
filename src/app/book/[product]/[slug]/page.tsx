@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,10 @@ import { cn } from "@/lib/utils";
 import { PoweredByBadge } from "@/components/PoweredByBadge";
 import { usePreviewMode } from "@/components/PreviewModeToggle";
 import { DEFAULT_PRODUCT_SEGMENT } from "@/lib/urls";
+import { EmbedOption1 } from "@/components/embed/EmbedOption1";
+import { EmbedOption2 } from "@/components/embed/EmbedOption2";
+import { EmbedOption3 } from "@/components/embed/EmbedOption3";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { parseTimeInTimezone } from "@/lib/timezone";
 
 type ConfirmationDetails = {
@@ -91,9 +95,21 @@ const linkSessionToContact = async (emailAddress: string, contactName?: string) 
 
 const PublicBooking = () => {
   const params = useParams<{ slug: string; product?: string }>();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const slug = params.slug;
   const rawProduct = params.product;
   const product = typeof rawProduct === "string" && rawProduct.trim().length > 0 ? rawProduct.trim() : DEFAULT_PRODUCT_SEGMENT;
+  
+  const viewTypeParam = searchParams.get("view") as "classic" | "wizard" | "progressive" | null;
+  const [viewType, setViewType] = useState<"classic" | "wizard" | "progressive" | null>(viewTypeParam);
+  
+  const handleViewChange = (newView: "classic" | "wizard" | "progressive") => {
+    setViewType(newView);
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", newView);
+    router.replace(url.pathname + url.search, { scroll: false });
+  };
   const [eventType, setEventType] = useState<(EventType & { branding_hide_badge?: boolean, user_timezone?: string }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -122,6 +138,19 @@ const PublicBooking = () => {
       setCallType(eventType.default_call_type);
     }
   }, [eventType]);
+
+  // Set view type from event type's saved preference or default to classic
+  useEffect(() => {
+    if (eventType && viewType === null) {
+      console.log('Setting view type from event type:', {
+        booking_page_view_style: eventType.booking_page_view_style,
+        embed_view_style: eventType.embed_view_style,
+        eventType
+      });
+      // If there's a saved preference, use it; otherwise default to classic
+      setViewType(eventType.booking_page_view_style || 'classic');
+    }
+  }, [eventType, viewType]);
 
   useEffect(() => {
     loadEventType();
@@ -172,6 +201,11 @@ const PublicBooking = () => {
       if (!fetched) {
         throw new Error("event not found");
       }
+      console.log('Loaded event type from database:', {
+        booking_page_view_style: fetched.booking_page_view_style,
+        embed_view_style: fetched.embed_view_style,
+        slug: fetched.slug
+      });
       setEventType({
         ...fetched,
         branding_hide_badge: fetched.companies?.branding_hide_badge ?? fetched.branding_hide_badge ?? false,
@@ -604,147 +638,32 @@ const PublicBooking = () => {
     );
   }
 
-  return (
-    <div className={cn("min-h-screen bg-background p-3 lg:p-4 flex items-center justify-center")}> 
-      {showBadge && <PoweredByBadge />}
-      <div className="max-w-6xl mx-auto w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-stretch">
-          {/* Column 1: Form */}
-          <Card className="flex flex-col h-auto lg:h-[520px]">
-            <div className="p-4 border-b flex-shrink-0">
-              <h1 className="text-lg font-bold mb-1">{eventType.name}</h1>
-              {eventType.description && (
-                <p className="text-xs text-muted-foreground line-clamp-2">{eventType.description}</p>
-              )}
-              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                <Clock className="w-3 h-3" />
-                <span>{eventType.duration_minutes} min</span>
-              </div>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <div className="h-full overflow-y-auto px-4 py-4 space-y-4">
-                <CallTypeSelector
-                  allowedTypes={eventType.allowed_call_types || [eventType.location_type]}
-                  selectedType={callType as any}
-                  onTypeChange={setCallType}
-                  onPhoneChange={setPhone}
-                  phoneValue={phone}
-                  phoneRequired={eventType.phone_required_for_phone_type}
-                  inPersonLocation={eventType.inperson_location}
-                  customLinkUrl={eventType.custom_link_url}
-                  customLinkLabel={eventType.custom_link_label}
-                />
-                <div className="space-y-3">
-                  <div>
-                    <Label htmlFor="name">Name <span className="text-destructive">*</span></Label>
-                    <Input
-                      id="name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Your full name"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@example.com"
-                      required
-                    />
-                    {email.length > 0 && !emailIsValid && (
-                      <p className="text-sm text-destructive">Enter a valid email address (example@domain.com) to continue.</p>
-                    )}
-                  </div>
-                  {eventType.invitee_form_schema && eventType.invitee_form_schema.length > 0 && (
-                    <InviteeQuestions
-                      questions={eventType.invitee_form_schema}
-                      answers={questionAnswers}
-                      onAnswerChange={(questionId, value) =>
-                        setQuestionAnswers({ ...questionAnswers, [questionId]: value })
-                      }
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          {/* Column 2: Calendar */}
-          <Card className="flex flex-col h-auto lg:h-[520px]">
-            <div className="p-4 border-b flex-shrink-0">
-              <h2 className="text-base font-semibold">Select a Date</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">{eventType.user_timezone || 'UTC'}</p>
-            </div>
-            <div className="flex-1 overflow-auto min-h-0">
-              <BookingCalendar
-                form={{
-                  ...eventType,
-                  user_id: eventType.user_id,
-                  use_custom_availability: eventType.use_custom_availability,
-                  email,
-                } as any}
-                selectedDate={selectedDate}
-                onDateSelect={(date) => {
-                  setSelectedDate(date);
-                  setSelectedTime(null);
-                }}
-                renderTimesColumn={false}
-              />
-            </div>
-          </Card>
-
-          {/* Column 3: Time slots */}
-          <Card className="flex flex-col h-auto lg:h-[520px]">
-            <div className="p-4 border-b flex-shrink-0">
-              <h2 className="text-base font-semibold">Select a Time</h2>
-              {selectedDate && (
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {format(selectedDate, 'EEEE, MMMM d, yyyy')}
-                </p>
-              )}
-            </div>
-            <div className="flex-1 overflow-auto min-h-0">
-              <BookingCalendar
-                form={{
-                  ...eventType,
-                  user_id: eventType.user_id,
-                  use_custom_availability: eventType.use_custom_availability,
-                  email,
-                } as any}
-                selectedDate={selectedDate}
-                selectedTime={selectedTime}
-                onTimeSelect={(time) => setSelectedTime(time)}
-                renderCalendar={false}
-                renderTimesColumn
-              />
-              {!emailIsValid && (
-                <p className="mt-3 text-sm text-destructive text-center">
-                  Enter a valid email address to reveal available times.
-                </p>
-              )}
-            </div>
-            <div className="p-4 border-t flex-shrink-0">
-              <Button
-                onClick={handleSubmit}
-                className="w-full"
-                disabled={
-                  submitting ||
-                  !selectedDate ||
-                  !selectedTime ||
-                  !name.trim() ||
-                  !emailIsValid
-                }
-              >
-                {submitting ? "Confirming..." : "Confirm Booking"}
-              </Button>
-            </div>
-          </Card>
-        </div>
+  // Don't render until we have a viewType
+  if (!viewType) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
       </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* View Style Selector */}
+      <div className="fixed top-4 right-4 z-50">
+        <Tabs value={viewType} onValueChange={(v) => handleViewChange(v as any)}>
+          <TabsList className="bg-background/80 backdrop-blur-sm border shadow-sm">
+            <TabsTrigger value="classic" className="text-xs">Classic</TabsTrigger>
+            <TabsTrigger value="wizard" className="text-xs">Wizard</TabsTrigger>
+            <TabsTrigger value="progressive" className="text-xs">Progressive</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {/* Render the selected view */}
+      {viewType === "classic" && <EmbedOption1 eventType={eventType} />}
+      {viewType === "wizard" && <EmbedOption2 eventType={eventType} />}
+      {viewType === "progressive" && <EmbedOption3 eventType={eventType} />}
     </div>
   );
 };

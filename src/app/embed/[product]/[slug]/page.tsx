@@ -15,11 +15,21 @@ export default function EmbedBookingPage() {
   const rawProduct = params.product;
   const product = typeof rawProduct === "string" && rawProduct.trim().length > 0 ? rawProduct.trim() : DEFAULT_PRODUCT_SEGMENT;
   
-  const embedType = searchParams.get("type") || "option1";
+  const embedTypeParam = searchParams.get("type");
   const isPreviewMode = searchParams.get("preview") === "true";
   const [eventType, setEventType] = useState<(EventType & { branding_hide_badge?: boolean, user_timezone?: string }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Determine embed type: use URL param if provided, otherwise use saved preference, fallback to classic
+  const getEmbedType = () => {
+    if (embedTypeParam) return embedTypeParam;
+    if (eventType?.embed_view_style) {
+      return eventType.embed_view_style;
+    }
+    return 'classic';
+  };
+  const embedType = getEmbedType();
 
   const previewOverrides = useMemo(() => {
     if (!isPreviewMode) return null;
@@ -126,9 +136,9 @@ export default function EmbedBookingPage() {
 
   return (
     <>
-      {embedType === "option1" && <EmbedOption1 eventType={eventType} />}
-      {embedType === "option2" && <EmbedOption2 eventType={eventType} />}
-      {embedType === "option3" && <EmbedOption3 eventType={eventType} />}
+      {embedType === "classic" && <EmbedOption1 eventType={eventType} />}
+      {embedType === "wizard" && <EmbedOption2 eventType={eventType} />}
+      {embedType === "progressive" && <EmbedOption3 eventType={eventType} />}
     </>
   );
 }

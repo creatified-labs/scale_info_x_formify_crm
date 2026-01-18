@@ -33,6 +33,8 @@ export interface EventType {
   use_custom_availability?: boolean; // DEPRECATED: Use availability_schedule_id instead
   availability_schedule_id?: string; // NEW: Which schedule to use (NULL = use default)
   theme_mode?: 'light' | 'dark' | 'auto';
+  embed_view_style?: 'classic' | 'wizard' | 'progressive';
+  booking_page_view_style?: 'classic' | 'wizard' | 'progressive';
   branding_hide_badge?: boolean;
   created_at: string;
   updated_at: string;

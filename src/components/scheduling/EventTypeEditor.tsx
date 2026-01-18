@@ -204,6 +204,8 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
   });
   const [saving, setSaving] = useState(false);
   const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'auto'>(eventType?.theme_mode as any || 'auto');
+  const [embedViewStyle, setEmbedViewStyle] = useState<'classic' | 'wizard' | 'progressive'>(eventType?.embed_view_style || 'classic');
+  const [bookingPageViewStyle, setBookingPageViewStyle] = useState<'classic' | 'wizard' | 'progressive'>(eventType?.booking_page_view_style || 'classic');
   const [successMessage, setSuccessMessage] = useState((eventType as any)?.success_message || "");
   const [redirectUrl, setRedirectUrl] = useState(eventType?.redirect_url || "");
   const [redirectButtonText, setRedirectButtonText] = useState((eventType as any)?.redirect_button_text || "Continue");
@@ -262,6 +264,8 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
     setQuestions(cloneQuestions(eventType?.invitee_form_schema));
     setNotifications(cloneNotifications(eventType?.notifications as NotificationSettings | undefined));
     setThemeMode((eventType?.theme_mode as any) || 'auto');
+    setEmbedViewStyle(eventType?.embed_view_style || 'classic');
+    setBookingPageViewStyle(eventType?.booking_page_view_style || 'classic');
     setSuccessMessage((eventType as any)?.success_message || "");
     setRedirectUrl(eventType?.redirect_url || "");
     setRedirectButtonText((eventType as any)?.redirect_button_text || "Continue");
@@ -411,10 +415,18 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
         notifications: notifications as any,
         templates: templates as any,
         theme_mode: themeMode,
+        embed_view_style: embedViewStyle,
+        booking_page_view_style: bookingPageViewStyle,
         success_message: successMessage,
         redirect_url: redirectUrl || null,
         redirect_button_text: redirectButtonText || "Continue",
       };
+
+      console.log('Saving event type with view styles:', {
+        embed_view_style: embedViewStyle,
+        booking_page_view_style: bookingPageViewStyle,
+        eventData
+      });
 
       const parseResponse = async (res: Response, action: "create" | "update") => {
         // Clone response to read it multiple times
@@ -1047,10 +1059,89 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
           )}
         </TabsContent>
 
-        <TabsContent value="embed" className="mt-6">
+        <TabsContent value="embed" className="mt-6 space-y-6">
+          <Card className="p-6">
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Embed View Style</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Choose the layout for embedded booking forms on external websites.
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div
+                  className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                    embedViewStyle === 'classic'
+                      ? 'border-primary bg-primary/5 ring-2 ring-primary'
+                      : 'hover:border-muted-foreground/50'
+                  }`}
+                  onClick={() => setEmbedViewStyle('classic')}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      embedViewStyle === 'classic' ? 'border-primary' : 'border-muted-foreground'
+                    }`}>
+                      {embedViewStyle === 'classic' && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </div>
+                    <span className="font-medium">Classic</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Three-column layout with form, calendar, and time slots side by side.
+                  </p>
+                </div>
+                <div
+                  className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                    embedViewStyle === 'wizard'
+                      ? 'border-primary bg-primary/5 ring-2 ring-primary'
+                      : 'hover:border-muted-foreground/50'
+                  }`}
+                  onClick={() => setEmbedViewStyle('wizard')}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      embedViewStyle === 'wizard' ? 'border-primary' : 'border-muted-foreground'
+                    }`}>
+                      {embedViewStyle === 'wizard' && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </div>
+                    <span className="font-medium">Wizard</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Step-by-step flow where invitees answer questions first, then select time.
+                  </p>
+                </div>
+                <div
+                  className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                    embedViewStyle === 'progressive'
+                      ? 'border-primary bg-primary/5 ring-2 ring-primary'
+                      : 'hover:border-muted-foreground/50'
+                  }`}
+                  onClick={() => setEmbedViewStyle('progressive')}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      embedViewStyle === 'progressive' ? 'border-primary' : 'border-muted-foreground'
+                    }`}>
+                      {embedViewStyle === 'progressive' && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </div>
+                    <span className="font-medium">Progressive</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Vertical form with calendar revealed at the bottom after completion.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Card>
+          
           {eventType && (
             <EmbedCodeGenerator
-              eventType={eventType}
+              eventType={{ ...eventType, embed_view_style: embedViewStyle }}
               livePreviewData={{
                 name,
                 description,
@@ -1074,7 +1165,86 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
           )}
         </TabsContent>
 
-        <TabsContent value="preview" className="mt-6">
+        <TabsContent value="preview" className="mt-6 space-y-6">
+          <Card className="p-6">
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Booking Page View Style</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Choose the layout for your direct booking page. This will be used when visitors access your booking link.
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div
+                  className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                    bookingPageViewStyle === 'classic'
+                      ? 'border-primary bg-primary/5 ring-2 ring-primary'
+                      : 'hover:border-muted-foreground/50'
+                  }`}
+                  onClick={() => setBookingPageViewStyle('classic')}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      bookingPageViewStyle === 'classic' ? 'border-primary' : 'border-muted-foreground'
+                    }`}>
+                      {bookingPageViewStyle === 'classic' && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </div>
+                    <span className="font-medium">Classic</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Three-column layout with form, calendar, and time slots side by side.
+                  </p>
+                </div>
+                <div
+                  className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                    bookingPageViewStyle === 'wizard'
+                      ? 'border-primary bg-primary/5 ring-2 ring-primary'
+                      : 'hover:border-muted-foreground/50'
+                  }`}
+                  onClick={() => setBookingPageViewStyle('wizard')}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      bookingPageViewStyle === 'wizard' ? 'border-primary' : 'border-muted-foreground'
+                    }`}>
+                      {bookingPageViewStyle === 'wizard' && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </div>
+                    <span className="font-medium">Wizard</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Step-by-step flow where invitees answer questions first, then select time.
+                  </p>
+                </div>
+                <div
+                  className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                    bookingPageViewStyle === 'progressive'
+                      ? 'border-primary bg-primary/5 ring-2 ring-primary'
+                      : 'hover:border-muted-foreground/50'
+                  }`}
+                  onClick={() => setBookingPageViewStyle('progressive')}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      bookingPageViewStyle === 'progressive' ? 'border-primary' : 'border-muted-foreground'
+                    }`}>
+                      {bookingPageViewStyle === 'progressive' && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </div>
+                    <span className="font-medium">Progressive</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Vertical form with calendar revealed at the bottom after completion.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Card>
+          
           <EventTypePreview
             name={name}
             description={description}
@@ -1084,7 +1254,9 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
             phoneRequired={phoneRequired}
             inPersonLocation={inPersonLocation}
             customLinkLabel={customLinkLabel}
+            customLinkUrl={customLinkUrl}
             questions={questions}
+            preferredViewStyle={bookingPageViewStyle}
           />
         </TabsContent>
       </Tabs>
