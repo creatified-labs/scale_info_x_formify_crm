@@ -649,17 +649,6 @@ const PublicBooking = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* View Style Selector */}
-      <div className="fixed top-4 right-4 z-50">
-        <Tabs value={viewType} onValueChange={(v) => handleViewChange(v as any)}>
-          <TabsList className="bg-background/80 backdrop-blur-sm border shadow-sm">
-            <TabsTrigger value="classic" className="text-xs">Classic</TabsTrigger>
-            <TabsTrigger value="wizard" className="text-xs">Wizard</TabsTrigger>
-            <TabsTrigger value="progressive" className="text-xs">Progressive</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
-
       {/* Render the selected view */}
       {viewType === "classic" && <EmbedOption1 eventType={eventType} />}
       {viewType === "wizard" && <EmbedOption2 eventType={eventType} />}
