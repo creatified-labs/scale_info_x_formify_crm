@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { format } from "date-fns";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,6 @@ import { DEFAULT_PRODUCT_SEGMENT } from "@/lib/urls";
 import { EmbedOption1 } from "@/components/embed/EmbedOption1";
 import { EmbedOption2 } from "@/components/embed/EmbedOption2";
 import { EmbedOption3 } from "@/components/embed/EmbedOption3";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { parseTimeInTimezone } from "@/lib/timezone";
 
 type ConfirmationDetails = {
@@ -95,21 +94,11 @@ const linkSessionToContact = async (emailAddress: string, contactName?: string) 
 
 const PublicBooking = () => {
   const params = useParams<{ slug: string; product?: string }>();
-  const searchParams = useSearchParams();
-  const router = useRouter();
   const slug = params.slug;
   const rawProduct = params.product;
   const product = typeof rawProduct === "string" && rawProduct.trim().length > 0 ? rawProduct.trim() : DEFAULT_PRODUCT_SEGMENT;
   
-  const viewTypeParam = searchParams.get("view") as "classic" | "wizard" | "progressive" | null;
-  const [viewType, setViewType] = useState<"classic" | "wizard" | "progressive" | null>(viewTypeParam);
-  
-  const handleViewChange = (newView: "classic" | "wizard" | "progressive") => {
-    setViewType(newView);
-    const url = new URL(window.location.href);
-    url.searchParams.set("view", newView);
-    router.replace(url.pathname + url.search, { scroll: false });
-  };
+  const [viewType, setViewType] = useState<"classic" | "wizard" | "progressive" | null>(null);
   const [eventType, setEventType] = useState<(EventType & { branding_hide_badge?: boolean, user_timezone?: string }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
