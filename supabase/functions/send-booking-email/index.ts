@@ -73,6 +73,10 @@ serve(async (req) => {
         subject: 'Booking Confirmed: {{event_name}}',
         body: `Hi {{invitee_name}},\n\nYour booking for {{event_name}} has been confirmed!\n\nDate: {{call_date}}\nTime: {{call_time}}\nLocation: {{location}}\n\nLooking forward to speaking with you!\n\nBest regards,\n${brandName}`
       },
+      'meeting_link_ready': {
+        subject: 'Meeting Link Ready: {{event_name}}',
+        body: `Hi {{invitee_name}},\n\nYour meeting link for {{event_name}} is ready!\n\nDate: {{call_date}}\nTime: {{call_time}}\nLocation: {{location}}\n\nLooking forward to speaking with you!\n\nBest regards,\n${brandName}`
+      },
       'booking_reminder_24h': {
         subject: 'Reminder: {{event_name}} tomorrow',
         body: `Hi {{invitee_name}},\n\nThis is a reminder that you have {{event_name}} scheduled for tomorrow.\n\nDate: {{call_date}}\nTime: {{call_time}}\nLocation: {{location}}\n\nSee you soon!`

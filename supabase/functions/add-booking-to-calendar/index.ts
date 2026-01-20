@@ -221,11 +221,11 @@ serve(async (req) => {
       console.log('✅ Successfully updated booking with meet link:', meetLink)
     }
 
-    // Send booking confirmation email to invitee when manually generating link
+    // Send meeting link ready email to invitee when manually generating link
     console.log('Email send check:', { manual, hasMeetLink: !!meetLink, meetLink })
 
     if (manual && meetLink) {
-      console.log('✉️ Sending booking confirmation email to invitee:', booking.invitee_email)
+      console.log('✉️ Sending meeting link ready email to invitee:', booking.invitee_email)
       try {
         const resendApiKey = Deno.env.get('RESEND_API_KEY')
         const fromEmail = Deno.env.get('FROM_EMAIL') || 'no-reply@formifycrm.com'
@@ -241,31 +241,56 @@ serve(async (req) => {
           const brandName = company?.branding_display_name || company?.branding_name || 'Scale Info'
           const formattedFrom = fromEmail.includes('<') ? fromEmail : `${brandName} <${fromEmail}>`
 
-          // Build email content
+          // Get email template from database
+          const { data: template } = await supabaseClient
+            .from('email_templates')
+            .select('*')
+            .eq('company_id', companyId)
+            .eq('name', 'meeting_link_ready')
+            .maybeSingle()
+
+          // Default template if none found
+          const defaultTemplate = {
+            subject: 'Meeting Link Ready: {{event_name}}',
+            body: `Hi {{invitee_name}},\n\nYour meeting link for {{event_name}} is ready!\n\nDate: {{call_date}}\nTime: {{call_time}}\nLocation: {{location}}\n\nLooking forward to speaking with you!\n\nBest regards,\n${brandName}`
+          }
+
+          const emailTemplate = template || defaultTemplate
+
+          console.log('📧 Using email template:', {
+            hasCustomTemplate: !!template,
+            templateId: template?.id || 'default',
+            templateName: 'meeting_link_ready'
+          })
+
+          // Build template variables
           const startTime = new Date(booking.start_time)
-          const subject = `Booking Confirmed: ${booking.event_types?.name || 'Meeting'}`
-          const body = `Hi ${booking.invitee_name},
+          const variables: Record<string, string> = {
+            '{{invitee_name}}': booking.invitee_name,
+            '{{event_name}}': booking.event_types?.name || 'Meeting',
+            '{{call_date}}': startTime.toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              timeZone: booking.invitee_timezone
+            }),
+            '{{call_time}}': startTime.toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              timeZone: booking.invitee_timezone
+            }),
+            '{{location}}': meetLink,
+          }
 
-Your booking for ${booking.event_types?.name || 'Meeting'} has been confirmed!
+          let subject = emailTemplate.subject
+          let body = emailTemplate.body
 
-Date: ${startTime.toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            timeZone: booking.invitee_timezone
-          })}
-Time: ${startTime.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            timeZone: booking.invitee_timezone
-          })}
-Location: ${meetLink}
-
-Looking forward to speaking with you!
-
-Best regards,
-${brandName}`
+          // Replace template variables
+          for (const [key, value] of Object.entries(variables)) {
+            subject = subject.replace(new RegExp(key, 'g'), value)
+            body = body.replace(new RegExp(key, 'g'), value)
+          }
 
           console.log('📧 Sending email with Resend:', { to: booking.invitee_email, from: formattedFrom })
 
@@ -294,7 +319,7 @@ ${brandName}`
           // Log email
           await supabaseClient.from('email_logs').insert({
             booking_id,
-            template_id: null,
+            template_id: template?.id || null,
             recipient_email: booking.invitee_email,
             subject,
             sent_at: new Date().toISOString(),
@@ -307,7 +332,7 @@ ${brandName}`
           console.warn('⚠️ RESEND_API_KEY not configured - skipping email')
         }
       } catch (emailError) {
-        console.error('❌ Failed to send booking confirmation email:', emailError)
+        console.error('❌ Failed to send meeting link ready email:', emailError)
         // Don't fail the whole request if email fails
       }
     } else {
