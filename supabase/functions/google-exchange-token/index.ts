@@ -64,21 +64,28 @@ serve(async (req) => {
     }
 
     // POST request from client app
+    // Check if this is a dev proxy request (from /api/edge-proxy)
+    const isDevProxy = req.headers.get('X-Dev-Proxy') === 'true'
     const authHeader = req.headers.get('Authorization')
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      authHeader ? {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      } : {}
-    )
 
-    // Try to get authenticated user, but don't require it
-    const {
-      data: { user },
-    } = await supabaseClient.auth.getUser()
+    let user: any = null
+
+    // If NOT using dev proxy, try to get authenticated user from JWT
+    if (!isDevProxy && authHeader) {
+      const supabaseAuth = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        {
+          global: {
+            headers: { Authorization: authHeader },
+          },
+        }
+      )
+
+      // Try to get authenticated user, but don't require it
+      const { data: { user: authUser } } = await supabaseAuth.auth.getUser()
+      user = authUser
+    }
 
     const body = await req.json() as RequestBody
     code = body.code
@@ -270,14 +277,13 @@ serve(async (req) => {
     }
 
     // Store integration in database
-    // Use admin client if we got user from state parameter or created a user (not from session)
-    const useAdminClient = stateUserId || effectiveUser.id !== user?.id
-    const clientForInsert = useAdminClient ? createClient(
+    // Always use admin client since we're typically using dev proxy or state-based auth
+    const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-    ) : supabaseClient
+    )
 
-    const { error: dbError } = await clientForInsert
+    const { error: dbError } = await supabaseAdmin
       .from('user_integrations')
       .upsert({
         user_id: effectiveUser.id,
