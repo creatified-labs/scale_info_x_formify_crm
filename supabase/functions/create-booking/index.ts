@@ -169,10 +169,11 @@ serve(async (req) => {
     // Add to Google Calendar (inline to avoid inter-function auth issues)
     let meetLink = null
     let calendarError = null
-    const autoAddToCalendar = settings?.google_calendar?.auto_add_bookings ?? true
-    const autoCreateMeet = settings?.google_calendar?.auto_create_meet_links ?? true
+    // Default to false for new companies, true only if explicitly set to true
+    const autoAddToCalendar = settings?.google_calendar?.auto_add_bookings === true
+    const autoCreateMeet = settings?.google_calendar?.auto_create_meet_links === true
     const targetCalendar = settings?.google_calendar?.add_events_to_calendar || 'primary'
-    console.log(`Calendar settings - auto_add: ${autoAddToCalendar}, auto_create_meet: ${autoCreateMeet}, company_id: ${companyId}`)
+    console.log(`Calendar settings - auto_add: ${autoAddToCalendar}, auto_create_meet: ${autoCreateMeet}, company_id: ${companyId}, settings:`, JSON.stringify(settings?.google_calendar || {}))
 
     if (autoAddToCalendar) {
       try {
@@ -275,8 +276,9 @@ serve(async (req) => {
 
           console.log(`Creating calendar event on calendar: ${targetCalendar}`)
 
+          // Don't send Google Calendar email notifications - we handle our own email notifications
           const calendarResponse = await fetch(
-            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendar)}/events?conferenceDataVersion=1&sendUpdates=all`,
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendar)}/events?conferenceDataVersion=1&sendUpdates=none`,
             {
               method: 'POST',
               headers: {

@@ -17,7 +17,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
-    const { booking_id } = await req.json() as { booking_id: string }
+    const { booking_id, manual = false } = await req.json() as { booking_id: string; manual?: boolean }
 
     if (!booking_id) {
       return new Response(
@@ -25,6 +25,8 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
+
+    console.log('add-booking-to-calendar called:', { booking_id, manual })
 
     // Get booking details
     const { data: booking, error: bookingError } = await supabaseClient
@@ -70,14 +72,16 @@ serve(async (req) => {
     console.log('Company settings query result:', { company, error: companyError })
 
     const settings = company?.settings as any
-    const autoAdd = settings?.google_calendar?.auto_add_bookings ?? true
-    const autoCreateMeet = settings?.google_calendar?.auto_create_meet_links ?? true
+    // Default to false for new companies, true only if explicitly set to true
+    const autoAdd = settings?.google_calendar?.auto_add_bookings === true
+    const autoCreateMeet = settings?.google_calendar?.auto_create_meet_links === true
     const targetCalendar = settings?.google_calendar?.add_events_to_calendar || 'primary'
 
-    console.log('Calendar settings:', { autoAdd, autoCreateMeet, targetCalendar })
+    console.log('Calendar settings:', { autoAdd, autoCreateMeet, targetCalendar, manual, rawSettings: settings?.google_calendar })
 
-    if (!autoAdd) {
-      console.log('Auto-add to calendar is disabled in settings')
+    // Skip autoAdd check if this is a manual request (user clicked "Generate Link")
+    if (!autoAdd && !manual) {
+      console.log('Auto-add to calendar is disabled in settings and not a manual request')
       return new Response(
         JSON.stringify({ message: 'Auto-add to calendar is disabled', skipped: true }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
@@ -148,8 +152,9 @@ serve(async (req) => {
     console.log('Creating calendar event with data:', JSON.stringify(eventData, null, 2))
     console.log('Target calendar:', targetCalendar)
 
+    // Don't send Google Calendar email notifications - we handle our own email notifications
     const response = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendar)}/events?conferenceDataVersion=1`,
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendar)}/events?conferenceDataVersion=1&sendUpdates=none`,
       {
         method: 'POST',
         headers: {

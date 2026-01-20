@@ -591,30 +591,29 @@ const PublicBooking = () => {
 
           <div className="space-y-3">
             <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
-              <h4 className="text-sm font-semibold">📅 Accept Your Calendar Invite</h4>
+              <h4 className="text-sm font-semibold">📧 Check Your Email</h4>
               <p className="text-xs text-muted-foreground">
-                A calendar invitation with the meeting link has been sent to <span className="font-medium">{confirmationDetails.email}</span>
+                A booking confirmation has been sent to <span className="font-medium">{confirmationDetails.email}</span>
               </p>
-              <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-                <li>Check your email inbox for the calendar invite</li>
-                <li>Click "Accept" or "Yes" in the invitation</li>
-                <li>The event will be added to your Google Calendar with the meeting link</li>
-              </ol>
+              <p className="text-xs text-muted-foreground">
+                The email contains all the details about your booking{confirmationDetails.joinUrl ? ' and the meeting link' : ''}.
+              </p>
             </div>
-            
+
             <div className="flex flex-col sm:flex-row gap-2">
-              <Button 
-                className="flex-1" 
-                onClick={() => window.open('https://calendar.google.com', '_blank')}
-              >
-                Check Google Calendar
-              </Button>
-              <Button 
-                variant="outline" 
-                className="flex-1" 
+              <Button
+                variant="outline"
+                className="flex-1"
                 onClick={() => window.location.href = `mailto:${confirmationDetails.email}`}
               >
                 Open Email
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={downloadICS}
+              >
+                Add to Calendar
               </Button>
             </div>
           </div>

@@ -34,56 +34,23 @@ serve(async (req) => {
   }
 
   try {
-    // Check if this is a dev proxy request (from /api/edge-proxy)
-    const isDevProxy = req.headers.get('X-Dev-Proxy') === 'true'
-    let userId: string | undefined
+    // Get user_id from query params (passed by edge-proxy for GET requests)
+    const url = new URL(req.url)
+    let userId = url.searchParams.get('user_id') || undefined
 
-    // If NOT using dev proxy, verify JWT and get user from token
-    if (!isDevProxy) {
-      const authHeader = req.headers.get('Authorization')
-      if (!authHeader) {
-        throw new Error('Missing authorization header')
-      }
-
-      const supabaseAuth = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-        {
-          global: {
-            headers: { Authorization: authHeader },
-          },
-        }
-      )
-
-      // Verify user's JWT token
-      const {
-        data: { user },
-        error: userError,
-      } = await supabaseAuth.auth.getUser()
-
-      if (userError || !user) {
-        throw new Error('Not authenticated')
-      }
-
-      userId = user.id
-    } else {
-      // For dev proxy, get user_id from query params (for GET) or payload (for POST)
-      const url = new URL(req.url)
-      userId = url.searchParams.get('user_id') || undefined
-
-      // Fallback to body if not in query params
-      if (!userId) {
-        try {
-          const body = await req.json() as RequestBody
-          userId = body?.user_id
-        } catch {
-          // Ignore JSON parse errors for GET requests without body
-        }
+    // Fallback to body for POST requests
+    if (!userId && req.method === 'POST') {
+      try {
+        const body = await req.json() as RequestBody
+        userId = body?.user_id
+      } catch {
+        // Ignore JSON parse errors
       }
     }
 
     // Validate we have a user ID
     if (!userId) {
+      console.error('[list-google-calendars] Missing user_id in request')
       throw new Error('Missing user_id')
     }
 

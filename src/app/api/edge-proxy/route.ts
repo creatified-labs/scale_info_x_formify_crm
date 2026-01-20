@@ -111,10 +111,16 @@ export async function POST(request: Request) {
     const baseUrl = `${supabaseUrl}/functions/v1/${functionName}`;
     const url = enrichedQuery ? `${baseUrl}?${new URLSearchParams(enrichedQuery).toString()}` : baseUrl;
 
-    console.log('🔧 Edge Proxy calling:', { functionName, method, userId });
+    console.log('🔧 Edge Proxy calling:', { functionName, method, userId, hasQuery: !!query });
     if (enrichedQuery) {
       console.log('📋 Query params:', enrichedQuery);
       console.log('🔗 Full URL:', url);
+    } else {
+      console.warn('⚠️ No enrichedQuery for GET request - userId may be missing');
+    }
+
+    if (!userId) {
+      console.error('❌ userId is undefined! Session extraction may have failed.');
     }
 
     console.log('📤 Sending to edge function:', { url, payload: enrichedPayload });

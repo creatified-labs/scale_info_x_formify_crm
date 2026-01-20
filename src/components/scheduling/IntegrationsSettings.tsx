@@ -82,12 +82,20 @@ export const IntegrationsSettings = () => {
     const loadCalendars = async () => {
       setLoadingCalendars(true);
       try {
+        // Get user ID from current session
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user?.id) {
+          console.error('No user ID found - cannot load calendars');
+          return;
+        }
+
         const res = await fetch('/api/edge-proxy', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             functionName: 'list-google-calendars',
             method: 'GET',
+            query: { user_id: user.id },
           }),
         });
 
@@ -315,8 +323,8 @@ export const IntegrationsSettings = () => {
   }
 
   const handlePreferenceChange = async (preference: 'auto_add_bookings' | 'auto_create_meet_links', value: boolean) => {
-    console.log(`Toggling ${preference} to ${value}`);
-    
+    console.log(`🔧 Toggling ${preference} to ${value}`);
+
     // Update local state immediately for responsive UI
     if (preference === 'auto_add_bookings') {
       setAutoAddBookings(value);
@@ -347,7 +355,8 @@ export const IntegrationsSettings = () => {
         },
       };
 
-      console.log('Updating company settings:', updatedSettings);
+      console.log('📝 Current company settings:', JSON.stringify(currentSettings.google_calendar || {}, null, 2));
+      console.log('📝 Updated company settings:', JSON.stringify(updatedSettings.google_calendar, null, 2));
 
       const { error } = await supabase
         .from('companies')
@@ -356,10 +365,19 @@ export const IntegrationsSettings = () => {
 
       if (error) throw error;
 
-      console.log(`Successfully updated ${preference} to ${value}`);
+      console.log(`✅ Successfully saved ${preference} = ${value} to database`);
+
+      // Verify the save worked
+      const { data: verifyCompany } = await supabase
+        .from('companies')
+        .select('settings')
+        .eq('id', companyId)
+        .maybeSingle();
+      console.log('✅ Verified database value:', (verifyCompany?.settings as any)?.google_calendar?.[preference]);
+
       toast.success('Preference saved');
     } catch (error: any) {
-      console.error('Failed to update preference:', error);
+      console.error('❌ Failed to update preference:', error);
       toast.error(error?.message || 'Failed to save preference');
       // Revert local state on error
       if (preference === 'auto_add_bookings') {

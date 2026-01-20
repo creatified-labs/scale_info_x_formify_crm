@@ -172,7 +172,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           functionName: 'add-booking-to-calendar',
-          payload: { booking_id: bookingId },
+          payload: { booking_id: bookingId, manual: true },
           method: 'POST',
         })
       });
