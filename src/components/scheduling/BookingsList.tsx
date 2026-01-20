@@ -962,41 +962,10 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
           {bookingNeedsFollowup.length > 0 && (
             <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500 dark:bg-amber-500/15 dark:text-amber-100">
               <AlertTitle>Meeting links pending</AlertTitle>
-              <AlertDescription className="space-y-3">
+              <AlertDescription>
                 <p>
-                  {bookingNeedsFollowup.length} booking{bookingNeedsFollowup.length === 1 ? "" : "s"} still need a meeting link.
+                  {bookingNeedsFollowup.length} booking{bookingNeedsFollowup.length === 1 ? "" : "s"} still need a meeting link. Use the "Generate Link" button in each booking row to create one.
                 </p>
-
-                {googleIntegration.connected ? (
-                  <div className="flex gap-3 items-center">
-                    <Button
-                      size="sm"
-                      onClick={handleGenerateAllLinks}
-                      disabled={generatingLinks}
-                    >
-                      {generatingLinks ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-                        'Generate All Links'
-                      )}
-                    </Button>
-
-                    <label className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={skipPastBookings}
-                        onCheckedChange={(checked) => setSkipPastBookings(checked as boolean)}
-                      />
-                      Skip past bookings
-                    </label>
-                  </div>
-                ) : (
-                  <p className="text-sm text-amber-800 dark:text-amber-200">
-                    Connect Google Calendar in Settings to automatically generate meeting links.
-                  </p>
-                )}
               </AlertDescription>
             </Alert>
           )}

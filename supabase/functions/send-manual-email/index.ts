@@ -1,6 +1,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+type ManualEmailPayload = {
+  booking_ids: string[]
+  template_id?: string
+  custom_message?: string
+  company_id?: string
+}
+
+type ResendEmailResponse = {
+  id?: string
+  [key: string]: unknown
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -17,7 +29,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
-    const { booking_ids, template_id, custom_message, company_id } = await req.json()
+    const { booking_ids, template_id, custom_message, company_id } = await req.json() as ManualEmailPayload
 
     if (!booking_ids || !Array.isArray(booking_ids) || booking_ids.length === 0) {
       return new Response(
@@ -27,7 +39,16 @@ serve(async (req) => {
     }
 
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
-    const fromEmail = Deno.env.get('FROM_EMAIL') || 'noreply@yourdomain.com'
+    const fromEmail = Deno.env.get('FROM_EMAIL') || 'no-reply@formifycrm.com'
+
+    // Get company branding
+    const { data: company } = await supabaseClient
+      .from('companies')
+      .select('branding_display_name, branding_name')
+      .eq('id', company_id)
+      .maybeSingle()
+
+    const brandName = company?.branding_display_name || company?.branding_name || 'Scale Info'
 
     let sentCount = 0
     let failedCount = 0
@@ -116,8 +137,7 @@ serve(async (req) => {
         }
 
         // Format from email with sender name (required by Resend)
-        const fromName = Deno.env.get('FROM_NAME') || 'Scale Info'
-        const formattedFrom = fromEmail.includes('<') ? fromEmail : `${fromName} <${fromEmail}>`
+        const formattedFrom = fromEmail.includes('<') ? fromEmail : `${brandName} <${fromEmail}>`
         
         const emailResponse = await fetch('https://api.resend.com/emails', {
           method: 'POST',
@@ -134,7 +154,7 @@ serve(async (req) => {
           }),
         })
 
-        const emailData = await emailResponse.json()
+        const emailData = await emailResponse.json() as ResendEmailResponse
 
         // Log email
         await supabaseClient.from('email_logs').insert({

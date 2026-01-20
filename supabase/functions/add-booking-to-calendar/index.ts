@@ -221,6 +221,103 @@ serve(async (req) => {
       console.log('✅ Successfully updated booking with meet link:', meetLink)
     }
 
+    // Send booking confirmation email to invitee when manually generating link
+    console.log('Email send check:', { manual, hasMeetLink: !!meetLink, meetLink })
+
+    if (manual && meetLink) {
+      console.log('✉️ Sending booking confirmation email to invitee:', booking.invitee_email)
+      try {
+        const resendApiKey = Deno.env.get('RESEND_API_KEY')
+        const fromEmail = Deno.env.get('FROM_EMAIL') || 'no-reply@formifycrm.com'
+
+        if (resendApiKey) {
+          // Get company branding
+          const { data: company } = await supabaseClient
+            .from('companies')
+            .select('branding_display_name, branding_name')
+            .eq('id', companyId)
+            .maybeSingle()
+
+          const brandName = company?.branding_display_name || company?.branding_name || 'Scale Info'
+          const formattedFrom = fromEmail.includes('<') ? fromEmail : `${brandName} <${fromEmail}>`
+
+          // Build email content
+          const startTime = new Date(booking.start_time)
+          const subject = `Booking Confirmed: ${booking.event_types?.name || 'Meeting'}`
+          const body = `Hi ${booking.invitee_name},
+
+Your booking for ${booking.event_types?.name || 'Meeting'} has been confirmed!
+
+Date: ${startTime.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            timeZone: booking.invitee_timezone
+          })}
+Time: ${startTime.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            timeZone: booking.invitee_timezone
+          })}
+Location: ${meetLink}
+
+Looking forward to speaking with you!
+
+Best regards,
+${brandName}`
+
+          console.log('📧 Sending email with Resend:', { to: booking.invitee_email, from: formattedFrom })
+
+          const emailResponse = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${resendApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              from: formattedFrom,
+              to: [booking.invitee_email],
+              subject,
+              html: body.replace(/\n/g, '<br>'),
+              text: body,
+            }),
+          })
+
+          const emailResult = await emailResponse.json() as { id?: string; [key: string]: any }
+          console.log('✅ Email sent:', {
+            status: emailResponse.status,
+            ok: emailResponse.ok,
+            result: emailResult
+          })
+
+          // Log email
+          await supabaseClient.from('email_logs').insert({
+            booking_id,
+            template_id: null,
+            recipient_email: booking.invitee_email,
+            subject,
+            sent_at: new Date().toISOString(),
+            status: emailResponse.ok ? 'sent' : 'failed',
+            message_id: emailResult.id || null,
+            error_message: emailResponse.ok ? null : JSON.stringify(emailResult),
+            company_id: companyId,
+          })
+        } else {
+          console.warn('⚠️ RESEND_API_KEY not configured - skipping email')
+        }
+      } catch (emailError) {
+        console.error('❌ Failed to send booking confirmation email:', emailError)
+        // Don't fail the whole request if email fails
+      }
+    } else {
+      console.log('⏭️ Skipping email send:', {
+        manual,
+        hasMeetLink: !!meetLink,
+        reason: !manual ? 'not a manual request' : 'no meet link created'
+      })
+    }
+
     return new Response(
       JSON.stringify({
         success: true,

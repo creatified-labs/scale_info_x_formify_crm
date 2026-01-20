@@ -50,6 +50,15 @@ serve(async (req) => {
 
     const companyId = booking.event_types?.company_id
 
+    // Get company branding
+    const { data: company } = await supabaseClient
+      .from('companies')
+      .select('branding_display_name, branding_name')
+      .eq('id', companyId)
+      .maybeSingle()
+
+    const brandName = company?.branding_display_name || company?.branding_name || 'Scale Info'
+
     // Get email template
     const { data: template } = await supabaseClient
       .from('email_templates')
@@ -62,7 +71,7 @@ serve(async (req) => {
     const defaultTemplates: Record<string, { subject: string; body: string }> = {
       'booking_confirmation': {
         subject: 'Booking Confirmed: {{event_name}}',
-        body: `Hi {{invitee_name}},\n\nYour booking for {{event_name}} has been confirmed!\n\nDate: {{call_date}}\nTime: {{call_time}}\nLocation: {{location}}\n\nLooking forward to speaking with you!\n\nBest regards`
+        body: `Hi {{invitee_name}},\n\nYour booking for {{event_name}} has been confirmed!\n\nDate: {{call_date}}\nTime: {{call_time}}\nLocation: {{location}}\n\nLooking forward to speaking with you!\n\nBest regards,\n${brandName}`
       },
       'booking_reminder_24h': {
         subject: 'Reminder: {{event_name}} tomorrow',
@@ -120,7 +129,7 @@ serve(async (req) => {
 
     // Send email using Resend
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
-    const fromEmail = Deno.env.get('FROM_EMAIL') || 'noreply@yourdomain.com'
+    const fromEmail = Deno.env.get('FROM_EMAIL') || 'no-reply@formifycrm.com'
 
     if (!resendApiKey) {
       console.warn('RESEND_API_KEY not configured')
@@ -137,18 +146,17 @@ serve(async (req) => {
       })
 
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           message: 'Email service not configured - email logged but not sent',
           subject,
-          body 
+          body
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       )
     }
 
     // Format from email with sender name (required by Resend)
-    const fromName = Deno.env.get('FROM_NAME') || 'Scale Info'
-    const formattedFrom = fromEmail.includes('<') ? fromEmail : `${fromName} <${fromEmail}>`
+    const formattedFrom = fromEmail.includes('<') ? fromEmail : `${brandName} <${fromEmail}>`
     
     const emailResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
