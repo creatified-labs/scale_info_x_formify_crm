@@ -6,6 +6,51 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Helper function to refresh Google OAuth token
+async function refreshGoogleToken(refreshToken: string): Promise<{ access_token: string; expires_in: number } | null> {
+  const clientId = Deno.env.get('GOOGLE_CLIENT_ID')
+  const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
+
+  if (!clientId || !clientSecret) {
+    console.error('Missing Google OAuth credentials')
+    return null
+  }
+
+  try {
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      console.error('Failed to refresh token:', error)
+      return null
+    }
+
+    const data = await response.json() as { access_token?: string; expires_in?: number }
+
+    if (!data.access_token || !data.expires_in) {
+      console.error('Invalid token response:', data)
+      return null
+    }
+
+    return {
+      access_token: data.access_token,
+      expires_in: data.expires_in
+    }
+  } catch (error) {
+    console.error('Error refreshing token:', error)
+    return null
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -159,12 +204,14 @@ serve(async (req) => {
     const sendUpdates = manual ? 'all' : 'none'
     console.log('sendUpdates mode:', sendUpdates, '(manual request:', manual, ')')
 
-    const response = await fetch(
+    // Try to create calendar event, with automatic token refresh on 401
+    let accessToken = integration.access_token
+    let response = await fetch(
       `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendar)}/events?conferenceDataVersion=1&sendUpdates=${sendUpdates}`,
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${integration.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(eventData),
@@ -172,6 +219,47 @@ serve(async (req) => {
     )
 
     console.log('Google Calendar API response status:', response.status)
+
+    // If 401 Unauthorized, try refreshing the token and retry
+    if (response.status === 401 && integration.refresh_token) {
+      console.log('⚠️ Access token expired (401), attempting to refresh...')
+
+      const newToken = await refreshGoogleToken(integration.refresh_token)
+
+      if (newToken) {
+        console.log('✅ Successfully refreshed access token')
+
+        // Update the database with new access token
+        const { error: updateTokenError } = await supabaseClient
+          .from('user_integrations')
+          .update({ access_token: newToken.access_token })
+          .eq('user_id', userId)
+          .eq('provider', 'google')
+
+        if (updateTokenError) {
+          console.error('Failed to update access token:', updateTokenError)
+        } else {
+          console.log('✅ Updated access token in database')
+        }
+
+        // Retry the request with new token
+        accessToken = newToken.access_token
+        response = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendar)}/events?conferenceDataVersion=1&sendUpdates=${sendUpdates}`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(eventData),
+          }
+        )
+        console.log('Retry response status:', response.status)
+      } else {
+        console.error('❌ Failed to refresh access token')
+      }
+    }
 
     if (!response.ok) {
       const error = await response.text()
