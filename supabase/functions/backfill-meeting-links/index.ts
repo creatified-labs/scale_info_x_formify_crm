@@ -10,6 +10,7 @@ interface BackfillRequest {
   booking_ids?: string[]
   process_all_pending?: boolean
   skip_past_bookings?: boolean
+  user_id?: string
 }
 
 interface BookingResult {
@@ -35,27 +36,15 @@ serve(async (req) => {
       booking_ids,
       process_all_pending = false,
       skip_past_bookings = true,
+      user_id,
     } = await req.json() as BackfillRequest
 
-    console.log('Backfill request:', { booking_ids, process_all_pending, skip_past_bookings })
+    console.log('Backfill request:', { booking_ids, process_all_pending, skip_past_bookings, user_id })
 
-    // Get user ID from auth header
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
+    // Get user ID from payload (passed by edge-proxy)
+    if (!user_id) {
       return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
-      )
-    }
-
-    // Verify user has Google Calendar connected
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    )
-
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'Missing user_id in request' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       )
     }
@@ -64,7 +53,7 @@ serve(async (req) => {
     const { data: integration, error: integrationError } = await supabaseClient
       .from('user_integrations')
       .select('access_token, refresh_token, expires_at')
-      .eq('user_id', user.id)
+      .eq('user_id', user_id)
       .eq('provider', 'google')
       .maybeSingle()
 
@@ -97,7 +86,7 @@ serve(async (req) => {
           company_id
         )
       `)
-      .eq('event_types.user_id', user.id)
+      .eq('event_types.user_id', user_id)
       .eq('status', 'scheduled')
       .in('chosen_call_type', ['zoom', 'google_meet', 'custom'])
       .is('calendar_event_id', null)
