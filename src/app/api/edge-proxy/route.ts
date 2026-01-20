@@ -103,12 +103,17 @@ export async function POST(request: Request) {
       user_id: payload?.user_id || userId,
     };
 
+    // For GET requests, add user_id to query params since we can't send a body
+    const enrichedQuery = method === 'GET' && userId
+      ? { ...query, user_id: userId }
+      : query;
+
     const baseUrl = `${supabaseUrl}/functions/v1/${functionName}`;
-    const url = query ? `${baseUrl}?${new URLSearchParams(query).toString()}` : baseUrl;
+    const url = enrichedQuery ? `${baseUrl}?${new URLSearchParams(enrichedQuery).toString()}` : baseUrl;
 
     console.log('🔧 Edge Proxy calling:', { functionName, method, userId });
-    if (query) {
-      console.log('📋 Query params:', query);
+    if (enrichedQuery) {
+      console.log('📋 Query params:', enrichedQuery);
       console.log('🔗 Full URL:', url);
     }
 

@@ -18,43 +18,88 @@ interface GoogleCalendarListResponse {
   items: GoogleCalendar[]
 }
 
+interface RequestBody {
+  user_id?: string
+}
+
+interface TokenResponse {
+  access_token: string
+  expires_in: number
+  refresh_token?: string
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      throw new Error('Missing authorization header')
+    // Check if this is a dev proxy request (from /api/edge-proxy)
+    const isDevProxy = req.headers.get('X-Dev-Proxy') === 'true'
+    let userId: string | undefined
+
+    // If NOT using dev proxy, verify JWT and get user from token
+    if (!isDevProxy) {
+      const authHeader = req.headers.get('Authorization')
+      if (!authHeader) {
+        throw new Error('Missing authorization header')
+      }
+
+      const supabaseAuth = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        {
+          global: {
+            headers: { Authorization: authHeader },
+          },
+        }
+      )
+
+      // Verify user's JWT token
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseAuth.auth.getUser()
+
+      if (userError || !user) {
+        throw new Error('Not authenticated')
+      }
+
+      userId = user.id
+    } else {
+      // For dev proxy, get user_id from query params (for GET) or payload (for POST)
+      const url = new URL(req.url)
+      userId = url.searchParams.get('user_id') || undefined
+
+      // Fallback to body if not in query params
+      if (!userId) {
+        try {
+          const body = await req.json() as RequestBody
+          userId = body?.user_id
+        } catch {
+          // Ignore JSON parse errors for GET requests without body
+        }
+      }
     }
 
+    // Validate we have a user ID
+    if (!userId) {
+      throw new Error('Missing user_id')
+    }
+
+    console.log('[list-google-calendars] Fetching calendars for user:', userId)
+
+    // Create admin client for database operations (bypasses RLS)
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
-
-    // Get authenticated user
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseClient.auth.getUser()
-
-    if (userError || !user) {
-      throw new Error('Not authenticated')
-    }
-
-    console.log('[list-google-calendars] Fetching calendars for user:', user.id)
 
     // Get user's Google integration
     const { data: integration, error: integrationError } = await supabaseClient
       .from('user_integrations')
       .select('access_token, refresh_token, expires_at')
+      .eq('user_id', userId)
       .eq('provider', 'google')
       .single()
 
@@ -92,7 +137,7 @@ serve(async (req) => {
         throw new Error('Failed to refresh Google token. Please reconnect Google Calendar.')
       }
 
-      const tokens = await tokenResponse.json()
+      const tokens = await tokenResponse.json() as TokenResponse
       accessToken = tokens.access_token
 
       // Update stored token
@@ -105,6 +150,7 @@ serve(async (req) => {
           access_token: accessToken,
           expires_at: newExpiresAt.toISOString(),
         })
+        .eq('user_id', userId)
         .eq('provider', 'google')
 
       if (updateError) {
