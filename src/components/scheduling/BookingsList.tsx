@@ -82,6 +82,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
 
   const signalCallTrackerRefresh = () => {
     window.dispatchEvent(new Event('call-tracker-refresh'));
+    window.dispatchEvent(new Event('bookings-refresh'));
   };
 
   const loadEmailTemplates = useCallback(async () => {
@@ -181,17 +182,55 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
 
       const result = await res.json();
 
-      // Update booking in local state
-      setBookings(prev => prev.map(b =>
-        b.id === bookingId
-          ? { ...b, video_join_url: result.meet_link, calendar_event_id: result.calendar_event_id }
-          : b
-      ));
+      console.log('✅ Meeting link API response:', {
+        success: result.success,
+        has_meet_link: !!result.meet_link,
+        meet_link: result.meet_link,
+        calendar_event_id: result.calendar_event_id,
+        full_response: result
+      });
+
+      if (!result.meet_link) {
+        console.error('⚠️ No meet link in response - Google Meet link was not created!');
+        console.error('This could mean the Google Calendar API did not create the conference data');
+      }
+
+      // Update booking in local state with the generated link
+      setBookings(prev => {
+        const updated = prev.map(b => {
+          if (b.id === bookingId) {
+            const updatedBooking = {
+              ...b,
+              video_join_url: result.meet_link || b.video_join_url,
+              calendar_event_id: result.calendar_event_id
+            };
+            console.log('📝 Updated booking in state:', {
+              id: bookingId,
+              old_video_join_url: b.video_join_url,
+              new_video_join_url: updatedBooking.video_join_url,
+              changed: b.video_join_url !== updatedBooking.video_join_url
+            });
+            return updatedBooking;
+          }
+          return b;
+        });
+        console.log('📊 Bookings needing follow-up after update:', updated.filter(b => {
+          const callType = b.chosen_call_type;
+          const isVirtual = callType === 'zoom' || callType === 'google_meet' || callType === 'custom';
+          const isScheduled = normalizeBookingStatus(b.status) === normalizeBookingStatus('scheduled');
+          const noRealLink = !b.video_join_url || b.video_join_url === meetingLinkPlaceholder;
+          return isVirtual && isScheduled && noRealLink;
+        }).length);
+        return updated;
+      });
 
       toast({
         title: "Link Generated",
-        description: "Meeting link created successfully",
+        description: result.meet_link ? "Meeting link created successfully" : "Calendar event created (no meet link)",
       });
+
+      // Signal call tracker to refresh - this will trigger other components to reload if needed
+      signalCallTrackerRefresh();
     } catch (error: any) {
       toast({
         title: "Error",

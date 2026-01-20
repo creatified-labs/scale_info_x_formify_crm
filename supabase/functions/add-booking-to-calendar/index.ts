@@ -139,22 +139,28 @@ serve(async (req) => {
       ],
     }
 
-    // Add Google Meet conference if enabled
-    if (autoCreateMeet) {
+    // Add Google Meet conference if enabled OR if this is a manual request
+    // Manual requests should always create a meet link regardless of settings
+    if (autoCreateMeet || manual) {
       eventData.conferenceData = {
         createRequest: {
           requestId: `booking-${booking_id}`,
           conferenceSolutionKey: { type: 'hangoutsMeet' },
         },
       }
+      console.log('Creating Google Meet link:', manual ? 'manual request' : 'auto-create enabled')
     }
 
     console.log('Creating calendar event with data:', JSON.stringify(eventData, null, 2))
     console.log('Target calendar:', targetCalendar)
 
-    // Don't send Google Calendar email notifications - we handle our own email notifications
+    // For manual requests (clicking "Generate Link"), send calendar invite to invitee
+    // For automatic requests, don't send - we handle our own email notifications
+    const sendUpdates = manual ? 'all' : 'none'
+    console.log('sendUpdates mode:', sendUpdates, '(manual request:', manual, ')')
+
     const response = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendar)}/events?conferenceDataVersion=1&sendUpdates=none`,
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendar)}/events?conferenceDataVersion=1&sendUpdates=${sendUpdates}`,
       {
         method: 'POST',
         headers: {
@@ -198,10 +204,12 @@ serve(async (req) => {
     console.log('Meet link extracted:', meetLink)
 
     // Update booking with calendar event ID and meet link
+    // Update both video_join_url (used by frontend) and meet_link (new column)
     const { error: updateError } = await supabaseClient
       .from('bookings')
       .update({
         calendar_event_id: calendarEvent.id,
+        video_join_url: meetLink || null,
         meet_link: meetLink || null,
         calendar_synced_at: new Date().toISOString(),
       })
@@ -209,6 +217,8 @@ serve(async (req) => {
 
     if (updateError) {
       console.error('Failed to update booking:', updateError)
+    } else {
+      console.log('✅ Successfully updated booking with meet link:', meetLink)
     }
 
     return new Response(
