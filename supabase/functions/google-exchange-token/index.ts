@@ -42,7 +42,8 @@ serve(async (req) => {
     if (req.method === 'GET') {
       // OAuth callback from Google
       code = url.searchParams.get('code')
-      
+      const state = url.searchParams.get('state')
+
       if (!code) {
         // Redirect to the callback page with error
         return new Response(null, {
@@ -52,13 +53,19 @@ serve(async (req) => {
           },
         })
       }
-      
+
       // For GET requests (OAuth callback), redirect to the app's callback page
-      // The app will then call this function via POST with the code
+      // The app will then call this function via POST with the code AND state
+      const callbackUrl = new URL(`${Deno.env.get('NEXT_PUBLIC_APP_URL') || 'http://localhost:3000'}/oauth/callback`)
+      callbackUrl.searchParams.set('code', code)
+      if (state) {
+        callbackUrl.searchParams.set('state', state)
+      }
+
       return new Response(null, {
         status: 302,
         headers: {
-          'Location': `${Deno.env.get('NEXT_PUBLIC_APP_URL') || 'http://localhost:3000'}/oauth/callback?code=${code}`,
+          'Location': callbackUrl.toString(),
         },
       })
     }
