@@ -71,6 +71,10 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
   const [deleting, setDeleting] = useState(false);
   const [sendUpdateEmail, setSendUpdateEmail] = useState(false);
   const [notesEditMode, setNotesEditMode] = useState(false);
+  const [googleIntegration, setGoogleIntegration] = useState({ connected: false });
+  const [generatingLinks, setGeneratingLinks] = useState(false);
+  const [skipPastBookings, setSkipPastBookings] = useState(true);
+  const [generatingLinkFor, setGeneratingLinkFor] = useState<string | null>(null);
   const isLocalhost = typeof window !== "undefined" &&
     (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
@@ -105,6 +109,99 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
   useEffect(() => {
     loadEmailTemplates();
   }, [loadEmailTemplates]);
+
+  useEffect(() => {
+    const loadGoogleIntegration = async () => {
+      const { data } = await supabase
+        .from("user_integrations")
+        .select("email")
+        .eq("provider", "google")
+        .maybeSingle();
+      setGoogleIntegration({ connected: !!data });
+    };
+    loadGoogleIntegration();
+  }, []);
+
+  const handleGenerateAllLinks = async () => {
+    setGeneratingLinks(true);
+
+    try {
+      const bookingIds = bookingNeedsFollowup.map(b => b.id);
+
+      const res = await fetch('/api/edge-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          functionName: 'backfill-meeting-links',
+          payload: {
+            booking_ids: bookingIds,
+            skip_past_bookings: skipPastBookings,
+          },
+          method: 'POST',
+        })
+      });
+
+      if (!res.ok) throw new Error('Failed to generate links');
+
+      const result = await res.json();
+
+      toast({
+        title: "Links Generated",
+        description: `Successfully generated ${result.successful} meeting link${result.successful === 1 ? '' : 's'}.${result.failed > 0 ? ` ${result.failed} failed.` : ''}`,
+      });
+
+      // Refresh bookings list
+      loadBookings();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate meeting links",
+        variant: "destructive",
+      });
+    } finally {
+      setGeneratingLinks(false);
+    }
+  };
+
+  const handleGenerateSingleLink = async (bookingId: string) => {
+    setGeneratingLinkFor(bookingId);
+
+    try {
+      const res = await fetch('/api/edge-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          functionName: 'add-booking-to-calendar',
+          payload: { booking_id: bookingId },
+          method: 'POST',
+        })
+      });
+
+      if (!res.ok) throw new Error('Failed to generate link');
+
+      const result = await res.json();
+
+      // Update booking in local state
+      setBookings(prev => prev.map(b =>
+        b.id === bookingId
+          ? { ...b, video_join_url: result.meet_link, calendar_event_id: result.calendar_event_id }
+          : b
+      ));
+
+      toast({
+        title: "Link Generated",
+        description: "Meeting link created successfully",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate link",
+        variant: "destructive",
+      });
+    } finally {
+      setGeneratingLinkFor(null);
+    }
+  };
 
   const buildTemplateFromPreset = (preset: string, booking: Booking) => {
     const when = booking.start_time ? new Date(booking.start_time) : null;
@@ -826,8 +923,41 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
           {bookingNeedsFollowup.length > 0 && (
             <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500 dark:bg-amber-500/15 dark:text-amber-100">
               <AlertTitle>Meeting links pending</AlertTitle>
-              <AlertDescription>
-                {bookingNeedsFollowup.length} booking{bookingNeedsFollowup.length === 1 ? "" : "s"} still need a meeting link. Contact the host or share call details manually.
+              <AlertDescription className="space-y-3">
+                <p>
+                  {bookingNeedsFollowup.length} booking{bookingNeedsFollowup.length === 1 ? "" : "s"} still need a meeting link.
+                </p>
+
+                {googleIntegration.connected ? (
+                  <div className="flex gap-3 items-center">
+                    <Button
+                      size="sm"
+                      onClick={handleGenerateAllLinks}
+                      disabled={generatingLinks}
+                    >
+                      {generatingLinks ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        'Generate All Links'
+                      )}
+                    </Button>
+
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={skipPastBookings}
+                        onCheckedChange={(checked) => setSkipPastBookings(checked as boolean)}
+                      />
+                      Skip past bookings
+                    </label>
+                  </div>
+                ) : (
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    Connect Google Calendar in Settings to automatically generate meeting links.
+                  </p>
+                )}
               </AlertDescription>
             </Alert>
           )}
@@ -1008,6 +1138,26 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
                           >
                             <Copy className="w-4 h-4" />
                           </Button>
+                          {/* Generate Link button for bookings without meet links */}
+                          {booking.chosen_call_type &&
+                           ['zoom', 'google_meet', 'custom'].includes(booking.chosen_call_type) &&
+                           (!booking.video_join_url || booking.video_join_url === meetingLinkPlaceholder) &&
+                           googleIntegration.connected &&
+                           normalizeBookingStatus(booking.status) === 'scheduled' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleGenerateSingleLink(booking.id)}
+                              disabled={generatingLinkFor === booking.id}
+                              title="Generate meeting link"
+                            >
+                              {generatingLinkFor === booking.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <LinkIcon className="w-4 h-4" />
+                              )}
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"

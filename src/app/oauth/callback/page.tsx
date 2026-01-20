@@ -117,7 +117,22 @@ const OAuthCallback = () => {
           if (integration) {
             console.log('✅ Integration confirmed in database - showing success');
             setStatus("done");
-            setMessage("Google Calendar connected successfully! You can close this tab and return to Whop.");
+            setMessage("Google Calendar connected! Generating meeting links for existing bookings...");
+
+            // Trigger backfill of meeting links in background
+            fetch('/api/edge-proxy', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                functionName: 'backfill-meeting-links',
+                payload: {
+                  process_all_pending: true,
+                  skip_past_bookings: true,
+                },
+                method: 'POST',
+              })
+            }).catch(err => console.error('Backfill failed:', err));
+
             return;
           }
 
@@ -128,7 +143,22 @@ const OAuthCallback = () => {
 
         console.log('✅ Success response received:', j);
         setStatus("done");
-        setMessage("Google Calendar connected successfully! You can close this tab and return to Whop.");
+        setMessage("Google Calendar connected! Generating meeting links for existing bookings...");
+
+        // Trigger backfill of meeting links in background
+        fetch('/api/edge-proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            functionName: 'backfill-meeting-links',
+            payload: {
+              process_all_pending: true,
+              skip_past_bookings: true,
+            },
+            method: 'POST',
+          })
+        }).catch(err => console.error('Backfill failed:', err));
+
         // Don't auto-redirect - let user close the popup manually
       } catch (e: any) {
         setStatus("error");
