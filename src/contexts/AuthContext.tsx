@@ -215,6 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Check if this is a public page that doesn't need authentication
             const isPublicPage = typeof window !== 'undefined' && (
               window.location.pathname.startsWith('/book/') ||
+              window.location.pathname.startsWith('/embed/') ||
               window.location.pathname.startsWith('/meeting-link-info') ||
               window.location.pathname === '/terms' ||
               window.location.pathname === '/privacy'
