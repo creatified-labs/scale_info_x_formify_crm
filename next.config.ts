@@ -8,19 +8,13 @@ const nextConfig: NextConfig = {
   // Note: DO NOT add fallback values here - they must be set in environment variables
   // This ensures production uses the correct Supabase instance
   async headers() {
-    const isDevelopment = process.env.NODE_ENV === 'development';
-
-    // Build allowed frame ancestors
+    // Build allowed frame ancestors - includes Lovable for development/preview
     const allowedDomains = [
       "'self'",
       "https://whop.com",
-      "https://*.whop.com"
+      "https://*.whop.com",
+      "https://*.lovable.app"
     ];
-
-    // Add Lovable domains in development only for preview testing
-    if (isDevelopment) {
-      allowedDomains.push("https://*.lovable.app");
-    }
 
     const cspFrameAncestors = `frame-ancestors ${allowedDomains.join(' ')}`;
 
@@ -30,7 +24,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'X-Frame-Options',
-            value: isDevelopment ? 'ALLOWALL' : 'ALLOW-FROM https://whop.com',
+            value: 'ALLOWALL',
           },
           {
             key: 'Content-Security-Policy',
