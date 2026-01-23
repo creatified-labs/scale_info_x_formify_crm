@@ -8,16 +8,8 @@ const nextConfig: NextConfig = {
   // Note: DO NOT add fallback values here - they must be set in environment variables
   // This ensures production uses the correct Supabase instance
   async headers() {
-    // Build allowed frame ancestors - includes Lovable for development/preview
-    const allowedDomains = [
-      "'self'",
-      "https://whop.com",
-      "https://*.whop.com",
-      "https://*.lovable.app"
-    ];
-
-    const cspFrameAncestors = `frame-ancestors ${allowedDomains.join(' ')}`;
-
+    // Allow embedding on any domain for maximum flexibility
+    // This enables custom domains, Lovable, Whop, and any other platform to embed booking forms
     return [
       {
         source: '/:path*',
@@ -28,7 +20,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: cspFrameAncestors,
+            value: 'frame-ancestors *',
           },
         ],
       },
