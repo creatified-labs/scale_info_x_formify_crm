@@ -190,10 +190,16 @@ const PublicBooking = () => {
       if (!fetched) {
         throw new Error("event not found");
       }
-      console.log('Loaded event type from database:', {
+      console.log('📅 Loaded event type:', {
+        slug: fetched.slug,
+        name: fetched.name,
+        duration_minutes: fetched.duration_minutes,
+        has_duration: 'duration_minutes' in fetched,
+        max_days_in_advance: fetched.max_days_in_advance,
+        has_max_days: 'max_days_in_advance' in fetched,
         booking_page_view_style: fetched.booking_page_view_style,
         embed_view_style: fetched.embed_view_style,
-        slug: fetched.slug
+        all_keys: Object.keys(fetched)
       });
       setEventType({
         ...fetched,
@@ -334,8 +340,27 @@ const PublicBooking = () => {
       const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const startTime = parseTimeInTimezone(selectedDate, selectedTime, browserTimezone);
 
+      console.log('📅 Calculating booking times:', {
+        duration_minutes: eventType.duration_minutes,
+        startTime: startTime.toISOString(),
+        selectedDate,
+        selectedTime
+      });
+
       const endTime = new Date(startTime);
-      endTime.setMinutes(endTime.getMinutes() + eventType.duration_minutes);
+      const durationMinutes = Number(eventType.duration_minutes) || 30; // Fallback to 30 if invalid
+
+      if (!eventType.duration_minutes) {
+        console.warn('⚠️ Event type missing duration_minutes, using default 30');
+      }
+
+      endTime.setMinutes(endTime.getMinutes() + durationMinutes);
+
+      console.log('📅 Calculated end time:', {
+        endTime: endTime.toISOString(),
+        duration_used: durationMinutes,
+        diff_minutes: (endTime.getTime() - startTime.getTime()) / 60000
+      });
 
       // Determine join URL or location based on call type
       let joinUrl = '';
@@ -368,6 +393,13 @@ const PublicBooking = () => {
         provider_pending: providerPending,
         answers: questionAnswers,
       };
+
+      console.log('📅 Booking payload:', {
+        start_time: payload.start_time,
+        end_time: payload.end_time,
+        duration_minutes: (new Date(payload.end_time).getTime() - new Date(payload.start_time).getTime()) / 60000
+      });
+
       const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-booking`;
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',

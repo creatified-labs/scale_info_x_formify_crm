@@ -550,12 +550,20 @@ export const EmbedOption3 = ({ eventType }: EmbedOption3Props) => {
                     <div>
                       <h3 className="text-sm font-semibold mb-3">Select a Date</h3>
                       <BookingCalendar
-                        form={{
-                          ...eventType,
-                          user_id: eventType.user_id,
-                          use_custom_availability: eventType.use_custom_availability,
-                          email,
-                        } as any}
+                        form={(() => {
+                          const formData = {
+                            ...eventType,
+                            user_id: eventType.user_id,
+                            use_custom_availability: eventType.use_custom_availability,
+                            email,
+                          };
+                          console.log('📅 [EmbedOption3] BookingCalendar form data:', {
+                            max_days_in_advance: formData.max_days_in_advance,
+                            has_max_days: 'max_days_in_advance' in formData,
+                            event_type_name: formData.name
+                          });
+                          return formData as any;
+                        })()}
                         selectedDate={selectedDate}
                         onDateSelect={(date) => {
                           setSelectedDate(date);

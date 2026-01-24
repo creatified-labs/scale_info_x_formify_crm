@@ -778,11 +778,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
         toast.success('Call added');
       }
     } catch (error: any) {
-      console.error('Error adding call:', error);
-      // Don't show error toast for public bookings (RLS errors are expected)
+      // Don't log or show errors for public bookings (RLS errors are expected - public users can't write to calls table)
       if (!call.bookingId) {
+        console.error('Error adding call:', error);
         toast.error(error.message || 'Failed to add call');
       }
+      // For bookings, silently ignore the error - the booking is created successfully via the edge function
     }
   };
 

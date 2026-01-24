@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'npm:@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -190,6 +190,8 @@ serve(async (req) => {
     const bufferBefore = eventType.buffer_before || 0
     const bufferAfter = eventType.buffer_after || 0
     const timeIncrement = eventType.time_increment || duration
+    const minNoticeHours = eventType.min_notice_hours || 0
+    const maxDaysInAdvance = eventType.max_days_in_advance || null
 
     for (const range of availableRanges) {
       // Parse time strings (HH:MM format) and interpret them in the schedule's timezone
@@ -215,11 +217,17 @@ serve(async (req) => {
     }
 
     // Filter out slots that are too soon (min_notice_hours)
-    const minNoticeHours = eventType.min_notice_hours || 0
     const minNoticeDate = new Date(Date.now() + minNoticeHours * 60 * 60 * 1000)
     let filteredSlots = slots.filter(slot => new Date(slot.start_time) >= minNoticeDate)
 
     console.log(`After min notice filter: ${filteredSlots.length}/${slots.length} slots`)
+
+    // Filter out slots too far in advance (max_days_in_advance)
+    if (maxDaysInAdvance !== null && maxDaysInAdvance > 0) {
+      const maxAdvanceDate = new Date(Date.now() + maxDaysInAdvance * 24 * 60 * 60 * 1000)
+      filteredSlots = filteredSlots.filter(slot => new Date(slot.start_time) <= maxAdvanceDate)
+      console.log(`After max days filter (${maxDaysInAdvance} days): ${filteredSlots.length} slots`)
+    }
 
     // Get existing bookings that might conflict (for THIS user, across ALL event types)
     // This ensures archived event bookings still block availability
@@ -242,11 +250,17 @@ serve(async (req) => {
           const bookingStart = new Date(booking.start_time)
           const bookingEnd = new Date(booking.end_time)
 
-          // Slots conflict if they overlap
-          return slotStart < bookingEnd && slotEnd > bookingStart
+          // Apply buffer time to the booking
+          // buffer_before: minutes before the booking that should be blocked
+          // buffer_after: minutes after the booking that should be blocked
+          const bufferedStart = new Date(bookingStart.getTime() - bufferBefore * 60000)
+          const bufferedEnd = new Date(bookingEnd.getTime() + bufferAfter * 60000)
+
+          // Slots conflict if they overlap with the buffered booking time
+          return slotStart < bufferedEnd && slotEnd > bufferedStart
         })
       })
-      console.log(`After booking conflicts filter: ${filteredSlots.length} slots`)
+      console.log(`After booking conflicts filter (with ${bufferBefore}min before, ${bufferAfter}min after buffer): ${filteredSlots.length} slots`)
     }
 
     // Get time blocks (manual blocks) - time_blocks uses date + minutes format

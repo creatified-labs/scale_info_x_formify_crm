@@ -165,6 +165,9 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
   const [minNotice, setMinNotice] = useState(
     eventType?.min_notice_hours != null ? String(eventType.min_notice_hours) : "24"
   );
+  const [maxDaysInAdvance, setMaxDaysInAdvance] = useState(
+    eventType?.max_days_in_advance != null ? String(eventType.max_days_in_advance) : ""
+  );
   const [bufferBefore, setBufferBefore] = useState(
     eventType?.buffer_before != null ? String(eventType.buffer_before) : "0"
   );
@@ -258,6 +261,7 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
     setCustomLinkLabel(eventType?.custom_link_label || "");
     setCustomLinkUrl(eventType?.custom_link_url || "");
     setMinNotice(eventType?.min_notice_hours != null ? String(eventType.min_notice_hours) : "24");
+    setMaxDaysInAdvance(eventType?.max_days_in_advance != null ? String(eventType.max_days_in_advance) : "");
     setBufferBefore(eventType?.buffer_before != null ? String(eventType.buffer_before) : "0");
     setBufferAfter(eventType?.buffer_after != null ? String(eventType.buffer_after) : "0");
     setAvailabilityScheduleId(eventType?.availability_schedule_id);
@@ -395,7 +399,7 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
     }
 
     try {
-      const eventData = {
+      const eventData: any = {
         name,
         slug,
         description,
@@ -404,6 +408,7 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
         allowed_call_types: allowedCallTypes,
         default_call_type: defaultCallType,
         min_notice_hours: parseInt(minNotice),
+        max_days_in_advance: maxDaysInAdvance ? parseInt(maxDaysInAdvance) : null,
         buffer_before: parseInt(bufferBefore),
         buffer_after: parseInt(bufferAfter),
         availability_schedule_id: availabilityScheduleId || null,
@@ -664,7 +669,26 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
                     type="number"
                     value={minNotice}
                     onChange={(e) => setMinNotice(e.target.value)}
+                    min="0"
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Minimum time before booking
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="maxDaysInAdvance">Max Days in Advance</Label>
+                  <Input
+                    id="maxDaysInAdvance"
+                    type="number"
+                    value={maxDaysInAdvance}
+                    onChange={(e) => setMaxDaysInAdvance(e.target.value)}
+                    placeholder="Unlimited"
+                    min="0"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Leave empty for unlimited
+                  </p>
                 </div>
 
                 <div>
@@ -674,9 +698,12 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
                     type="number"
                     value={bufferBefore}
                     onChange={(e) => setBufferBefore(e.target.value)}
+                    min="0"
                   />
                 </div>
+              </div>
 
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="bufferAfter">Buffer After (min)</Label>
                   <Input
@@ -684,6 +711,7 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
                     type="number"
                     value={bufferAfter}
                     onChange={(e) => setBufferAfter(e.target.value)}
+                    min="0"
                   />
                 </div>
               </div>

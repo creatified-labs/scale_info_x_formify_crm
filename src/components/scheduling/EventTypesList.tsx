@@ -134,12 +134,16 @@ export const EventTypesList = () => {
   const canCreateMore = currentEventCount < maxEvents;
 
   const getEffectiveIdentifier = async (): Promise<{ mode: "company" | "user"; value: string }> => {
+    console.log('[EventTypesList] Getting effective identifier, localMode:', localMode);
     if (!localMode) {
       const companyId = await getCompanyId();
+      console.log('[EventTypesList] Got company ID from getCompanyId():', companyId);
       if (companyId) {
+        console.log('[EventTypesList] ✅ Using company mode with ID:', companyId);
         return { mode: "company", value: companyId };
       }
       const { data: { user } } = await supabase.auth.getUser();
+      console.log('[EventTypesList] Fallback to user mode, user:', user?.id);
       if (user?.id) {
         return { mode: "user", value: user.id };
       }
@@ -149,6 +153,7 @@ export const EventTypesList = () => {
       anon = crypto.randomUUID();
       writeLocal(LOCAL_KEYS.anonUserId, anon);
     }
+    console.log('[EventTypesList] Using anon user mode:', anon);
     return { mode: "user", value: anon };
   };
 
@@ -165,7 +170,13 @@ export const EventTypesList = () => {
     }
 
     const identifier = await getEffectiveIdentifier();
-    
+
+    console.log('[EventTypesList] Loading event types with identifier:', {
+      mode: identifier.mode,
+      value: identifier.value,
+      queryColumn: identifier.mode === "company" ? "company_id" : "user_id"
+    });
+
     // Load active event types (owned by user)
     const { data: activeData, error: activeError } = await supabase
       .from("event_types")
@@ -174,6 +185,12 @@ export const EventTypesList = () => {
       .eq("is_archived", false)
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
+
+    console.log('[EventTypesList] Query results:', {
+      activeCount: activeData?.length || 0,
+      activeError,
+      firstEvent: activeData?.[0]?.name
+    });
 
     // Load archived event types (owned by user)
     const { data: archivedData, error: archivedError } = await supabase

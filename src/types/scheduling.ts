@@ -13,6 +13,7 @@ export interface EventType {
   buffer_before: number;
   buffer_after: number;
   min_notice_hours: number;
+  max_days_in_advance?: number | null;
   max_bookings_per_day?: number;
   time_increment: number;
   is_secret: boolean;

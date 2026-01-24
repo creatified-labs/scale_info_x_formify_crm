@@ -48,6 +48,13 @@ serve(async (req) => {
       answers,
     } = payload
 
+    console.log('📅 create-booking received:', {
+      start_time,
+      end_time,
+      duration_minutes: (new Date(end_time).getTime() - new Date(start_time).getTime()) / 60000,
+      event_type_id
+    })
+
     // Get event type and company info
     const { data: eventType, error: eventTypeError } = await supabaseClient
       .from('event_types')
@@ -240,10 +247,17 @@ serve(async (req) => {
           if (!calendarError) {
           // Create calendar event
           const brandName = eventType.companies?.branding_display_name || eventType.companies?.branding_name || 'Scale Info'
-          
+
           // Get organizer email - use Google Calendar integrated email or primary contact
           const organizerEmail = integration?.email || eventType.companies?.primary_contact_email || targetCalendar
-          
+
+          console.log('📅 Creating Google Calendar event:', {
+            start_time,
+            end_time,
+            duration_minutes: (new Date(end_time).getTime() - new Date(start_time).getTime()) / 60000,
+            scheduleTimezone
+          })
+
           const eventData: any = {
             summary: `${eventType.name || 'Booking'} with ${brandName}`,
             description: eventType.description || `Meeting with ${invitee_name}`,
@@ -273,6 +287,11 @@ serve(async (req) => {
               },
             }
           }
+
+          console.log('📅 Google Calendar eventData:', {
+            start: eventData.start,
+            end: eventData.end
+          })
 
           console.log(`Creating calendar event on calendar: ${targetCalendar}`)
 

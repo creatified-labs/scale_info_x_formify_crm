@@ -12,11 +12,13 @@ import {
   isSameDay,
   isToday,
   isBefore,
+  isAfter,
   startOfDay,
   setHours,
   setMinutes,
   addMinutes,
   addHours,
+  addDays,
 } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
@@ -40,6 +42,7 @@ interface BookingCalendarProps {
     buffer_before?: number;
     buffer_after?: number;
     min_notice_hours?: number;
+    max_days_in_advance?: number | null;
     time_increment?: number;
     id?: string;
     user_id?: string;
@@ -84,6 +87,17 @@ export const BookingCalendar = ({
     if (!trimmed) return false;
     return trimmed.includes("@");
   }, [form.email]);
+
+  // Log max_days_in_advance value for debugging
+  useEffect(() => {
+    console.log('📅 [BookingCalendar] Component mounted/updated with max_days_in_advance:', {
+      max_days_in_advance: form.max_days_in_advance,
+      type: typeof form.max_days_in_advance,
+      has_value: 'max_days_in_advance' in form,
+      is_valid: form.max_days_in_advance != null && form.max_days_in_advance > 0,
+      all_form_keys: Object.keys(form).filter(k => k.includes('max') || k.includes('days') || k.includes('advance'))
+    });
+  }, [form.max_days_in_advance]);
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -386,7 +400,20 @@ export const BookingCalendar = ({
     if (isBefore(date, startOfDay(new Date()))) {
       return false;
     }
-    
+
+    // Check maximum days in advance
+    if (form.max_days_in_advance && form.max_days_in_advance > 0) {
+      const maxDate = addDays(startOfDay(new Date()), form.max_days_in_advance);
+      if (isAfter(date, maxDate)) {
+        console.log('🚫 [BookingCalendar] Date blocked by max_days_in_advance:', {
+          date: format(date, 'yyyy-MM-dd'),
+          max_days_in_advance: form.max_days_in_advance,
+          maxDate: format(maxDate, 'yyyy-MM-dd')
+        });
+        return false;
+      }
+    }
+
     // Check minimum notice
     const minNoticeHours = form.min_notice_hours || 24;
     const minDate = addHours(new Date(), minNoticeHours);
@@ -422,6 +449,15 @@ export const BookingCalendar = ({
     return false;
   };
 
+  const canNavigateToMonth = (month: Date) => {
+    if (!form.max_days_in_advance || form.max_days_in_advance <= 0) {
+      return true; // No limit
+    }
+    const maxDate = addDays(new Date(), form.max_days_in_advance);
+    // Can navigate if the month contains any dates before maxDate
+    return isBefore(startOfMonth(month), maxDate);
+  };
+
   const calendarDays = [];
   for (let i = 0; i < startDay; i++) {
     calendarDays.push(null);
@@ -453,6 +489,7 @@ export const BookingCalendar = ({
                   variant="ghost"
                   size="icon"
                   onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+                  disabled={!canNavigateToMonth(addMonths(currentMonth, 1))}
                   className="h-8 w-8"
                   aria-label="Next month"
                 >
@@ -595,6 +632,7 @@ export const BookingCalendar = ({
                 variant="ghost"
                 size="icon"
                 onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+                disabled={!canNavigateToMonth(addMonths(currentMonth, 1))}
                 className="h-8 w-8"
                 aria-label="Next month"
               >
