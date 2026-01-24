@@ -189,9 +189,11 @@ serve(async (req) => {
     const duration = eventType.duration || 30 // minutes
     const bufferBefore = eventType.buffer_before || 0
     const bufferAfter = eventType.buffer_after || 0
-    const timeIncrement = eventType.time_increment || duration
+    const timeIncrement = eventType.time_increment || 15 // Default to 15 min for better flexibility
     const minNoticeHours = eventType.min_notice_hours || 0
     const maxDaysInAdvance = eventType.max_days_in_advance || null
+
+    console.log(`Slot generation config: duration=${duration}min, increment=${timeIncrement}min, buffer_before=${bufferBefore}min, buffer_after=${bufferAfter}min`)
 
     for (const range of availableRanges) {
       // Parse time strings (HH:MM format) and interpret them in the schedule's timezone

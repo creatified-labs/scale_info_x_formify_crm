@@ -174,6 +174,9 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
   const [bufferAfter, setBufferAfter] = useState(
     eventType?.buffer_after != null ? String(eventType.buffer_after) : "0"
   );
+  const [timeIncrement, setTimeIncrement] = useState(
+    eventType?.time_increment != null ? String(eventType.time_increment) : "15"
+  );
   const [availabilityScheduleId, setAvailabilityScheduleId] = useState<string | undefined>(
     eventType?.availability_schedule_id
   );
@@ -264,6 +267,7 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
     setMaxDaysInAdvance(eventType?.max_days_in_advance != null ? String(eventType.max_days_in_advance) : "");
     setBufferBefore(eventType?.buffer_before != null ? String(eventType.buffer_before) : "0");
     setBufferAfter(eventType?.buffer_after != null ? String(eventType.buffer_after) : "0");
+    setTimeIncrement(eventType?.time_increment != null ? String(eventType.time_increment) : "15");
     setAvailabilityScheduleId(eventType?.availability_schedule_id);
     setQuestions(cloneQuestions(eventType?.invitee_form_schema));
     setNotifications(cloneNotifications(eventType?.notifications as NotificationSettings | undefined));
@@ -411,6 +415,7 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
         max_days_in_advance: maxDaysInAdvance ? parseInt(maxDaysInAdvance) : null,
         buffer_before: parseInt(bufferBefore),
         buffer_after: parseInt(bufferAfter),
+        time_increment: parseInt(timeIncrement),
         availability_schedule_id: availabilityScheduleId || null,
         phone_required_for_phone_type: phoneRequired,
         inperson_location: inPersonLocation,
@@ -713,6 +718,20 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
                     onChange={(e) => setBufferAfter(e.target.value)}
                     min="0"
                   />
+                </div>
+                <div>
+                  <Label htmlFor="timeIncrement">Time Slot Interval (min)</Label>
+                  <Input
+                    id="timeIncrement"
+                    type="number"
+                    value={timeIncrement}
+                    onChange={(e) => setTimeIncrement(e.target.value)}
+                    min="5"
+                    step="5"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    How often slots appear (5, 10, 15, 30 min)
+                  </p>
                 </div>
               </div>
 
