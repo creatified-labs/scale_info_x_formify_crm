@@ -295,6 +295,7 @@ const Index = () => {
     const conversionGrowth = lastConversionRate > 0 ? ((currentConversionRate - lastConversionRate) / lastConversionRate) * 100 : 0;
     const completedGoals = goalProgress.filter((gp) => gp.isCompleted).length;
     const totalGoals = goals.length;
+    const totalConversions = calls.filter(call => call.isConverted).length;
 
     return {
       totalRevenue,
@@ -308,6 +309,7 @@ const Index = () => {
       currentConversionRate,
       conversionGrowth,
       currentMonthConversions,
+      totalConversions,
     };
   }, [loading, switching, filteredRevenueEntries, calls, goalProgress, goals]);
 
@@ -409,7 +411,7 @@ const Index = () => {
                 {currencyLoading ? '' : currencySymbol}{summaryStats.totalRevenue.toLocaleString()}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                From {summaryStats.totalEntries} {summaryStats.totalEntries === 1 ? 'conversion' : 'conversions'}
+                From {summaryStats.totalConversions} {summaryStats.totalConversions === 1 ? 'conversion' : 'conversions'}
               </p>
             </CardContent>
           </Card>
