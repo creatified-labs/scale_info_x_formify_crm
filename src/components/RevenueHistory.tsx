@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, PoundSterling } from "lucide-react";
 import { RevenueEntry } from "@/types/revenue";
 import { useData } from "@/contexts/DataContext";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface EntriesListProps {
   entries: RevenueEntry[];
@@ -32,6 +33,7 @@ const getEntrySource = (entry: RevenueEntry): EntrySource => {
 
 export const EntriesList = ({ entries, onDeleteEntry }: EntriesListProps) => {
   const { categories, goals } = useData();
+  const { symbol: currencySymbol } = useCurrency();
 
   const sortedEntries = [...entries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -63,7 +65,7 @@ export const EntriesList = ({ entries, onDeleteEntry }: EntriesListProps) => {
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2 flex-wrap">
                     <div className="text-lg font-semibold text-foreground">
-                      £{entry.amount.toLocaleString()}
+                      {currencySymbol}{entry.amount.toLocaleString()}
                     </div>
                     {entry.categoryName && (
                       <span className="text-xs px-2 py-1 rounded-full flex items-center gap-1" style={{ backgroundColor: `${entry.categoryColor}20`, color: entry.categoryColor }}>

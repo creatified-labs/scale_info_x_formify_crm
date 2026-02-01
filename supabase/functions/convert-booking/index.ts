@@ -49,7 +49,7 @@ serve(async (req) => {
       .from('bookings')
       .update(updateData)
       .eq('id', booking_id)
-      .select()
+      .select('*, event_types(name)')
       .single()
 
     if (error) {
@@ -77,6 +77,56 @@ serve(async (req) => {
         // Don't fail the request, just log the error
       } else {
         console.log('Call log updated successfully')
+      }
+
+      // Create or remove revenue entry
+      if (is_converted && conversion_amount !== undefined && conversion_amount > 0) {
+        // Create a revenue entry for this conversion
+        const entryDate = data.start_time ? data.start_time.split('T')[0] : new Date().toISOString().split('T')[0]
+        const eventTypeName = (data as any).event_types?.name || 'Booking'
+        const inviteeName = data.invitee_name || 'Unknown'
+
+        const { error: revenueError } = await supabaseClient
+          .from('revenue_entries')
+          .upsert({
+            id: `booking-conversion-${booking_id}`,
+            company_id: data.company_id,
+            entry_date: entryDate,
+            amount: conversion_amount,
+            currency: 'GBP',
+            description: `${eventTypeName}: ${inviteeName}`,
+            category: eventTypeName.toLowerCase().replace(/\s+/g, '_'),
+            category_name: eventTypeName,
+            event_type_id: data.event_type_id,
+            event_type_name: eventTypeName,
+            booking_id: booking_id,
+            metadata: {
+              source: 'booking_conversion',
+              booking_id: booking_id,
+              event_type_id: data.event_type_id
+            }
+          }, {
+            onConflict: 'id'
+          })
+
+        if (revenueError) {
+          console.error('Error creating revenue entry:', revenueError)
+          // Don't fail the request, just log the error
+        } else {
+          console.log('Revenue entry created successfully')
+        }
+      } else if (!is_converted) {
+        // Remove revenue entry when conversion is undone
+        const { error: deleteError } = await supabaseClient
+          .from('revenue_entries')
+          .delete()
+          .eq('id', `booking-conversion-${booking_id}`)
+
+        if (deleteError) {
+          console.error('Error deleting revenue entry:', deleteError)
+        } else {
+          console.log('Revenue entry deleted successfully')
+        }
       }
     }
 
