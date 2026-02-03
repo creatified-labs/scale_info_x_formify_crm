@@ -274,6 +274,9 @@ const Index = () => {
       if (!call.isConverted || typeof call.conversionAmount !== 'number' || call.conversionAmount <= 0) {
         return false;
       }
+      if (call.bookingId && existingBookingIds.has(call.bookingId)) {
+        return false;
+      }
       return !existingCallIds.has(call.id);
     });
     return revenueEntries.length + uniqueBookingEntries.length + uniqueConvertedCalls.length;
@@ -362,6 +365,9 @@ const Index = () => {
     );
     const uniqueConvertedCalls = calls.filter((call) => {
       if (!call.isConverted || typeof call.conversionAmount !== 'number' || call.conversionAmount <= 0) {
+        return false;
+      }
+      if (call.bookingId && existingBookingIds.has(call.bookingId)) {
         return false;
       }
       return !existingCallIds.has(call.id);
