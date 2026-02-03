@@ -37,6 +37,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { supabase } from "@/integrations/supabase/client";
 import { usePreviewMode, type PreviewModeState } from "@/components/PreviewModeToggle";
 import { getCompanyId } from "@/lib/company";
+import { useAuth } from "@/contexts/AuthContext";
 
 export type Entitlements = {
   plan_id: "preview" | "solo" | "pro" | "expert";
@@ -114,6 +115,7 @@ type EntitlementsContextType = {
 const EntitlementsContext = createContext<EntitlementsContextType | null>(null);
 
 export function EntitlementsProvider({ children }: { children: ReactNode }) {
+  const { user, loading: authLoading } = useAuth();
   const [entitlements, setEntitlements] = useState<Entitlements>(PRO_ENTITLEMENTS);
   const [loading, setLoading] = useState(true);
   const previewMode = usePreviewMode();
@@ -177,8 +179,11 @@ export function EntitlementsProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
     fetchEntitlements();
-  }, []);
+  }, [authLoading, user?.id]);
 
   // Apply preview mode override only when explicitly set; otherwise use fetched entitlements
   const allowPreviewOverride = !isEmbed;

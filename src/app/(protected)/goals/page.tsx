@@ -1,7 +1,7 @@
 "use client";
 
 export const dynamic = 'force-dynamic';
-import { useMemo, useEffect, useState } from "react";
+import { useMemo, useEffect, useState, useCallback } from "react";
 import { GoalsManager } from "@/components/GoalsManager";
 import { useData } from "@/contexts/DataContext";
 import { GoalProgress } from "@/types/revenue";
@@ -12,6 +12,11 @@ const Goals = () => {
   const { goals, addGoal, deleteGoal, revenueEntries, loading } = useData();
   const [bookings, setBookings] = useState<any[]>([]);
   const [bookingConversions, setBookingConversions] = useState<any[]>([]);
+
+  const getLinkedBookingId = useCallback((entry: any): string | undefined => {
+    const metadata = entry?.metadata || {};
+    return entry?.bookingId || metadata.bookingId || metadata.booking_id || undefined;
+  }, []);
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -43,6 +48,12 @@ const Goals = () => {
 
   // Combine revenue entries with booking conversions
   const allRevenueData = useMemo(() => {
+    const existingBookingIds = new Set(
+      revenueEntries
+        .map((entry: any) => getLinkedBookingId(entry))
+        .filter((id: string | undefined): id is string => Boolean(id))
+    );
+
     const bookingRevenue = bookingConversions.map(booking => {
       const metadata: Record<string, unknown> = {
         source: "booking",
@@ -65,9 +76,14 @@ const Goals = () => {
         goalId: undefined, // Booking conversions don't have explicit goal links
       };
     });
-    
-    return [...revenueEntries, ...bookingRevenue];
-  }, [revenueEntries, bookingConversions]);
+
+    const uniqueBookingRevenue = bookingRevenue.filter((entry: any) => {
+      const bookingId = getLinkedBookingId(entry);
+      return !bookingId || !existingBookingIds.has(bookingId);
+    });
+
+    return [...revenueEntries, ...uniqueBookingRevenue];
+  }, [revenueEntries, bookingConversions, getLinkedBookingId]);
 
   const goalProgress = useMemo((): GoalProgress[] => {
     return goals.map(goal => {

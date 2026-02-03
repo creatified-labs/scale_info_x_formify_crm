@@ -288,8 +288,17 @@ const Index = () => {
     }
 
     return goals.map((goal) => {
-      // Combine filtered revenue entries with booking revenue entries
-      const allEntries = [...filteredRevenueEntries, ...filteredBookingRevenueEntries];
+      // Deduplicate booking conversion rows that already exist as real revenue entries
+      const existingBookingIds = new Set(
+        filteredRevenueEntries
+          .map((entry) => getLinkedBookingId(entry))
+          .filter((id): id is string => Boolean(id))
+      );
+      const uniqueBookingEntries = filteredBookingRevenueEntries.filter((entry) => {
+        const bookingId = getLinkedBookingId(entry);
+        return !bookingId || !existingBookingIds.has(bookingId);
+      });
+      const allEntries = [...filteredRevenueEntries, ...uniqueBookingEntries];
 
       let relevantEntries = allEntries;
 
@@ -320,7 +329,7 @@ const Index = () => {
         daysRemaining: 0,
       };
     });
-  }, [loading, goals, filteredRevenueEntries, filteredBookingRevenueEntries]);
+  }, [loading, goals, filteredRevenueEntries, filteredBookingRevenueEntries, getLinkedBookingId]);
 
   const summaryStats = useMemo(() => {
     if (loading) {

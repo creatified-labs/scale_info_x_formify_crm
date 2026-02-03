@@ -9,6 +9,13 @@ let bootstrapPromise: Promise<{
   error?: string;
 }> | null = null;
 
+function getCompanyIdFromPathname(): string | null {
+  if (typeof window === 'undefined') return null;
+  const match = window.location.pathname.match(/\/dashboard\/([^/]+)/);
+  const raw = match?.[1]?.trim();
+  return raw || null;
+}
+
 /**
  * Bootstrap Whop user and company data
  * This ensures user and company exist in Supabase when app loads
@@ -82,6 +89,12 @@ async function waitForWhopContext(maxAttempts = 30, delayMs = 500): Promise<stri
   // Validate production configuration before proceeding
   validateProductionConfig();
 
+  const urlCompanyId = getCompanyIdFromPathname();
+  if (urlCompanyId) {
+    console.log('[waitForWhopContext] ✅ Using company ID from URL path:', urlCompanyId);
+    return urlCompanyId;
+  }
+
   for (let i = 0; i < maxAttempts; i++) {
     const whopIdentity = readWhopIdentity();
     const companyId = whopIdentity.orgId || process.env.NEXT_PUBLIC_WHOP_COMPANY_ID;
@@ -119,8 +132,18 @@ async function performBootstrap(): Promise<{
     const { data: sessionData } = await supabase.auth.getSession();
     if (sessionData?.session) {
       const currentWhopOrgId = sessionData.session.user.user_metadata?.whop_org_id;
-      
-      // If the session's company matches the URL's company, we're good
+
+      // If we couldn't resolve company context yet but already have a session, keep it.
+      if (!companyId) {
+        console.log('[bootstrapWhopUser] Company context unavailable, using existing session');
+        return {
+          success: true,
+          userId: sessionData.session.user.id,
+          companyId: sessionData.session.user.user_metadata?.company_id,
+        };
+      }
+
+      // If the session's company matches the requested company, we're good.
       if (currentWhopOrgId === companyId) {
         console.log('[bootstrapWhopUser] User already has active session for this company:', companyId);
         return {
@@ -129,13 +152,15 @@ async function performBootstrap(): Promise<{
           companyId: sessionData.session.user.user_metadata?.company_id,
         };
       }
-      
-      // Company mismatch - need to re-authenticate for the new company
-      console.log('[bootstrapWhopUser] Company mismatch detected');
-      console.log('[bootstrapWhopUser]   Current session company:', currentWhopOrgId);
-      console.log('[bootstrapWhopUser]   Requested URL company:', companyId);
-      console.log('[bootstrapWhopUser]   Clearing session and re-authenticating...');
-      await supabase.auth.signOut();
+
+      // Only clear session on a confirmed mismatch.
+      if (currentWhopOrgId && currentWhopOrgId !== companyId) {
+        console.log('[bootstrapWhopUser] Company mismatch detected');
+        console.log('[bootstrapWhopUser]   Current session company:', currentWhopOrgId);
+        console.log('[bootstrapWhopUser]   Requested URL company:', companyId);
+        console.log('[bootstrapWhopUser]   Clearing session and re-authenticating...');
+        await supabase.auth.signOut();
+      }
     }
     
     console.log('[bootstrapWhopUser] Bootstrapping Whop user:', {

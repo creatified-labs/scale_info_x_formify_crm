@@ -10,6 +10,7 @@ import { getCompanyId } from "@/lib/company";
 import { track } from "@/lib/track";
 import { callStatusToBookingStatus } from "@/lib/status";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 
 type DbRevenueRow = {
   id: string;
@@ -92,6 +93,8 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export function DataProvider({ children }: { children: ReactNode }) {
+  const { user, loading: authLoading } = useAuth();
+  const hasAuthenticatedUser = Boolean(user?.id);
   const [revenueEntries, setRevenueEntries] = useState<RevenueEntry[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [calls, setCalls] = useState<Call[]>([]);
@@ -460,6 +463,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Load data on mount and set up periodic refresh + storage event listener
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
+    if (!hasAuthenticatedUser) {
+      setRevenueEntries([]);
+      setGoals([]);
+      setCalls([]);
+      setLoading(false);
+      return;
+    }
+
     void fetchData();
 
     const handleStorageChange = () => {
@@ -521,7 +536,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       clearInterval(interval);
       sb.removeChannel(channel);
     };
-  }, [fetchData, sb, syncBookingToCalls]);
+  }, [authLoading, hasAuthenticatedUser, fetchData, sb, syncBookingToCalls]);
 
   const addRevenueEntry = async (entry: Omit<RevenueEntry, 'id' | 'createdAt'>) => {
     try {
