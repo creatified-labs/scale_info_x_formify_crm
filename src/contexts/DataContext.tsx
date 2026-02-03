@@ -24,6 +24,7 @@ type DbRevenueRow = {
   goal_id?: string | null;
   event_type_id?: string | null;
   event_type_name?: string | null;
+  booking_id?: string | null;
 };
 
 type DbGoalRow = {
@@ -223,6 +224,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     goalId: row.goal_id || undefined,
     eventTypeId: row.event_type_id || undefined,
     eventTypeName: row.event_type_name || undefined,
+    bookingId: row.booking_id || undefined,
   });
 
   const mapGoalFromDb = (row: any): Goal => {
