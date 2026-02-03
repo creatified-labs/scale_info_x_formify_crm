@@ -262,8 +262,19 @@ const Index = () => {
       const bookingId = (entry.metadata as any)?.bookingId;
       return !bookingId || !existingBookingIds.has(bookingId);
     });
-    return revenueEntries.length + uniqueBookingEntries.length;
-  }, [revenueEntries, bookingRevenueEntries]);
+    const existingCallIds = new Set(
+      revenueEntries
+        .map((entry) => (entry.metadata as any)?.callId)
+        .filter((callId): callId is string => typeof callId === 'string' && callId.length > 0)
+    );
+    const uniqueConvertedCalls = calls.filter((call) => {
+      if (!call.isConverted || typeof call.conversionAmount !== 'number' || call.conversionAmount <= 0) {
+        return false;
+      }
+      return !existingCallIds.has(call.id);
+    });
+    return revenueEntries.length + uniqueBookingEntries.length + uniqueConvertedCalls.length;
+  }, [revenueEntries, bookingRevenueEntries, calls]);
 
   const goalProgress = useMemo((): GoalProgress[] => {
     if (loading) {
@@ -350,11 +361,21 @@ const Index = () => {
       const bookingId = (entry.metadata as any)?.bookingId;
       return !bookingId || !existingBookingIds.has(bookingId);
     });
-    const totalEntries = filteredRevenueEntries.length + uniqueBookingEntries.length;
+    const existingCallIds = new Set(
+      filteredRevenueEntries
+        .map((entry) => (entry.metadata as any)?.callId)
+        .filter((callId): callId is string => typeof callId === 'string' && callId.length > 0)
+    );
+    const uniqueConvertedCalls = calls.filter((call) => {
+      if (!call.isConverted || typeof call.conversionAmount !== 'number' || call.conversionAmount <= 0) {
+        return false;
+      }
+      return !existingCallIds.has(call.id);
+    });
+    const totalEntries = filteredRevenueEntries.length + uniqueBookingEntries.length + uniqueConvertedCalls.length;
 
     const callRevenueForRange = (predicate: (date: Date) => boolean) =>
-      calls.reduce((sum, call) => {
-        if (!call.isConverted || typeof call.conversionAmount !== 'number') return sum;
+      uniqueConvertedCalls.reduce((sum, call) => {
         const callDate = new Date(call.date);
         return predicate(callDate) ? sum + Number(call.conversionAmount || 0) : sum;
       }, 0);

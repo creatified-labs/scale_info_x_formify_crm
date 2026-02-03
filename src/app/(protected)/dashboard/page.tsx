@@ -229,15 +229,34 @@ const Index = () => {
   const historyEntries = useMemo(() => {
     const combined = [...filteredRevenueEntries];
     const existingIds = new Set(combined.map((entry) => entry.id));
+    const existingBookingIds = new Set(
+      combined
+        .filter((entry) => entry.bookingId)
+        .map((entry) => entry.bookingId)
+    );
 
     filteredBookingRevenueEntries.forEach((entry) => {
-      if (!existingIds.has(entry.id)) {
-        combined.push(entry);
-      }
+      if (existingIds.has(entry.id)) return;
+      const bookingId = (entry.metadata as any)?.bookingId;
+      if (bookingId && existingBookingIds.has(bookingId)) return;
+      combined.push(entry);
     });
 
     return combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [filteredRevenueEntries, filteredBookingRevenueEntries]);
+
+  const totalEntriesCount = useMemo(() => {
+    const existingBookingIds = new Set(
+      revenueEntries
+        .filter((entry) => entry.bookingId)
+        .map((entry) => entry.bookingId)
+    );
+    const uniqueBookingEntries = bookingRevenueEntries.filter((entry) => {
+      const bookingId = (entry.metadata as any)?.bookingId;
+      return !bookingId || !existingBookingIds.has(bookingId);
+    });
+    return revenueEntries.length + uniqueBookingEntries.length;
+  }, [revenueEntries, bookingRevenueEntries]);
 
   const goalProgress = useMemo((): GoalProgress[] => {
     if (loading) {
@@ -302,18 +321,42 @@ const Index = () => {
     const lastMonthKey = `${lastMonthDate.getFullYear()}-${(lastMonthDate.getMonth() + 1).toString().padStart(2, '0')}`;
 
     const totalRevenueManual = filteredRevenueEntries.reduce((sum, entry) => sum + entry.amount, 0);
-    const totalEntries = filteredRevenueEntries.length + filteredBookingRevenueEntries.length;
+
+    // Avoid counting booking conversion rows twice when a real revenue entry already exists.
+    const existingBookingIds = new Set(
+      filteredRevenueEntries
+        .filter((entry) => entry.bookingId)
+        .map((entry) => entry.bookingId)
+    );
+    const uniqueBookingEntries = filteredBookingRevenueEntries.filter((entry) => {
+      const bookingId = (entry.metadata as any)?.bookingId;
+      return !bookingId || !existingBookingIds.has(bookingId);
+    });
+
+    // Avoid counting call conversion rows twice when a linked revenue entry already exists.
+    const existingCallIds = new Set(
+      filteredRevenueEntries
+        .map((entry) => (entry.metadata as any)?.callId)
+        .filter((callId): callId is string => typeof callId === 'string' && callId.length > 0)
+    );
+    const uniqueConvertedCalls = calls.filter((call) => {
+      if (!call.isConverted || typeof call.conversionAmount !== 'number' || call.conversionAmount <= 0) {
+        return false;
+      }
+      return !existingCallIds.has(call.id);
+    });
+
+    const totalEntries = filteredRevenueEntries.length + uniqueBookingEntries.length + uniqueConvertedCalls.length;
 
     const callRevenueForRange = (predicate: (date: Date) => boolean) =>
-      calls.reduce((sum, call) => {
-        if (!call.isConverted || typeof call.conversionAmount !== 'number') return sum;
+      uniqueConvertedCalls.reduce((sum, call) => {
         const callDate = new Date(call.date);
         return predicate(callDate) ? sum + Number(call.conversionAmount || 0) : sum;
       }, 0);
 
     // Include booking conversions revenue
     const bookingRevenueForRange = (predicate: (date: Date) => boolean) =>
-      filteredBookingRevenueEntries.reduce((sum, entry) => {
+      uniqueBookingEntries.reduce((sum, entry) => {
         const entryDate = new Date(entry.date);
         return predicate(entryDate) ? sum + entry.amount : sum;
       }, 0);
@@ -419,7 +462,7 @@ const Index = () => {
       conversionGrowth,
       currentMonthConversions,
     };
-  }, [loading, filteredRevenueEntries, bookings, calls, goalProgress, goals]);
+  }, [loading, filteredRevenueEntries, filteredBookingRevenueEntries, bookings, calls, goalProgress, goals]);
 
   const analyticsCallMetrics = useMemo(() => {
     if (loading) {
@@ -523,7 +566,7 @@ const Index = () => {
         <FilterPanel
           filters={filters}
           onFiltersChange={setFilters}
-          totalEntries={revenueEntries.length + bookingRevenueEntries.length}
+          totalEntries={totalEntriesCount}
           filteredEntries={historyEntries.length}
         />
 
