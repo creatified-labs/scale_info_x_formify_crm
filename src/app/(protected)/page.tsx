@@ -226,14 +226,44 @@ const Index = () => {
     const combined = [...filteredRevenueEntries];
     const existingIds = new Set(combined.map((entry) => entry.id));
 
+    // Also track booking IDs that already have revenue entries to prevent duplicates
+    // Revenue entries from convert-booking/webhook have bookingId field
+    const existingBookingIds = new Set(
+      combined
+        .filter((entry) => entry.bookingId)
+        .map((entry) => entry.bookingId)
+    );
+
     filteredBookingRevenueEntries.forEach((entry) => {
-      if (!existingIds.has(entry.id)) {
-        combined.push(entry);
+      // Skip if we already have an entry with this ID
+      if (existingIds.has(entry.id)) {
+        return;
       }
+      // Skip if we already have a revenue entry for this booking
+      // Virtual entries store booking ID in metadata.bookingId
+      const bookingId = (entry.metadata as any)?.bookingId;
+      if (bookingId && existingBookingIds.has(bookingId)) {
+        return;
+      }
+      combined.push(entry);
     });
 
     return combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [filteredRevenueEntries, filteredBookingRevenueEntries]);
+
+  // Calculate total entries count (unfiltered, deduplicated) for FilterPanel
+  const totalEntriesCount = useMemo(() => {
+    const existingBookingIds = new Set(
+      revenueEntries
+        .filter((entry) => entry.bookingId)
+        .map((entry) => entry.bookingId)
+    );
+    const uniqueBookingEntries = bookingRevenueEntries.filter((entry) => {
+      const bookingId = (entry.metadata as any)?.bookingId;
+      return !bookingId || !existingBookingIds.has(bookingId);
+    });
+    return revenueEntries.length + uniqueBookingEntries.length;
+  }, [revenueEntries, bookingRevenueEntries]);
 
   const goalProgress = useMemo((): GoalProgress[] => {
     if (loading) {
@@ -241,8 +271,19 @@ const Index = () => {
     }
 
     return goals.map((goal) => {
-      // Combine filtered revenue entries with booking revenue entries
-      const allEntries = [...filteredRevenueEntries, ...filteredBookingRevenueEntries];
+      // Combine filtered revenue entries with booking revenue entries (deduplicated)
+      // First, get booking IDs that already have revenue entries
+      const existingBookingIds = new Set(
+        filteredRevenueEntries
+          .filter((entry) => entry.bookingId)
+          .map((entry) => entry.bookingId)
+      );
+      // Only include booking entries that don't have corresponding revenue entries
+      const uniqueBookingEntries = filteredBookingRevenueEntries.filter((entry) => {
+        const bookingId = (entry.metadata as any)?.bookingId;
+        return !bookingId || !existingBookingIds.has(bookingId);
+      });
+      const allEntries = [...filteredRevenueEntries, ...uniqueBookingEntries];
 
       let relevantEntries = allEntries;
 
@@ -298,7 +339,18 @@ const Index = () => {
     const lastMonthKey = `${lastMonthDate.getFullYear()}-${(lastMonthDate.getMonth() + 1).toString().padStart(2, '0')}`;
 
     const totalRevenueManual = filteredRevenueEntries.reduce((sum, entry) => sum + entry.amount, 0);
-    const totalEntries = filteredRevenueEntries.length + filteredBookingRevenueEntries.length;
+
+    // Count booking entries that don't already have a corresponding revenue entry
+    const existingBookingIds = new Set(
+      filteredRevenueEntries
+        .filter((entry) => entry.bookingId)
+        .map((entry) => entry.bookingId)
+    );
+    const uniqueBookingEntries = filteredBookingRevenueEntries.filter((entry) => {
+      const bookingId = (entry.metadata as any)?.bookingId;
+      return !bookingId || !existingBookingIds.has(bookingId);
+    });
+    const totalEntries = filteredRevenueEntries.length + uniqueBookingEntries.length;
 
     const callRevenueForRange = (predicate: (date: Date) => boolean) =>
       calls.reduce((sum, call) => {
@@ -307,9 +359,9 @@ const Index = () => {
         return predicate(callDate) ? sum + Number(call.conversionAmount || 0) : sum;
       }, 0);
 
-    // Include booking conversions revenue
+    // Include booking conversions revenue (only unique entries not already in revenue_entries)
     const bookingRevenueForRange = (predicate: (date: Date) => boolean) =>
-      filteredBookingRevenueEntries.reduce((sum, entry) => {
+      uniqueBookingEntries.reduce((sum, entry) => {
         const entryDate = new Date(entry.date);
         return predicate(entryDate) ? sum + entry.amount : sum;
       }, 0);
@@ -488,7 +540,7 @@ const Index = () => {
         <FilterPanel
           filters={filters}
           onFiltersChange={setFilters}
-          totalEntries={revenueEntries.length + bookingRevenueEntries.length}
+          totalEntries={totalEntriesCount}
           filteredEntries={historyEntries.length}
         />
 
