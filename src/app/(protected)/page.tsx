@@ -222,6 +222,16 @@ const Index = () => {
     [applyFilters, bookingRevenueEntries]
   );
 
+  const getLinkedBookingId = useCallback((entry: RevenueEntry): string | undefined => {
+    const metadata = (entry.metadata as any) || {};
+    return entry.bookingId || metadata.bookingId || metadata.booking_id || undefined;
+  }, []);
+
+  const getLinkedCallId = useCallback((entry: RevenueEntry): string | undefined => {
+    const metadata = (entry.metadata as any) || {};
+    return metadata.callId || metadata.call_id || undefined;
+  }, []);
+
   const historyEntries = useMemo(() => {
     const combined = [...filteredRevenueEntries];
     const existingIds = new Set(combined.map((entry) => entry.id));
@@ -230,8 +240,8 @@ const Index = () => {
     // Revenue entries from convert-booking/webhook have bookingId field
     const existingBookingIds = new Set(
       combined
-        .filter((entry) => entry.bookingId)
-        .map((entry) => entry.bookingId)
+        .map((entry) => getLinkedBookingId(entry))
+        .filter((id): id is string => Boolean(id))
     );
 
     filteredBookingRevenueEntries.forEach((entry) => {
@@ -241,7 +251,7 @@ const Index = () => {
       }
       // Skip if we already have a revenue entry for this booking
       // Virtual entries store booking ID in metadata.bookingId
-      const bookingId = (entry.metadata as any)?.bookingId;
+      const bookingId = getLinkedBookingId(entry);
       if (bookingId && existingBookingIds.has(bookingId)) {
         return;
       }
@@ -249,23 +259,23 @@ const Index = () => {
     });
 
     return combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [filteredRevenueEntries, filteredBookingRevenueEntries]);
+  }, [filteredRevenueEntries, filteredBookingRevenueEntries, getLinkedBookingId]);
 
   // Calculate total entries count (unfiltered, deduplicated) for FilterPanel
   const totalEntriesCount = useMemo(() => {
     const existingBookingIds = new Set(
       revenueEntries
-        .filter((entry) => entry.bookingId)
-        .map((entry) => entry.bookingId)
+        .map((entry) => getLinkedBookingId(entry))
+        .filter((id): id is string => Boolean(id))
     );
     const uniqueBookingEntries = bookingRevenueEntries.filter((entry) => {
-      const bookingId = (entry.metadata as any)?.bookingId;
+      const bookingId = getLinkedBookingId(entry);
       return !bookingId || !existingBookingIds.has(bookingId);
     });
     const existingCallIds = new Set(
       revenueEntries
-        .map((entry) => (entry.metadata as any)?.callId)
-        .filter((callId): callId is string => typeof callId === 'string' && callId.length > 0)
+        .map((entry) => getLinkedCallId(entry))
+        .filter((id): id is string => Boolean(id))
     );
     const uniqueConvertedCalls = calls.filter((call) => {
       if (!call.isConverted || typeof call.conversionAmount !== 'number' || call.conversionAmount <= 0) {
@@ -274,7 +284,7 @@ const Index = () => {
       return !existingCallIds.has(call.id);
     });
     return revenueEntries.length + uniqueBookingEntries.length + uniqueConvertedCalls.length;
-  }, [revenueEntries, bookingRevenueEntries, calls]);
+  }, [revenueEntries, bookingRevenueEntries, calls, getLinkedBookingId, getLinkedCallId]);
 
   const goalProgress = useMemo((): GoalProgress[] => {
     if (loading) {
@@ -286,12 +296,12 @@ const Index = () => {
       // First, get booking IDs that already have revenue entries
       const existingBookingIds = new Set(
         filteredRevenueEntries
-          .filter((entry) => entry.bookingId)
-          .map((entry) => entry.bookingId)
+          .map((entry) => getLinkedBookingId(entry))
+          .filter((id): id is string => Boolean(id))
       );
       // Only include booking entries that don't have corresponding revenue entries
       const uniqueBookingEntries = filteredBookingRevenueEntries.filter((entry) => {
-        const bookingId = (entry.metadata as any)?.bookingId;
+        const bookingId = getLinkedBookingId(entry);
         return !bookingId || !existingBookingIds.has(bookingId);
       });
       const allEntries = [...filteredRevenueEntries, ...uniqueBookingEntries];
@@ -325,7 +335,7 @@ const Index = () => {
         daysRemaining: 0,
       };
     });
-  }, [loading, goals, filteredRevenueEntries, filteredBookingRevenueEntries]);
+  }, [loading, goals, filteredRevenueEntries, filteredBookingRevenueEntries, getLinkedBookingId]);
 
   const summaryStats = useMemo(() => {
     if (loading) {
@@ -354,17 +364,17 @@ const Index = () => {
     // Count booking entries that don't already have a corresponding revenue entry
     const existingBookingIds = new Set(
       filteredRevenueEntries
-        .filter((entry) => entry.bookingId)
-        .map((entry) => entry.bookingId)
+        .map((entry) => getLinkedBookingId(entry))
+        .filter((id): id is string => Boolean(id))
     );
     const uniqueBookingEntries = filteredBookingRevenueEntries.filter((entry) => {
-      const bookingId = (entry.metadata as any)?.bookingId;
+      const bookingId = getLinkedBookingId(entry);
       return !bookingId || !existingBookingIds.has(bookingId);
     });
     const existingCallIds = new Set(
       filteredRevenueEntries
-        .map((entry) => (entry.metadata as any)?.callId)
-        .filter((callId): callId is string => typeof callId === 'string' && callId.length > 0)
+        .map((entry) => getLinkedCallId(entry))
+        .filter((id): id is string => Boolean(id))
     );
     const uniqueConvertedCalls = calls.filter((call) => {
       if (!call.isConverted || typeof call.conversionAmount !== 'number' || call.conversionAmount <= 0) {
@@ -471,7 +481,7 @@ const Index = () => {
       conversionGrowth,
       currentMonthConversions,
     };
-  }, [loading, filteredRevenueEntries, bookings, calls, goalProgress, goals]);
+  }, [loading, filteredRevenueEntries, filteredBookingRevenueEntries, bookings, calls, goalProgress, goals, getLinkedBookingId, getLinkedCallId]);
 
   const analyticsCallMetrics = useMemo(() => {
     if (loading) {

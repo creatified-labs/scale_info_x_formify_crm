@@ -181,6 +181,16 @@ const Index = () => {
       });
   }, [bookings, categories]);
 
+  const getLinkedBookingId = useCallback((entry: RevenueEntry): string | undefined => {
+    const metadata = (entry.metadata as any) || {};
+    return entry.bookingId || metadata.bookingId || metadata.booking_id || undefined;
+  }, []);
+
+  const getLinkedCallId = useCallback((entry: RevenueEntry): string | undefined => {
+    const metadata = (entry.metadata as any) || {};
+    return metadata.callId || metadata.call_id || undefined;
+  }, []);
+
   const applyFilters = useCallback(
     (entries: RevenueEntry[]) => {
       if (loading) {
@@ -231,32 +241,43 @@ const Index = () => {
     const existingIds = new Set(combined.map((entry) => entry.id));
     const existingBookingIds = new Set(
       combined
-        .filter((entry) => entry.bookingId)
-        .map((entry) => entry.bookingId)
+        .map((entry) => getLinkedBookingId(entry))
+        .filter((id): id is string => Boolean(id))
     );
 
     filteredBookingRevenueEntries.forEach((entry) => {
       if (existingIds.has(entry.id)) return;
-      const bookingId = (entry.metadata as any)?.bookingId;
+      const bookingId = getLinkedBookingId(entry);
       if (bookingId && existingBookingIds.has(bookingId)) return;
       combined.push(entry);
     });
 
     return combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [filteredRevenueEntries, filteredBookingRevenueEntries]);
+  }, [filteredRevenueEntries, filteredBookingRevenueEntries, getLinkedBookingId]);
 
   const totalEntriesCount = useMemo(() => {
     const existingBookingIds = new Set(
       revenueEntries
-        .filter((entry) => entry.bookingId)
-        .map((entry) => entry.bookingId)
+        .map((entry) => getLinkedBookingId(entry))
+        .filter((id): id is string => Boolean(id))
     );
     const uniqueBookingEntries = bookingRevenueEntries.filter((entry) => {
-      const bookingId = (entry.metadata as any)?.bookingId;
+      const bookingId = getLinkedBookingId(entry);
       return !bookingId || !existingBookingIds.has(bookingId);
     });
-    return revenueEntries.length + uniqueBookingEntries.length;
-  }, [revenueEntries, bookingRevenueEntries]);
+    const existingCallIds = new Set(
+      revenueEntries
+        .map((entry) => getLinkedCallId(entry))
+        .filter((id): id is string => Boolean(id))
+    );
+    const uniqueConvertedCalls = calls.filter((call) => {
+      if (!call.isConverted || typeof call.conversionAmount !== 'number' || call.conversionAmount <= 0) {
+        return false;
+      }
+      return !existingCallIds.has(call.id);
+    });
+    return revenueEntries.length + uniqueBookingEntries.length + uniqueConvertedCalls.length;
+  }, [revenueEntries, bookingRevenueEntries, calls, getLinkedBookingId, getLinkedCallId]);
 
   const goalProgress = useMemo((): GoalProgress[] => {
     if (loading) {
@@ -325,19 +346,19 @@ const Index = () => {
     // Avoid counting booking conversion rows twice when a real revenue entry already exists.
     const existingBookingIds = new Set(
       filteredRevenueEntries
-        .filter((entry) => entry.bookingId)
-        .map((entry) => entry.bookingId)
+        .map((entry) => getLinkedBookingId(entry))
+        .filter((id): id is string => Boolean(id))
     );
     const uniqueBookingEntries = filteredBookingRevenueEntries.filter((entry) => {
-      const bookingId = (entry.metadata as any)?.bookingId;
+      const bookingId = getLinkedBookingId(entry);
       return !bookingId || !existingBookingIds.has(bookingId);
     });
 
     // Avoid counting call conversion rows twice when a linked revenue entry already exists.
     const existingCallIds = new Set(
       filteredRevenueEntries
-        .map((entry) => (entry.metadata as any)?.callId)
-        .filter((callId): callId is string => typeof callId === 'string' && callId.length > 0)
+        .map((entry) => getLinkedCallId(entry))
+        .filter((id): id is string => Boolean(id))
     );
     const uniqueConvertedCalls = calls.filter((call) => {
       if (!call.isConverted || typeof call.conversionAmount !== 'number' || call.conversionAmount <= 0) {
@@ -462,7 +483,7 @@ const Index = () => {
       conversionGrowth,
       currentMonthConversions,
     };
-  }, [loading, filteredRevenueEntries, filteredBookingRevenueEntries, bookings, calls, goalProgress, goals]);
+  }, [loading, filteredRevenueEntries, filteredBookingRevenueEntries, bookings, calls, goalProgress, goals, getLinkedBookingId, getLinkedCallId]);
 
   const analyticsCallMetrics = useMemo(() => {
     if (loading) {
