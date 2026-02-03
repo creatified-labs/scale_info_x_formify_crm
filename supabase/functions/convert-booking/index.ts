@@ -85,11 +85,25 @@ serve(async (req) => {
         const entryDate = data.start_time ? data.start_time.split('T')[0] : new Date().toISOString().split('T')[0]
         const eventTypeName = (data as any).event_types?.name || 'Booking'
         const inviteeName = data.invitee_name || 'Unknown'
+        const revenueEntryId = `booking-conversion-${booking_id}`
 
-        const { error: revenueError } = await supabaseClient
+        // Check if revenue entry was created by webhook - don't overwrite webhook data
+        const { data: existingEntry } = await supabaseClient
+          .from('revenue_entries')
+          .select('id, metadata')
+          .eq('id', revenueEntryId)
+          .maybeSingle()
+
+        const isWebhookEntry = existingEntry?.metadata?.source === 'whop_webhook'
+        if (isWebhookEntry) {
+          console.log('Revenue entry exists from webhook, preserving payment data:', revenueEntryId)
+        }
+
+        // Only create/update if not a webhook-created entry
+        const { error: revenueError } = isWebhookEntry ? { error: null } : await supabaseClient
           .from('revenue_entries')
           .upsert({
-            id: `booking-conversion-${booking_id}`,
+            id: revenueEntryId,
             company_id: data.company_id,
             entry_date: entryDate,
             amount: conversion_amount,

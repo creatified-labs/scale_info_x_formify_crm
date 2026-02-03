@@ -26,6 +26,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { FilterCriteria } from "@/types/categories";
 import { useData } from "@/contexts/DataContext";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface FilterPanelProps {
   filters: FilterCriteria;
@@ -45,6 +46,7 @@ export const FilterPanel = ({
   totalEntries, 
   filteredEntries 
 }: FilterPanelProps) => {
+  const { symbol: currencySymbol } = useCurrency();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isManageCategoriesOpen, setIsManageCategoriesOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -307,7 +309,7 @@ export const FilterPanel = ({
 
           {/* Amount Range */}
           <div className="space-y-3">
-            <Label className="text-responsive">Amount Range (£)</Label>
+            <Label className="text-responsive">Amount Range ({currencySymbol})</Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-sm text-muted-foreground">Minimum</Label>

@@ -19,10 +19,13 @@ serve(async (req) => {
 
     console.log('Request info:', { hasAuthHeader: !!authHeader, origin, isDev, devProxy })
 
-    // For production we now rely on frontend session establishing the correct company_id.
-    // When running locally, the dev proxy still injects the service role token.
+    // Require authorization in production
     if (!isDev && !authHeader) {
-      console.warn('goals-write missing auth header but continuing (JWT disabled). Origin:', origin)
+      console.error('goals-write missing auth header in production. Origin:', origin)
+      return new Response(
+        JSON.stringify({ error: 'Authorization required' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      )
     } else if (isDev) {
       console.log('Dev mode: Skipping JWT validation', { devProxy, origin })
     }

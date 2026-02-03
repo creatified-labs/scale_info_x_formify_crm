@@ -8,15 +8,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, PoundSterling } from "lucide-react";
+import { Plus } from "lucide-react";
 import { RevenueEntry } from "@/types/revenue";
 import { useData } from "@/contexts/DataContext";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface RevenueEntryFormProps {
   onAddEntry: (entry: Omit<RevenueEntry, 'id' | 'createdAt'>) => Promise<void>;
 }
 
 export const RevenueEntryForm = ({ onAddEntry }: RevenueEntryFormProps) => {
+  const { symbol: currencySymbol } = useCurrency();
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -82,9 +84,9 @@ export const RevenueEntryForm = ({ onAddEntry }: RevenueEntryFormProps) => {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="amount">Amount (£)</Label>
+              <Label htmlFor="amount">Amount ({currencySymbol})</Label>
               <div className="relative">
-                <PoundSterling className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-sm text-muted-foreground">{currencySymbol}</span>
                 <Input
                   id="amount"
                   type="number"
@@ -132,7 +134,7 @@ export const RevenueEntryForm = ({ onAddEntry }: RevenueEntryFormProps) => {
                 <SelectItem value="">No goal</SelectItem>
                 {revenueGoals.map((goal) => (
                   <SelectItem key={goal.id} value={goal.id}>
-                    {goal.description || `${goal.type} goal - £${goal.targetAmount.toLocaleString()}`}
+                    {goal.description || `${goal.type} goal - ${currencySymbol}${goal.targetAmount.toLocaleString()}`}
                   </SelectItem>
                 ))}
               </SelectContent>

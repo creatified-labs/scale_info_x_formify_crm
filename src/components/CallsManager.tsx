@@ -17,10 +17,12 @@ import { toast } from "sonner";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
 import * as callsRepo from "@/lib/repo/calls";
 import { MigrationTool } from "./MigrationTool";
+import { useCurrency } from "@/hooks/useCurrency";
 
 type TimeRange = 'last7days' | 'last14days' | 'thisMonth' | 'last30days' | 'allTime';
 
 const CallsManager = () => {
+  const { symbol: currencySymbol } = useCurrency();
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddingCall, setIsAddingCall] = useState(false);
@@ -263,7 +265,7 @@ const CallsManager = () => {
     
     if (!call.isConverted && !call.conversionAmount) {
       // Prompt for conversion amount if converting
-      const amount = prompt("Enter conversion amount (£):");
+      const amount = prompt(`Enter conversion amount (${currencySymbol}):`)
       if (amount && !isNaN(Number(amount))) {
         updatedCall.conversionAmount = Number(amount);
       } else {
@@ -407,7 +409,7 @@ const CallsManager = () => {
             <PoundSterling className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">£{callStats.totalRevenue.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{currencySymbol}{callStats.totalRevenue.toLocaleString()}</div>
           </CardContent>
         </Card>
       </div>
@@ -543,7 +545,7 @@ const CallsManager = () => {
                     {formData.isConverted && (
                       <>
                         <div>
-                          <Label htmlFor="conversionAmount">Conversion Amount (£)</Label>
+                          <Label htmlFor="conversionAmount">Conversion Amount ({currencySymbol})</Label>
                            <Input
                             id="conversionAmount"
                             type="number"
@@ -617,7 +619,7 @@ const CallsManager = () => {
                     
                     {call.isConverted && (
                       <Badge variant="default" className="bg-green-600">
-                        £{call.conversionAmount?.toLocaleString()}
+                        {currencySymbol}{call.conversionAmount?.toLocaleString()}
                       </Badge>
                     )}
                     

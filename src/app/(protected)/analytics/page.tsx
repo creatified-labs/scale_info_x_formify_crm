@@ -31,7 +31,7 @@ const Analytics = () => {
   const [exportingCsv, setExportingCsv] = useState(false);
 
   // Use the centralized currency hook for real-time sync across the app
-  const { formatAmount } = useCurrency();
+  const { formatAmount, symbol: currencySymbol } = useCurrency();
 
   // Fetch converted bookings
   useEffect(() => {
@@ -237,15 +237,43 @@ const Analytics = () => {
   const goalAnalytics = useMemo(() => {
     const activeGoals = goals.length;
     const completedGoals = goals.filter(goal => {
-      // This is a simplified completion check - you'd want to use your existing goal progress logic
-      return false; // Placeholder
+      // Calculate current amount based on goal type and period
+      let relevantEntries = allRevenueData;
+
+      // Filter entries based on goal period type
+      if (goal.type === 'deadline' && goal.deadline) {
+        const deadlineDate = new Date(goal.deadline);
+        const createdDate = new Date(goal.createdAt);
+        relevantEntries = allRevenueData.filter(entry => {
+          const entryDate = new Date(entry.date);
+          return entryDate >= createdDate && entryDate <= deadlineDate;
+        });
+      } else if (goal.type === 'daily' && goal.period) {
+        relevantEntries = allRevenueData.filter(entry => entry.date === goal.period);
+      } else if (goal.type === 'weekly' && goal.period) {
+        const [year, week] = (goal.period || '').split('-W');
+        const weekStart = new Date(parseInt(year), 0, 1 + (parseInt(week) - 1) * 7);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        relevantEntries = allRevenueData.filter(entry => {
+          const entryDate = new Date(entry.date);
+          return entryDate >= weekStart && entryDate <= weekEnd;
+        });
+      } else if (goal.type === 'monthly' && goal.period) {
+        relevantEntries = allRevenueData.filter(entry => entry.date.startsWith(goal.period || ''));
+      } else if (goal.type === 'yearly' && goal.period) {
+        relevantEntries = allRevenueData.filter(entry => entry.date.startsWith(goal.period || ''));
+      }
+
+      const currentAmount = relevantEntries.reduce((sum, entry) => sum + entry.amount, 0);
+      return currentAmount >= goal.targetAmount;
     }).length;
     return {
       activeGoals,
       completedGoals,
       completionRate: activeGoals > 0 ? completedGoals / activeGoals * 100 : 0
     };
-  }, [goals]);
+  }, [goals, allRevenueData]);
   if (allRevenueData.length === 0) {
     return (
       <div className="min-h-screen bg-background p-4 md:p-6">
@@ -512,9 +540,9 @@ const Analytics = () => {
                   <LineChart data={analytics.monthlyTrend}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `£${value}`} />
+                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `${currencySymbol}${value}`} />
                     <Tooltip
-                      formatter={(value) => [`£${value}`, "Revenue"]}
+                      formatter={(value) => [`${currencySymbol}${value}`, "Revenue"]}
                       contentStyle={tooltipStyle}
                       labelStyle={tooltipLabelStyle}
                     />
@@ -587,9 +615,9 @@ const Analytics = () => {
                     <BarChart data={analytics.dayOfWeekData} barCategoryGap="30%">
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `£${value}`} />
+                      <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `${currencySymbol}${value}`} />
                       <Tooltip
-                      formatter={(value) => [`£${value}`, "Average"]}
+                      formatter={(value) => [`${currencySymbol}${value}`, "Average"]}
                       contentStyle={tooltipStyle}
                       labelStyle={tooltipLabelStyle}
                     />

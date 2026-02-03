@@ -29,12 +29,14 @@ import { cn } from "@/lib/utils";
 import { normalizeBookingStatus, formatBookingStatus, statusTextColorClass } from "@/lib/status";
 import { useTimezone, formatTimeInTimezone } from "@/hooks/use-timezone";
 import { formatInTimeZone } from "date-fns-tz";
+import { useCurrency } from "@/hooks/useCurrency";
 
 type BookingsListProps = {
   extraActions?: ReactNode;
 };
 
 export const BookingsList = ({ extraActions }: BookingsListProps) => {
+  const { symbol: currencySymbol } = useCurrency();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -965,7 +967,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
                         {(booking as any).is_converted ? (
                           <div className="flex items-center gap-2">
                             <Badge variant="default" className="gap-1">
-                              {(booking as any).conversion_amount ? `£${((booking as any).conversion_amount).toFixed(2)}` : 'Paid'}
+                              {(booking as any).conversion_amount ? `${currencySymbol}${((booking as any).conversion_amount).toFixed(2)}` : 'Paid'}
                             </Badge>
                             <Button
                               variant="ghost"
@@ -1176,7 +1178,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
                   </Label>
                   <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
                     <span className="text-lg font-semibold text-green-700 dark:text-green-300">
-                      {(selectedBooking as any).conversion_amount ? `£${((selectedBooking as any).conversion_amount).toFixed(2)}` : 'Paid'}
+                      {(selectedBooking as any).conversion_amount ? `${currencySymbol}${((selectedBooking as any).conversion_amount).toFixed(2)}` : 'Paid'}
                     </span>
                   </div>
                 </div>
@@ -1371,7 +1373,7 @@ export const BookingsList = ({ extraActions }: BookingsListProps) => {
               )}
             </div>
             <div>
-              <label className="text-sm font-medium mb-2 block">Conversion Amount (£)</label>
+              <label className="text-sm font-medium mb-2 block">Conversion Amount ({currencySymbol})</label>
               <Input
                 type="number"
                 step="0.01"

@@ -243,12 +243,14 @@ serve(async (req) => {
     
     // Fallback to email lookup if no booking ID or booking not found
     if (!booking && customerEmail) {
-      console.log('Looking up booking by email:', customerEmail)
+      const normalizedEmail = customerEmail.toLowerCase()
+      console.log('Looking up booking by email:', normalizedEmail)
       const { data: bookings, error: emailError } = await supabaseAdmin
         .from('bookings')
         .select('id, event_type_id, host_user_id, invitee_name, invitee_email, start_time, status, is_converted')
-        .eq('invitee_email', customerEmail)
+        .eq('invitee_email', normalizedEmail)
         .order('created_at', { ascending: false })
+        .limit(10)
 
       if (emailError) {
         console.error('Error finding booking by email:', emailError)
@@ -313,8 +315,22 @@ serve(async (req) => {
       .single()
 
     // Create revenue entry
-    const revenueEntryId = `booking-${booking.id}`
-    const { error: revenueError } = await supabaseAdmin
+    // Use same ID format as convert-booking to avoid duplicates
+    const revenueEntryId = `booking-conversion-${booking.id}`
+
+    // Check if revenue entry already exists to prevent overwriting manual conversions
+    const { data: existingEntry } = await supabaseAdmin
+      .from('revenue_entries')
+      .select('id')
+      .eq('id', revenueEntryId)
+      .maybeSingle()
+
+    if (existingEntry) {
+      console.log('Revenue entry already exists, skipping creation:', revenueEntryId)
+    }
+
+    // Only create if no existing entry
+    const { error: revenueError } = existingEntry ? { error: null } : await supabaseAdmin
       .from('revenue_entries')
       .upsert({
         id: revenueEntryId,
@@ -327,6 +343,7 @@ serve(async (req) => {
         category_name: 'Booking Payment',
         event_type_id: booking.event_type_id,
         event_type_name: eventTypeData?.name,
+        booking_id: booking.id,
         metadata: {
           booking_id: booking.id,
           whop_payment_id: data.id,

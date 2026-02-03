@@ -27,6 +27,7 @@ import {
 } from 'date-fns';
 import { useTimezone } from '@/hooks/use-timezone';
 import { formatInTimeZone } from 'date-fns-tz';
+import { useCurrency } from '@/hooks/useCurrency';
 
 type CalendarEvent = {
   id: string;
@@ -47,6 +48,7 @@ type CalendarEvent = {
 };
 
 const CalendarView = () => {
+  const { symbol: currencySymbol } = useCurrency();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
@@ -348,7 +350,7 @@ const CalendarView = () => {
                                       Converted
                                     </div>
                                     <p className="text-lg font-semibold text-green-700">
-                                      £{event.conversionAmount?.toLocaleString()}
+                                      {currencySymbol}{event.conversionAmount?.toLocaleString()}
                                     </p>
                                   </div>
                                 )}

@@ -5,8 +5,10 @@ import { useRealtimeMetrics } from "@/hooks/useRealtimeMetrics";
 import { Phone, CheckCircle2, AlertCircle, TrendingUp, DollarSign } from "lucide-react";
 import { useMemo, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrency } from "@/hooks/useCurrency";
 
 export const UnifiedMetricsDashboard = () => {
+  const { symbol: currencySymbol } = useCurrency();
   const [userId, setUserId] = useState<string | undefined>();
 
   useEffect(() => {
@@ -110,7 +112,7 @@ export const UnifiedMetricsDashboard = () => {
           </div>
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <DollarSign className="h-3 w-3" />
-            £{(metrics?.revenue_total || 0).toLocaleString()} • {conversionRate.toFixed(1)}%
+            {currencySymbol}{(metrics?.revenue_total || 0).toLocaleString()} • {conversionRate.toFixed(1)}%
           </p>
         </CardContent>
       </Card>

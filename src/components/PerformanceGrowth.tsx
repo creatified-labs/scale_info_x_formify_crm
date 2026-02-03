@@ -9,8 +9,10 @@ import { TrendingUp, TrendingDown, Target, Users, Phone, PoundSterling, BarChart
 import { useData } from '@/contexts/DataContext';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { format, subDays, subWeeks, subMonths, startOfWeek, startOfMonth, endOfWeek, endOfMonth } from 'date-fns';
+import { useCurrency } from '@/hooks/useCurrency';
 
 const PerformanceGrowth = () => {
+  const { symbol: currencySymbol } = useCurrency();
   console.log('PerformanceGrowth rendering...');
   const { revenueEntries, goals, calls } = useData();
   console.log('PerformanceGrowth data:', { revenueEntries, goals, calls });
@@ -248,7 +250,7 @@ const PerformanceGrowth = () => {
                 <PoundSterling className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">£{performanceMetrics.revenue.current.toLocaleString()}</div>
+                <div className="text-2xl font-bold">{currencySymbol}{performanceMetrics.revenue.current.toLocaleString()}</div>
                 <div className="flex items-center justify-between mt-2">
                   <div className="flex items-center gap-2">
                     {formatGrowth(performanceMetrics.revenue.growth)}
@@ -415,7 +417,7 @@ const PerformanceGrowth = () => {
                         </div>
                         <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
                           <span>
-                            £{currentAmount.toLocaleString()} / £{goal.targetAmount.toLocaleString()}
+                            {currencySymbol}{currentAmount.toLocaleString()} / {currencySymbol}{goal.targetAmount.toLocaleString()}
                           </span>
                           <span>{progress.toFixed(1)}%</span>
                         </div>

@@ -25,6 +25,7 @@ import { GoalProgress, RevenueEntry } from "@/types/revenue";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { detectWhopContext, readWhopIdentity } from "@/lib/embed";
+import { useCurrency } from "@/hooks/useCurrency";
 const Index = () => {
   const {
     revenueEntries,
@@ -46,6 +47,7 @@ const Index = () => {
 
   const { user } = useAuth();
   const { entitlements } = useEntitlements();
+  const { symbol: currencySymbol } = useCurrency();
   const [usage, setUsage] = useState<{ bookingsTotal: number } | null>(null);
   const [bookings, setBookings] = useState<any[]>([]);
 
@@ -499,7 +501,7 @@ const Index = () => {
             </CardHeader>
             <CardContent className="pb-4">
               <div className="text-2xl lg:text-3xl number-display text-primary">
-                £{summaryStats.totalRevenue.toLocaleString()}
+                {currencySymbol}{summaryStats.totalRevenue.toLocaleString()}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 From {summaryStats.totalEntries} entries
@@ -514,7 +516,7 @@ const Index = () => {
             </CardHeader>
             <CardContent className="pb-4">
               <div className="text-2xl lg:text-3xl number-display text-primary">
-                £{summaryStats.thisMonthRevenue.toLocaleString()}
+                {currencySymbol}{summaryStats.thisMonthRevenue.toLocaleString()}
               </div>
               <div className="flex items-center justify-between mt-1">
                 <p className="text-xs text-muted-foreground">
@@ -532,7 +534,7 @@ const Index = () => {
             </CardHeader>
             <CardContent className="pb-4">
               <div className="text-2xl lg:text-3xl number-display text-primary">
-                £{summaryStats.thisWeekRevenue.toLocaleString()}
+                {currencySymbol}{summaryStats.thisWeekRevenue.toLocaleString()}
               </div>
               <div className="flex items-center justify-between mt-1">
                 <p className="text-xs text-muted-foreground">
@@ -669,7 +671,7 @@ const Index = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    £{summaryStats.thisMonthRevenue.toLocaleString()}
+                    {currencySymbol}{summaryStats.thisMonthRevenue.toLocaleString()}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     Total revenue this month
@@ -726,7 +728,7 @@ const Index = () => {
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-muted-foreground">Revenue</p>
                     <p className="text-2xl font-bold text-primary">
-                      £{analyticsCallMetrics.revenue.toLocaleString()}
+                      {currencySymbol}{analyticsCallMetrics.revenue.toLocaleString()}
                     </p>
                   </div>
                 </div>

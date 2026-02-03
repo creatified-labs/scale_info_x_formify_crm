@@ -14,6 +14,7 @@ import { format } from "date-fns";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface GoalsManagerProps {
   goals: Goal[];
@@ -23,6 +24,7 @@ interface GoalsManagerProps {
 }
 
 export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: GoalsManagerProps) => {
+  const { symbol: currencySymbol } = useCurrency();
   const [showAddForm, setShowAddForm] = useState(false);
   const [goalType, setGoalType] = useState<'daily' | 'weekly' | 'monthly' | 'yearly' | 'deadline'>('monthly');
   const [targetAmount, setTargetAmount] = useState("");
@@ -150,7 +152,7 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="targetAmount">Target Amount (£)</Label>
+                  <Label htmlFor="targetAmount">Target Amount ({currencySymbol})</Label>
                   <Input
                     id="targetAmount"
                     type="number"
@@ -232,7 +234,7 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
                             <p className="font-semibold text-sm mb-1">Goal Details</p>
                             <div className="space-y-1 text-xs">
                               <p><span className="text-muted-foreground">Type:</span> {progress.goal.type} Revenue Goal</p>
-                              <p><span className="text-muted-foreground">Target:</span> £{progress.goal.targetAmount.toLocaleString()}</p>
+                              <p><span className="text-muted-foreground">Target:</span> {currencySymbol}{progress.goal.targetAmount.toLocaleString()}</p>
                               <p><span className="text-muted-foreground">Period:</span> {formatPeriod(progress.goal)}</p>
                               {progress.goal.description && (
                                 <p><span className="text-muted-foreground">Description:</span> {progress.goal.description}</p>
@@ -267,10 +269,10 @@ export const GoalsManager = ({ goals, goalProgress, onAddGoal, onDeleteGoal }: G
                 <span className="text-muted-foreground">Progress</span>
                 <div className="text-right">
                   <div className="number-display text-primary text-lg">
-                    £{progress.currentAmount.toLocaleString()}
+                    {currencySymbol}{progress.currentAmount.toLocaleString()}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    / £{progress.goal.targetAmount.toLocaleString()}
+                    / {currencySymbol}{progress.goal.targetAmount.toLocaleString()}
                   </div>
                 </div>
               </div>
