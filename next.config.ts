@@ -14,11 +14,11 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'X-Frame-Options',
-            value: 'ALLOW-FROM https://whop.com',
+            value: 'ALLOWALL',
           },
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors 'self' https://whop.com https://*.whop.com",
+            value: 'frame-ancestors *',
           },
         ],
       },

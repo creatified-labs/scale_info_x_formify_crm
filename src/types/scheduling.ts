@@ -13,6 +13,7 @@ export interface EventType {
   buffer_before: number;
   buffer_after: number;
   min_notice_hours: number;
+  max_days_in_advance?: number | null;
   max_bookings_per_day?: number;
   time_increment: number;
   is_secret: boolean;
@@ -34,6 +35,7 @@ export interface EventType {
   availability_schedule_id?: string; // NEW: Which schedule to use (NULL = use default)
   theme_mode?: 'light' | 'dark' | 'auto';
   branding_hide_badge?: boolean;
+  embed_view_style?: 'classic' | 'wizard' | 'progressive';
   created_at: string;
   updated_at: string;
 }

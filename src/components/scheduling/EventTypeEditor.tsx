@@ -24,6 +24,7 @@ import { TimeBlocksEditor } from "./TimeBlocksEditor";
 import { getCompanyId } from "@/lib/company";
 import { NotificationsSection } from "@/components/calendar/editor-sections/NotificationsSection";
 import { AvailabilityScheduleSelector } from "./AvailabilityScheduleSelector";
+import { EmbedCodeGenerator } from "@/components/embed/EmbedCodeGenerator";
 
 const createDefaultNotifications = (): NotificationSettings => ({
   email: { enabled: true, confirmation: true, confirmationDelay: 0, reminders: [1440, 60], followup: 0 },
@@ -135,7 +136,7 @@ interface EventTypeEditorProps {
   eventType: EventType | null;
   onClose: () => void;
   onSaved?: () => Promise<void> | void;
-  initialTab?: "basics" | "call-types" | "questions" | "notifications" | "confirmation" | "appearance" | "time-blocks" | "preview";
+  initialTab?: "basics" | "call-types" | "questions" | "notifications" | "confirmation" | "appearance" | "time-blocks" | "embed" | "preview";
 }
 
 export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "basics" }: EventTypeEditorProps) => {
@@ -203,6 +204,7 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
   });
   const [saving, setSaving] = useState(false);
   const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'auto'>(eventType?.theme_mode as any || 'auto');
+  const [embedViewStyle, setEmbedViewStyle] = useState<'classic' | 'wizard' | 'progressive'>(eventType?.embed_view_style || 'classic');
   const [successMessage, setSuccessMessage] = useState((eventType as any)?.success_message || "");
   const [redirectUrl, setRedirectUrl] = useState(eventType?.redirect_url || "");
   const [redirectButtonText, setRedirectButtonText] = useState((eventType as any)?.redirect_button_text || "Continue");
@@ -261,6 +263,7 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
     setQuestions(cloneQuestions(eventType?.invitee_form_schema));
     setNotifications(cloneNotifications(eventType?.notifications as NotificationSettings | undefined));
     setThemeMode((eventType?.theme_mode as any) || 'auto');
+    setEmbedViewStyle(eventType?.embed_view_style || 'classic');
     setSuccessMessage((eventType as any)?.success_message || "");
     setRedirectUrl(eventType?.redirect_url || "");
     setRedirectButtonText((eventType as any)?.redirect_button_text || "Continue");
@@ -410,6 +413,7 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
         notifications: notifications as any,
         templates: templates as any,
         theme_mode: themeMode,
+        embed_view_style: embedViewStyle,
         success_message: successMessage,
         redirect_url: redirectUrl || null,
         redirect_button_text: redirectButtonText || "Continue",
@@ -565,7 +569,7 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
-        <TabsList className="grid w-full grid-cols-8">
+        <TabsList className="grid w-full grid-cols-9">
           <TabsTrigger value="basics">Basics</TabsTrigger>
           <TabsTrigger value="call-types">Call Types</TabsTrigger>
           <TabsTrigger value="questions">
@@ -579,6 +583,7 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="confirmation">Confirmation</TabsTrigger>
           <TabsTrigger value="time-blocks">Time Blocks</TabsTrigger>
+          <TabsTrigger value="embed">Embed</TabsTrigger>
           <TabsTrigger value="preview">Preview</TabsTrigger>
         </TabsList>
 
@@ -1040,6 +1045,33 @@ export const EventTypeEditor = ({ eventType, onClose, onSaved, initialTab = "bas
             <Card className="p-6">
               <p className="text-center text-muted-foreground">
                 Save this event type first to configure time blocks
+              </p>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="embed" className="mt-6 space-y-6">
+          {eventType && (
+            <EmbedCodeGenerator
+              eventType={{ ...eventType, embed_view_style: embedViewStyle }}
+              livePreviewData={{
+                name,
+                description,
+                duration,
+                allowedCallTypes,
+                defaultCallType,
+                phoneRequired,
+                inPersonLocation,
+                customLinkLabel,
+                customLinkUrl,
+                questions,
+              }}
+            />
+          )}
+          {!eventType && (
+            <Card className="p-6">
+              <p className="text-center text-muted-foreground">
+                Save this event type first to generate embed codes
               </p>
             </Card>
           )}
